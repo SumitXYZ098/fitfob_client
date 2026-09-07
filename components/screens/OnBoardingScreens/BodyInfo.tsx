@@ -16,7 +16,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useClientBodyInfo } from '@/hook/useClient';
 
 const { width } = Dimensions.get('window');
-const TICK_SPACING = 15;
+const TICK_SPACING = 18.5;
 
 export interface BodyInfoRef {
   submit: () => Promise<boolean>;
@@ -72,32 +72,65 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
     return 'kg';
   };
 
-  // Parsing Height helpers
-  const getInitialHeight = () => {
-    if (prefill?.height) {
-      const parts = prefill.height.split(' ');
-      const val = parseInt(parts[0]);
-      if (!isNaN(val)) return val;
-    }
-    return 170;
+  // Helper to format feet and inches like 5'6"
+  const formatFeetInches = (totalInches: number) => {
+    const feet = Math.floor(totalInches / 12);
+    const inches = totalInches % 12;
+    return `${feet}'${inches}"`;
   };
 
-  const getInitialHeightUnit = () => {
-    if (prefill?.height) {
-      const parts = prefill.height.split(' ');
-      if (parts[1] === 'inches') return 'inches';
+  // Parsing Height helpers supporting cm and ft'in' (e.g. 5'6", 60 inches, 170 cm)
+  const parsePrefillHeight = (prefillHeight?: string) => {
+    if (!prefillHeight) return { val: 170, unit: 'cm' as 'cm' | 'ft' };
+    const str = prefillHeight.trim();
+
+    // Match 5'6" or 5'6
+    const ftInMatch = str.match(/^(\d+)'\s*(\d+)?(?:"|'')?$/);
+    if (ftInMatch) {
+      const feet = parseInt(ftInMatch[1], 10);
+      const inches = ftInMatch[2] ? parseInt(ftInMatch[2], 10) : 0;
+      return { val: feet * 12 + inches, unit: 'ft' as 'cm' | 'ft' };
     }
-    return 'cm';
+
+    // Match "X inches" or "X in"
+    if (str.includes('inches') || str.includes('inch')) {
+      const val = parseInt(str.split(' ')[0], 10);
+      return { val: isNaN(val) ? 66 : val, unit: 'ft' as 'cm' | 'ft' };
+    }
+
+    // Match "X cm"
+    if (str.includes('cm')) {
+      const val = parseInt(str.split(' ')[0], 10);
+      return { val: isNaN(val) ? 170 : val, unit: 'cm' as 'cm' | 'ft' };
+    }
+
+    // Match "X ft Y in"
+    if (str.includes('ft')) {
+      const parts = str.split('ft');
+      const feet = parseInt(parts[0], 10);
+      const inches = parts[1] ? parseInt(parts[1], 10) : 0;
+      return { val: feet * 12 + (isNaN(inches) ? 0 : inches), unit: 'ft' as 'cm' | 'ft' };
+    }
+
+    const num = parseInt(str, 10);
+    if (!isNaN(num)) {
+      if (num < 100) return { val: num, unit: 'ft' as 'cm' | 'ft' };
+      return { val: num, unit: 'cm' as 'cm' | 'ft' };
+    }
+
+    return { val: 170, unit: 'cm' as 'cm' | 'ft' };
   };
+
+  const initialHeightData = parsePrefillHeight(prefill?.height);
 
   const [date, setDate] = useState(getInitialDob());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dobText, setDobText] = useState(getInitialDobText());
 
   const [weight, setWeight] = useState<number>(getInitialWeight());
-  const [height, setHeight] = useState<number>(getInitialHeight());
+  const [height, setHeight] = useState<number>(initialHeightData.val);
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(getInitialWeightUnit());
-  const [heightUnit, setHeightUnit] = useState<'cm' | 'inches'>(getInitialHeightUnit());
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>(initialHeightData.unit);
 
   useImperativeHandle(ref, () => ({
     submit: async () => {
@@ -107,8 +140,11 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
       }
       try {
         const dobFormatted = date.toISOString().split('T')[0];
+        const heightFormatted =
+          heightUnit === 'cm' ? `${height} cm` : formatFeetInches(height);
+
         await mutateAsync({
-          height: `${height} ${heightUnit}`,
+          height: heightFormatted,
           weight: `${weight} ${weightUnit}`,
           date_of_birth: dobFormatted,
         });
@@ -121,7 +157,9 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
   }));
 
   const weights = Array.from({ length: 251 }, (_, i) => i + 20);
-  const heights = Array.from({ length: 201 }, (_, i) => i + 50);
+  const heightsCm = Array.from({ length: 161 }, (_, i) => i + 90); // 90cm to 250cm
+  const heightsFt = Array.from({ length: 57 }, (_, i) => i + 40); // 40" (3'4") to 96" (8'0")
+  const heights = heightUnit === 'cm' ? heightsCm : heightsFt;
 
   // --- Date Picker Logic ---
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -154,8 +192,8 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
     return Math.round(val / 2.20462);
   };
 
-  const convertHeight = (val: number, toUnit: 'cm' | 'inches'): number => {
-    if (toUnit === 'inches') return Math.round(val / 2.54);
+  const convertHeight = (val: number, toUnit: 'cm' | 'ft'): number => {
+    if (toUnit === 'ft') return Math.round(val / 2.54);
     return Math.round(val * 2.54);
   };
 
@@ -286,17 +324,20 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => handleUnitChange('height', 'inches')}
-            className={`flex-1 items-center rounded-xl border py-3 ${heightUnit === 'inches' ? 'border-[#F6163C] bg-[#F6163C]' : 'ml-2 border-slate-200 bg-white'}`}>
-            <Text
-              className={`font-bold ${heightUnit === 'inches' ? 'text-white' : 'text-slate-400'}`}>
-              inches
+            onPress={() => handleUnitChange('height', 'ft')}
+            className={`flex-1 items-center rounded-xl border py-3 ${heightUnit === 'ft' ? 'border-[#F6163C] bg-[#F6163C]' : 'ml-2 border-slate-200 bg-white'}`}>
+            <Text className={`font-bold ${heightUnit === 'ft' ? 'text-white' : 'text-slate-400'}`}>
+              ft'in"
             </Text>
           </TouchableOpacity>
         </View>
         <View className="mb-4 flex-row items-baseline justify-center">
-          <Text className="text-5xl font-black text-slate-900">{height}</Text>
-          <Text className="ml-1 font-bold text-xl text-[#F6163C]">{heightUnit}</Text>
+          <Text className="text-5xl font-black text-slate-900">
+            {heightUnit === 'cm' ? height : formatFeetInches(height)}
+          </Text>
+          {heightUnit === 'cm' && (
+            <Text className="ml-1 font-bold text-xl text-[#F6163C]">cm</Text>
+          )}
         </View>
         <View className="h-24 justify-center overflow-hidden rounded-2xl">
           <View
@@ -311,21 +352,44 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
             snapToInterval={TICK_SPACING}
             decelerationRate="fast"
             onScroll={(e) => handleScrollSelection(e, setHeight, heights, TICK_SPACING, height)}
-            initialScrollIndex={heights.indexOf(height)}
+            initialScrollIndex={Math.max(0, heights.indexOf(height))}
             getItemLayout={(_, i) => ({ length: TICK_SPACING, offset: TICK_SPACING * i, index: i })}
             contentContainerStyle={{ paddingHorizontal: (width - 80) / 2 }}
-            renderItem={({ item }) => (
-              <View style={{ width: TICK_SPACING }} className="items-center justify-end pb-4">
-                {item % 10 === 0 && (
-                  <Text className="absolute top-2 text-[10px] font-black text-slate-400">
-                    {item}
-                  </Text>
-                )}
-                <View
-                  className={`w-[2px] rounded-full ${item % 10 === 0 ? 'h-8 bg-slate-800' : 'h-4 bg-slate-300'}`}
-                />
-              </View>
-            )}
+            renderItem={({ item }) => {
+              const isMajor = heightUnit === 'cm' ? item % 10 === 0 : item % 12 === 0;
+              const isMedium = heightUnit === 'ft' && item % 6 === 0 && !isMajor;
+
+              return (
+                <View style={{ width: TICK_SPACING }} className="items-center justify-end pb-4">
+                  {heightUnit === 'cm' ? (
+                    item % 10 === 0 && (
+                      <Text className="absolute top-2 text-[10px] font-black text-slate-400">
+                        {item}
+                      </Text>
+                    )
+                  ) : (
+                    item % 12 === 0 ? (
+                      <Text className="absolute top-2 text-[10px] font-black text-slate-400">
+                        {item / 12}'
+                      </Text>
+                    ) : item % 6 === 0 ? (
+                      <Text className="absolute top-2 text-[9px] font-semibold text-slate-400">
+                        {Math.floor(item / 12)}'6"
+                      </Text>
+                    ) : null
+                  )}
+                  <View
+                    className={`w-[2px] rounded-full ${
+                      isMajor
+                        ? 'h-8 bg-slate-800'
+                        : isMedium
+                          ? 'h-6 bg-slate-500'
+                          : 'h-4 bg-slate-300'
+                    }`}
+                  />
+                </View>
+              );
+            }}
           />
         </View>
       </View>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { Button } from '@/components/modules/Button';
 import { Container } from '@/components/modules/Container';
 import { KeyboardAwareScrollView } from '@pietile-native-kit/keyboard-aware-scrollview';
@@ -11,10 +11,12 @@ import SelfieScreen from '@/components/screens/OnBoardingScreens/SelfieScreen';
 import GovernmentId from '@/components/screens/OnBoardingScreens/GovernmentId';
 import { useClientSubmit, useCheckUserStep } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
+import { LinearGradient } from 'expo-linear-gradient';
+import Toast from 'react-native-toast-message';
 
 export default function OnBoardingStep() {
   const router = useRouter();
-  const { step: paramStep } = useLocalSearchParams<{ step?: string }>();
+  const { step: paramStep, reupload } = useLocalSearchParams<{ step?: string; reupload?: string }>();
   const [step, setStep] = useState(paramStep ? Number(paramStep) : 1);
   const [loading, setLoading] = useState(false);
   const [checkingStep, setCheckingStep] = useState(true);
@@ -30,7 +32,7 @@ export default function OnBoardingStep() {
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [govIdUri, setGovIdUri] = useState<string | null>(null);
 
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, logOut } = useAuthStore();
   const verifyClient = useClientSubmit();
   const checkUserStepMutation = useCheckUserStep();
 
@@ -48,14 +50,18 @@ export default function OnBoardingStep() {
           if (response.details) {
             setPrefillData(response.details);
 
-            // Prefill local state selfieUri and govIdUri if present in response
-            if (response.details.selfieUpload?.url) {
+            // Prefill local state selfieUri and govIdUri if present in response (skip if reupload requested)
+            if (response.details.selfieUpload?.url && reupload !== 'selfie') {
               const url = response.details.selfieUpload.url;
               setSelfieUri(
                 url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`
               );
             }
-            if (response.details.governmentId?.url) {
+            if (
+              response.details.governmentId?.url &&
+              reupload !== 'govId' &&
+              reupload !== 'selfie'
+            ) {
               const url = response.details.governmentId.url;
               setGovIdUri(
                 url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`
@@ -76,7 +82,7 @@ export default function OnBoardingStep() {
     };
 
     checkProgress();
-  }, [router, paramStep, checkUserStepMutation]);
+  }, [router, paramStep]);
 
   const handleNext = async () => {
     setLoading(true);
@@ -124,6 +130,22 @@ export default function OnBoardingStep() {
             // 4. Navigate based on approval status
             if (verifyResult && verifyResult.status === 'approved') {
               router.replace('/onBoardingScreen/Congratulations');
+            } else if (
+              verifyResult &&
+              (verifyResult.status === 'rejected' ||
+                verifyResult.status === 'declined' ||
+                verifyResult.status === 'failed')
+            ) {
+              router.replace({
+                pathname: '/onBoardingScreen/UnderReview',
+                params: {
+                  status: 'rejected',
+                  reason:
+                    verifyResult.reason ||
+                    verifyResult.rejection_reason ||
+                    'Face recognition photo and Government ID do not match.',
+                },
+              });
             } else {
               router.replace('/onBoardingScreen/UnderReview');
             }
@@ -136,6 +158,36 @@ export default function OnBoardingStep() {
       setLoading(false);
     }
   };
+
+  const handleBackToLogin = async () => {
+    try {
+      await logOut();
+      Toast.show({
+        type: 'success',
+        text1: 'Logged Out',
+        text2: 'You have been successfully logged out.',
+      });
+      router.replace('/auth/Login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      router.replace('/welcome');
+    }
+  }
+  const handleSignUp = async () => {
+    try {
+      await logOut();
+      Toast.show({
+        type: 'success',
+        text1: 'Logged Out',
+        text2: 'You have been successfully logged out.',
+      });
+      router.replace('/auth/SignUp');
+    } catch (error) {
+      console.error('Logout error:', error);
+      router.replace('/welcome');
+    }
+  }
+
 
   if (checkingStep) {
     return (
@@ -202,6 +254,31 @@ export default function OnBoardingStep() {
             onPress={handleNext}
             loading={loading}
           />
+        </View>
+
+        <View className="mt-5 flex-row items-center my-2">
+          <LinearGradient
+            colors={['transparent', '#F6163C']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ flex: 1, height: 1.5 }}
+          />
+          <View className="px-3 flex-row items-center">
+            <TouchableOpacity onPress={handleBackToLogin} activeOpacity={0.7} className="px-1 py-0.5">
+              <Text className="text-xs font-bold text-[#F6163C]">Log In</Text>
+            </TouchableOpacity>
+            <Text className="mx-1.5 text-slate-300">|</Text>
+            <TouchableOpacity onPress={handleSignUp} activeOpacity={0.7} className="px-1 py-0.5">
+              <Text className="text-xs font-bold text-[#F6163C]">Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+          <LinearGradient
+            colors={['#F6163C', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ flex: 1, height: 1.5 }}
+          />
+
         </View>
       </KeyboardAwareScrollView>
     </Container>

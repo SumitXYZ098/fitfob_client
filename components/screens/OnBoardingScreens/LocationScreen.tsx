@@ -10,12 +10,14 @@ import {
   ActivityIndicator,
   ScrollView,
   Keyboard,
-  Platform,
 } from 'react-native';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useClientLocation } from '@/hook/useClient';
+import LocationMapPicker, {
+  LocationMapPickerHandle,
+  Region,
+} from '@/components/modules/LocationMapPicker';
 
 interface Suggestion {
   place_id: number;
@@ -39,9 +41,10 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
   const [searchLoading, setSearchLoading] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<LocationMapPickerHandle>(null);
+  const reverseGeocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [location, setLocation] = useState({
+  const [location, setLocation] = useState<Region>({
     latitude: prefill?.latitude ? parseFloat(prefill.latitude) : 28.6139,
     longitude: prefill?.longitude ? parseFloat(prefill.longitude) : 77.209,
     latitudeDelta: 0.008,
@@ -117,6 +120,23 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
     }
   };
 
+  const debouncedReverseGeocode = (latitude: number, longitude: number) => {
+    if (reverseGeocodeTimerRef.current) {
+      clearTimeout(reverseGeocodeTimerRef.current);
+    }
+    reverseGeocodeTimerRef.current = setTimeout(() => {
+      reverseGeocode(latitude, longitude);
+    }, 500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (reverseGeocodeTimerRef.current) {
+        clearTimeout(reverseGeocodeTimerRef.current);
+      }
+    };
+  }, []);
+
   const getCurrentLocation = async () => {
     setLoading(true);
     try {
@@ -139,23 +159,29 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
 
       let userLocation: Location.LocationObject | null = null;
 
+      // 1. Try to get last known position first for an immediate fix
       try {
-        const positionPromise = Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        const timeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Location request timed out')), 8000)
-        );
-        userLocation = (await Promise.race([
-          positionPromise,
-          timeoutPromise,
-        ])) as Location.LocationObject;
-      } catch (err) {
-        console.log('getCurrentPosition timed out or failed, checking last known position:', err);
+        userLocation = await Location.getLastKnownPositionAsync();
+      } catch (e) {
+        console.log('Error getting last known position:', e);
       }
 
+      // 2. If no last known position exists, request fresh position with timeout
       if (!userLocation) {
-        userLocation = await Location.getLastKnownPositionAsync();
+        try {
+          const positionPromise = Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('Location request timed out')), 8000)
+          );
+          userLocation = (await Promise.race([
+            positionPromise,
+            timeoutPromise,
+          ])) as Location.LocationObject;
+        } catch (err) {
+          console.log('getCurrentPosition timed out or failed:', err);
+        }
       }
 
       if (userLocation) {
@@ -202,7 +228,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
     } else {
       getCurrentLocation();
     }
-  }, [prefill]);
+  }, [prefill?.latitude, prefill?.longitude]);
 
   // Forward Geocode: Search coordinates from text query
   const searchLocation = async () => {
@@ -266,100 +292,78 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
     setSuggestions([]); // Clear suggestions
   };
 
-  // Handler when marker is moved or map is tapped
-  const handleLocationUpdate = (latitude: number, longitude: number) => {
-    const updatedCoords = {
+  // Handler when map region changes (user finishes dragging)
+  const handleRegionChangeComplete = (newRegion: Region) => {
+    const updatedCoords: Region = {
       ...location,
-      latitude,
-      longitude,
+      latitude: newRegion.latitude,
+      longitude: newRegion.longitude,
     };
     setLocation(updatedCoords);
-    mapRef.current?.animateToRegion(updatedCoords, 500);
-    reverseGeocode(latitude, longitude);
+    debouncedReverseGeocode(newRegion.latitude, newRegion.longitude);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: 'white' }}>
-      {/* --- OPENSTREETMAP SECTION --- */}
+      {/* --- MAP SECTION USING LocationMapPicker --- */}
       <View style={StyleSheet.absoluteFill}>
-        <MapView
+        <LocationMapPicker
           ref={mapRef}
-          style={StyleSheet.absoluteFill}
           initialRegion={location}
-          mapType={Platform.OS === 'android' ? 'none' : 'standard'}
-          rotateEnabled={false}
-          onPress={(e) => {
-            const coords = e.nativeEvent.coordinate;
-            if (coords) {
-              handleLocationUpdate(coords.latitude, coords.longitude);
-            }
-          }}>
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.de/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-            shouldReplaceMapContent={true}
-            zIndex={1}
-          />
-          <Marker
-            draggable
-            coordinate={{
-              latitude: location.latitude,
-              longitude: location.longitude,
-            }}
-            anchor={{ x: 0.5, y: 1 }}
-            onDragEnd={(e) => {
-              const coords = e.nativeEvent.coordinate;
-              if (coords) {
-                handleLocationUpdate(coords.latitude, coords.longitude);
-              }
-            }}>
-            <View className="items-center justify-center">
-              <Ionicons name="location" size={38} color="#F6163C" />
-            </View>
-          </Marker>
-        </MapView>
+          onRegionChangeComplete={handleRegionChangeComplete}
+          onRequestLocation={getCurrentLocation}
+          controlsPosition="middle-right"
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Center Pin Marker */}
+        <View pointerEvents="none" style={styles.centerMarkerWrapper}>
+          <View style={styles.pinContainer}>
+            <Ionicons name="location" size={42} color="#F6163C" />
+            <View style={styles.pinShadow} />
+          </View>
+        </View>
       </View>
 
       {/* --- UI OVERLAY --- */}
-      <View className="relative z-50 px-5 pt-12">
+      <View className="relative z-50 px-4 pt-4">
         {/* Auto-Detect Card */}
         <View
-          className="mb-4 flex-row items-center justify-between rounded-3xl bg-white p-4"
+          className="mb-4 flex-row items-center justify-between rounded-xl bg-white p-2"
           style={{ elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 }}>
           <View className="flex-1 flex-row items-center">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-red-50">
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-red-50">
               {loading ? (
                 <ActivityIndicator color="#F6163C" size="small" />
               ) : (
-                <MaterialCommunityIcons name="map-marker-radius" size={24} color="#F6163C" />
+                <MaterialCommunityIcons name="map-marker-radius" size={18} color="#F6163C" />
               )}
             </View>
             <View className="ml-3">
-              <Text className="font-bold text-[15px] text-slate-900">Auto-Detect Location</Text>
-              <Text className="text-[11px] text-slate-400">Use your current location</Text>
+              <Text className="font-bold text-[12px] text-slate-900">Auto-Detect Location</Text>
+              <Text className="text-[8px] text-slate-400">Use your current location</Text>
             </View>
           </View>
           <TouchableOpacity
             onPress={getCurrentLocation}
             disabled={loading}
-            className="rounded-2xl border border-slate-50 bg-white px-5 py-2">
-            <Text className="font-bold text-[#F6163C]">{loading ? '...' : 'Enable'}</Text>
+            className="rounded-xl border border-[#f2f2f2] bg-white px-5 py-2">
+            <Text className="font-bold text-[10px] text-[#F6163C]">{loading ? '...' : 'Enable'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Dynamic Search Bar */}
         <View
-          className="mb-2 flex-row items-center rounded-full bg-white py-1.5 pl-6 pr-2"
+          className="mb-1 flex-row items-center rounded-2xl bg-white py-1.5 px-2"
           style={{ elevation: 15, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 15 }}>
-          {addressLoading ? (
+          {addressLoading && (
             <View className="mr-2">
               <ActivityIndicator color="#F6163C" size="small" />
             </View>
-          ) : null}
+          )}
           <TextInput
             placeholder={addressLoading ? 'Fetching address...' : 'Search location...'}
-            className="flex-1 font-medium text-[15px] text-slate-700"
+            className="flex-1 font-medium text-[12px] text-slate-700"
             value={city}
             onChangeText={(text) => {
               setCity(text);
@@ -372,11 +376,11 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
           <TouchableOpacity
             onPress={searchLocation}
             disabled={searchLoading}
-            className="h-12 w-12 items-center justify-center rounded-full bg-[#F6163C]">
+            className="h-8 w-8 items-center justify-center rounded-full bg-[#F6163C]">
             {searchLoading ? (
               <ActivityIndicator color="white" size="small" />
             ) : (
-              <Ionicons name="search" size={22} color="white" />
+              <Ionicons name="search" size={16} color="white" />
             )}
           </TouchableOpacity>
         </View>
@@ -415,3 +419,28 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
 LocationScreen.displayName = 'LocationScreen';
 
 export default LocationScreen;
+
+const styles = StyleSheet.create({
+  centerMarkerWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  pinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateY: -21 }],
+  },
+  pinShadow: {
+    width: 8,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    marginTop: -2,
+  },
+});
