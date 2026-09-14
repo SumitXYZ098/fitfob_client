@@ -113,6 +113,7 @@ export default function SignUp() {
   const {
     control,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
@@ -158,8 +159,44 @@ export default function SignUp() {
       },
       onError: (error: any) => {
         console.log('Signup Error Detail:', error?.response?.data || error.message);
-        const msg = error?.response?.data?.message || error?.message;
-        Toast.show({ type: 'error', text1: 'Signup Failed', text2: msg });
+
+        const errorData = error?.response?.data;
+        const serverMsg =
+          errorData?.error?.message ||
+          errorData?.message ||
+          (typeof errorData?.error === 'string' ? errorData.error : null) ||
+          '';
+
+        const isUserExists =
+          serverMsg.toLowerCase().includes('already exist') ||
+          serverMsg.toLowerCase().includes('already registered') ||
+          serverMsg.toLowerCase().includes('user exists');
+
+        if (isUserExists) {
+          setError('identifier', {
+            type: 'manual',
+            message: 'User already exists. Please login.',
+          });
+
+          Toast.show({
+            type: 'error',
+            text1: 'User Already Exists',
+            text2: 'This email or phone is already registered. Please login.',
+          });
+          return;
+        }
+
+        // Clean user-friendly message without raw status codes like 400
+        let cleanMsg = serverMsg;
+        if (!cleanMsg || cleanMsg.toLowerCase().includes('status code')) {
+          cleanMsg = 'Unable to create account. Please check your details and try again.';
+        }
+
+        Toast.show({
+          type: 'error',
+          text1: 'Signup Failed',
+          text2: cleanMsg,
+        });
       },
     });
   };
@@ -183,10 +220,15 @@ export default function SignUp() {
             });
           },
           onError: (err: any) => {
+            const errorData = err?.response?.data;
+            let msg =
+              errorData?.error?.message ||
+              errorData?.message ||
+              (err?.message && !err.message.includes('status code') ? err.message : 'Google Login failed');
             Toast.show({
               type: 'error',
               text1: 'Google Login Failed',
-              text2: err?.message || 'Google Login failed',
+              text2: msg,
             });
           },
         }
@@ -196,7 +238,7 @@ export default function SignUp() {
         Toast.show({
           type: 'error',
           text1: 'Google Login Failed',
-          text2: err?.message || 'Google Login failed',
+          text2: !err.message.includes('status code') ? err.message : 'Google Login failed',
         });
       }
     }
@@ -219,10 +261,15 @@ export default function SignUp() {
           });
         },
         onError: (err: any) => {
+          const errorData = err?.response?.data;
+          let msg =
+            errorData?.error?.message ||
+            errorData?.message ||
+            (err?.message && !err.message.includes('status code') ? err.message : 'Facebook Login failed');
           Toast.show({
             type: 'error',
             text1: 'Facebook Login Failed',
-            text2: err?.message || 'Facebook Login failed',
+            text2: msg,
           });
         },
       });
@@ -231,7 +278,7 @@ export default function SignUp() {
         Toast.show({
           type: 'error',
           text1: 'Facebook Login Failed',
-          text2: err?.message || 'Facebook Login failed',
+          text2: !err.message.includes('status code') ? err.message : 'Facebook Login failed',
         });
       }
     }

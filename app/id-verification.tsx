@@ -5,15 +5,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
 
-const CONFETTI_COUNT = 45;
-const COLORS = ['#F6163C', '#FFD700', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#F59E0B'];
+const GYM_EMOJIS = [
+  '🏋️‍♂️',
+  '💪',
+  '🏆',
+  '🥊',
+  '🥇',
+  '👟',
+  '⏱️',
+  '❤️‍🔥',
+  '🥤',
+  '🥗',
+ 
+];
+
+const CONFETTI_COUNT = 16;
 
 interface ConfettiPiece {
   id: number;
-  color: string;
-  width: number;
-  height: number;
-  borderRadius: number;
+  emoji: string;
+  size: number;
   position: Animated.ValueXY;
   rotation: Animated.Value;
   opacity: Animated.Value;
@@ -23,10 +34,8 @@ const createParticles = (): ConfettiPiece[] => {
   return Array.from({ length: CONFETTI_COUNT }).map((_, index) => {
     return {
       id: index,
-      color: COLORS[index % COLORS.length],
-      width: Math.random() * 8 + 6,
-      height: Math.random() * 12 + 6,
-      borderRadius: Math.random() > 0.5 ? 0 : 3,
+      emoji: GYM_EMOJIS[index % GYM_EMOJIS.length],
+      size: Math.floor(Math.random() * 6) + 26, // 26-31px
       position: new Animated.ValueXY({ x: 0, y: 0 }),
       rotation: new Animated.Value(0),
       opacity: new Animated.Value(1),
@@ -78,27 +87,27 @@ export default function IdVerificationScreen() {
       })
     ).start();
 
-    // 4. Confetti Blast animations
-    const blastAnimations = particles.map((p) => {
-      const blastX = (Math.random() - 0.5) * 360; // shoot sideways
-      const blastY = -120 - Math.random() * 180; // shoot upwards
-      const fallX = blastX + (Math.random() - 0.5) * 100; // drift sideways
-      const fallY = 600; // fall past bottom of screen
-      const fallDuration = 2000 + Math.random() * 1200;
+    // 4. Confetti Blast animations (Smooth 60 FPS)
+    const blastAnimations = particles.map((p, index) => {
+      const blastX = (Math.random() - 0.5) * 320; // shoot sideways
+      const blastY = -120 - Math.random() * 160; // shoot upwards
+      const fallX = blastX + (Math.random() - 0.5) * 60; // drift sideways
+      const fallY = 580; // fall past bottom of screen
+      const fallDuration = 2200 + Math.random() * 600;
 
       return Animated.sequence([
-        Animated.delay(450 + Math.random() * 100), // staggered timing
+        Animated.delay(400 + (index % 4) * 35), // staggered frame distribution
         // Blast up
         Animated.parallel([
           Animated.timing(p.position, {
             toValue: { x: blastX, y: blastY },
-            duration: 600,
+            duration: 550,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
           Animated.timing(p.rotation, {
-            toValue: 360 + Math.random() * 360,
-            duration: 600,
+            toValue: (Math.random() - 0.5) * 180,
+            duration: 550,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
@@ -112,14 +121,15 @@ export default function IdVerificationScreen() {
             useNativeDriver: true,
           }),
           Animated.timing(p.rotation, {
-            toValue: 1080 + Math.random() * 1080,
+            toValue: (Math.random() - 0.5) * 540,
             duration: fallDuration,
             easing: Easing.linear,
             useNativeDriver: true,
           }),
           Animated.timing(p.opacity, {
             toValue: 0,
-            duration: fallDuration * 0.9,
+            duration: fallDuration * 0.8,
+            delay: fallDuration * 0.2,
             easing: Easing.linear,
             useNativeDriver: true,
           }),
@@ -160,20 +170,22 @@ export default function IdVerificationScreen() {
           return (
             <Animated.View
               key={p.id}
+              renderToHardwareTextureAndroid={true}
               style={{
                 position: 'absolute',
-                width: p.width,
-                height: p.height,
-                backgroundColor: p.color,
-                borderRadius: p.borderRadius,
+                width: 36,
+                height: 36,
+                alignItems: 'center',
+                justifyContent: 'center',
                 transform: [
                   { translateX: p.position.x },
                   { translateY: p.position.y },
                   { rotate: spin },
                 ],
                 opacity: p.opacity,
-              }}
-            />
+              }}>
+              <Text style={{ fontSize: p.size }}>{p.emoji}</Text>
+            </Animated.View>
           );
         })}
       </View>
@@ -214,7 +226,7 @@ export default function IdVerificationScreen() {
                 width: 72,
                 height: 72,
                 borderRadius: 36,
-                backgroundColor: '#A7F3D0',
+                backgroundColor: '#FFE4E6',
                 transform: [{ scale: rippleScale }],
                 opacity: rippleOpacity,
                 zIndex: 1,
@@ -228,7 +240,7 @@ export default function IdVerificationScreen() {
                 width: 80,
                 height: 80,
                 borderRadius: 40,
-                backgroundColor: '#E8F8F5',
+                backgroundColor: '#FFEAEF',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transform: [{ scale: shieldScale }],
@@ -236,7 +248,7 @@ export default function IdVerificationScreen() {
               }}>
               {/* Checkmark popping up inside shield */}
               <Animated.View style={{ transform: [{ scale: checkScale }] }}>
-                <Ionicons name="shield-checkmark" size={40} color="#10B981" />
+                <Ionicons name="shield-checkmark" size={44} color="#F6163C" />
               </Animated.View>
             </Animated.View>
           </View>
@@ -266,12 +278,6 @@ export default function IdVerificationScreen() {
             <Text className="font-bold font-sans text-[13px] text-[#1C1C1C]">{ownerId}</Text>
           </View>
 
-          <View className="flex-row justify-between border-b border-slate-100 py-3">
-            <Text className="font-medium font-sans text-[13px] text-slate-400">Document Type</Text>
-            <Text className="font-bold font-sans text-[13px] text-[#1C1C1C]">
-              Govt. ID / Selfie
-            </Text>
-          </View>
 
           <View className="flex-row justify-between py-3">
             <Text className="font-medium font-sans text-[13px] text-slate-400">

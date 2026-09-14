@@ -82,6 +82,7 @@ export default function ProfileScreen() {
       id: 'help-support',
       title: 'Help & Support',
       iconName: 'help-circle-outline',
+      route: '/help-support',
     },
   ];
 

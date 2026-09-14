@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, forwardRef, useImperativeHandle } from 'react';
+import { useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { TextInput, TouchableOpacity, Image, Text, View, Alert } from 'react-native';
 import CountryPicker, { CountryCode, Country } from 'react-native-country-picker-modal';
 import { useClientBasicDetails } from '@/hook/useClient';
@@ -78,6 +78,13 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(({ prefill }
   const [callingCode, setCallingCode] = useState(initialPhone?.callingCode || '91');
   const [phoneNumber, setPhoneNumber] = useState(initialPhone?.number || '');
 
+  useEffect(() => {
+    const latestEmail = prefill?.email || user?.email;
+    if (latestEmail && !email) {
+      setEmail(latestEmail);
+    }
+  }, [prefill?.email, user?.email, email]);
+
   useImperativeHandle(ref, () => ({
     submit: async () => {
       if (!name.trim()) {
@@ -150,16 +157,26 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(({ prefill }
         />
       </View>
 
-      {/* Email Input */}
+      {/* Email Input (Read-only / Disabled) */}
       <View className="mt-4">
-        <Text className="mb-1 font-medium text-slate-400">Email</Text>
-        <TextInput
-          placeholder="Enter Email"
-          placeholderTextColor="#94a3b8"
-          value={email}
-          onChangeText={setEmail}
-          className="h-16 rounded-2xl border border-slate-100 bg-white px-5"
-        />
+        <View className="mb-1 flex-row items-center justify-between">
+          <Text className="font-medium text-slate-400">Email</Text>
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="lock-closed" size={11} color="#94a3b8" />
+            <Text className="font-medium text-xs text-slate-400">Verified</Text>
+          </View>
+        </View>
+        <View className="h-16 flex-row items-center justify-between rounded-2xl border border-slate-200 bg-slate-100/80 px-5">
+          <TextInput
+            placeholder="Enter Email"
+            placeholderTextColor="#94a3b8"
+            value={email}
+            editable={false}
+            selectTextOnFocus={false}
+            className="flex-1 font-medium text-slate-600"
+          />
+          <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" />
+        </View>
       </View>
 
       {/* Phone Number Field with Country Picker & Down Arrow */}

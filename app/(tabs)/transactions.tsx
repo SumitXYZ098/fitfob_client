@@ -175,26 +175,24 @@ export default function TransactionsScreen() {
               style={
                 isSelected
                   ? {
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 2,
-                      elevation: 1,
-                      backgroundColor: 'white',
-                    }
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 2,
+                    elevation: 1,
+                    backgroundColor: 'white',
+                  }
                   : {}
               }
               className="flex-1 flex-row items-center justify-center rounded-full py-2.5">
               <Text
-                className={`mr-2 font-semibold text-sm ${
-                  isSelected ? 'text-darkText' : 'text-secondaryText'
-                }`}>
+                className={`mr-2 font-semibold text-sm ${isSelected ? 'text-darkText' : 'text-secondaryText'
+                  }`}>
                 {tab.label}
               </Text>
               <View
-                className={`h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 ${
-                  isSelected ? 'bg-[#E23744]' : 'bg-[#E5E7EB]'
-                }`}>
+                className={`h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 ${isSelected ? 'bg-[#E23744]' : 'bg-[#E5E7EB]'
+                  }`}>
                 <Text
                   className={`font-bold text-xs ${isSelected ? 'text-white' : 'text-slate-600'}`}>
                   {tab.count}
@@ -333,13 +331,11 @@ export default function TransactionsScreen() {
                   setSelectedMonth(month);
                   setFilterModalVisible(false);
                 }}
-                className={`mb-2 flex-row items-center justify-between rounded-xl p-3.5 ${
-                  selectedMonth === month ? 'bg-[#FFEAEF]' : 'bg-gray-50'
-                }`}>
-                <Text
-                  className={`font-semibold text-base ${
-                    selectedMonth === month ? 'text-[#E23744]' : 'text-darkText'
+                className={`mb-2 flex-row items-center justify-between rounded-xl p-3.5 ${selectedMonth === month ? 'bg-[#FFEAEF]' : 'bg-gray-50'
                   }`}>
+                <Text
+                  className={`font-semibold text-base ${selectedMonth === month ? 'text-[#E23744]' : 'text-darkText'
+                    }`}>
                   {month}
                 </Text>
                 {selectedMonth === month && (

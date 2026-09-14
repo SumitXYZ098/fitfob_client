@@ -22,14 +22,14 @@
     "plugins": [
       "expo-notifications",
       "expo-router",
-       [
-    "expo-splash-screen",
-    {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    }
-  ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
       [
         "expo-font",
         {
@@ -74,7 +74,9 @@
         {
           "locationWhenInUseDescription": "Allow fitFob to use your location."
         }
-      ]
+      ],
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

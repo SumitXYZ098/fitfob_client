@@ -163,7 +163,6 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
 
   // --- Date Picker Logic ---
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    // Android mein 'set' dabate hi band hona chahiye, 'dismissed' pe bhi band hona chahiye
     if (event.type === 'dismissed') {
       setShowDatePicker(false);
       return;
