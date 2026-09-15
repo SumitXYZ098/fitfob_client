@@ -550,12 +550,14 @@ export default function GymDetailScreen() {
           </ScrollView>
 
           {/* Bottom Left: Carousel Pagination Dots */}
-          <View className="absolute bottom-12 left-5 flex-row items-center space-x-1.5">
+          <View className="absolute bottom-12 left-5 flex-row items-center">
             {gym.images.map((_, idx) => (
               <View
                 key={idx}
-                className={`h-1.5 rounded-full ${idx === activeImageIndex ? 'w-6 bg-[#E23744]' : 'ml-1 h-1.5 w-1.5 bg-white/80'
-                  }`}
+                style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
+                className={`h-1.5 rounded-full ${
+                  idx === activeImageIndex ? 'w-6 bg-[#E23744]' : 'w-1.5 bg-white/80'
+                }`}
               />
             ))}
           </View>
@@ -587,8 +589,16 @@ export default function GymDetailScreen() {
               <Text className="font-bold text-2xl text-slate-900">{gym.title}</Text>
               <Text className="mt-1 font-medium text-xs text-slate-500">{gym.address}</Text>
 
-              {/* Star Rating Badge */}
-              <View className="mt-2 flex-row items-center space-x-1.5">
+              {/* Star Rating Badge (Clickable to open all reviews) */}
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/gym/reviews' as any,
+                    params: { id: gym.id },
+                  })
+                }
+                activeOpacity={0.7}
+                className="mt-2 flex-row items-center space-x-1.5">
                 <Ionicons name="star" size={15} color="#F59E0B" />
                 <Text className="ml-1 font-bold text-xs text-slate-800">
                   {gym.rating}/5
@@ -596,12 +606,12 @@ export default function GymDetailScreen() {
                     {'  '}({gym.totalReviews} Reviews)
                   </Text>
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Red Circular Chat Button */}
             <TouchableOpacity
-              onPress={() => router.push('/help-support')}
+              onPress={() => router.push('/support/help-support' as any)}
               activeOpacity={0.85}
               className="h-12 w-12 items-center justify-center rounded-full bg-[#FFEAEF] shadow-xs">
               <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -681,7 +691,7 @@ export default function GymDetailScreen() {
             {/* Map Graphic Preview Card */}
             <View className="relative mt-3 h-48 w-full overflow-hidden rounded-3xl border border-slate-200">
               <Image
-                source={require('../assets/images/gym-map.png')}
+                source={require('../../assets/images/gym-map.png')}
                 className="h-full w-full"
                 resizeMode="cover"
               />
@@ -834,6 +844,12 @@ export default function GymDetailScreen() {
 
             {/* Show All Reviews Button */}
             <TouchableOpacity
+              onPress={() =>
+                router.push({
+                  pathname: '/gym/reviews' as any,
+                  params: { id: gym.id },
+                })
+              }
               activeOpacity={0.8}
               className="mt-3 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-3.5">
               <Text className="font-bold text-xs text-slate-700">
@@ -847,7 +863,12 @@ export default function GymDetailScreen() {
             <Text className="font-bold text-base text-slate-900">Upgrade to unlock</Text>
 
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/membership')}
+              onPress={() =>
+                router.push({
+                  pathname: '/membership/buy-membership' as any,
+                  params: { gymName: gym.title, gymId: gym.id },
+                })
+              }
               activeOpacity={0.85}
               className="mt-2.5 flex-row items-center justify-center gap-2 rounded-2xl border border-[#E23744]/25 bg-[#FFEAEF] py-3.5">
               <Ionicons name="lock-closed" size={16} color="#E23744" />
@@ -878,7 +899,12 @@ export default function GymDetailScreen() {
         className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-slate-100 bg-white px-4 pt-3">
         {/* Buy Membership Button */}
         <TouchableOpacity
-          onPress={() => router.push('/(tabs)/membership')}
+          onPress={() =>
+            router.push({
+              pathname: '/membership/buy-membership' as any,
+              params: { gymName: gym.title, gymId: gym.id },
+            })
+          }
           activeOpacity={0.85}
           className="flex-1 items-center justify-center rounded-2xl bg-[#E23744] py-3.5 shadow-md shadow-[#E23744]/25">
           <Text className="font-bold text-sm text-white">Buy Membership</Text>

@@ -150,7 +150,7 @@ export default function TransactionsScreen() {
         </Text>
 
         <TouchableOpacity
-          onPress={() => router.push('/notifications')}
+          onPress={() => router.push('/account/notifications' as any)}
           className="relative h-10 w-10 items-center justify-center rounded-full"
           activeOpacity={0.7}>
           <Ionicons name="notifications" size={22} color="#E23744" />

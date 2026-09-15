@@ -82,7 +82,7 @@ export default function ProfileScreen() {
       id: 'help-support',
       title: 'Help & Support',
       iconName: 'help-circle-outline',
-      route: '/help-support',
+      route: '/support/help-support',
     },
   ];
 
@@ -120,7 +120,7 @@ export default function ProfileScreen() {
         {/* 2. Top Profile Card */}
         <View className="my-4 overflow-hidden rounded-[28px] shadow-lg">
           <ImageBackground
-            source={require('../assets/images/Bg.png')}
+            source={require('../../assets/images/Bg.png')}
             resizeMode="cover"
             className="p-5">
             {/* User Info Row */}
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
                     source={
                       user?.clientDetail?.selfieUrl
                         ? { uri: user.clientDetail.selfieUrl }
-                        : require('../assets/images/male.png')
+                        : require('../../assets/images/male.png')
                     }
                     className="h-full w-full"
                     resizeMode="cover"

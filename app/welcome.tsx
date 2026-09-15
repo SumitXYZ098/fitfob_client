@@ -282,19 +282,19 @@ export default function Welcome() {
               </Text>
               <View className="mt-1 flex-row items-center">
                 <Pressable
-                  onPress={() => router.push('/terms')}
+                  onPress={() => router.push('/support/terms' as any)}
                   hitSlop={8}
                   className="active:opacity-60">
-                  <Text className="font-semibold text-xs text-primary underline">
-                    Terms & Conditions
+                  <Text className="text-xs font-semibold text-[#E23744] underline">
+                    Terms of Service
                   </Text>
                 </Pressable>
                 <Text className="mx-1.5 font-sans text-xs text-white/50">and</Text>
                 <Pressable
-                  onPress={() => router.push('/privacy')}
+                  onPress={() => router.push('/support/privacy' as any)}
                   hitSlop={8}
                   className="active:opacity-60">
-                  <Text className="font-semibold text-xs text-primary underline">
+                  <Text className="text-xs font-semibold text-[#E23744] underline">
                     Privacy Policy
                   </Text>
                 </Pressable>

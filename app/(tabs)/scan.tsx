@@ -63,7 +63,7 @@ export default function ScanScreen() {
         <Text className="font-bold text-lg text-darkText">Check In</Text>
 
         <TouchableOpacity
-          onPress={() => router.push('/notifications')}
+          onPress={() => router.push('/account/notifications' as any)}
           className="h-10 w-10 items-center justify-center rounded-full">
           <Ionicons name="notifications" size={20} color="#E23744" />
         </TouchableOpacity>

@@ -15,7 +15,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
 import GradientDivider from '@/components/GradientDivider';
 
-export default function MembershipScreen() {
+export default function YourOutdoorPassScreen() {
   const router = useRouter();
   const { activePass, togglePausePass } = useOutdoorPassStore();
 
@@ -73,13 +73,7 @@ export default function MembershipScreen() {
       {/* 1. Top Header Bar */}
       <View className="flex-row items-center justify-between px-5 pt-1 pb-3">
         <TouchableOpacity
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push('/(tabs)');
-            }
-          }}
+          onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center -ml-2"
           activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={22} color="#1E293B" />
@@ -175,13 +169,11 @@ export default function MembershipScreen() {
             Luxury Membership of your benefits
           </Text>
 
-          {/* Smooth Fading Gradient Divider */}
           <GradientDivider />
 
           <View className="pt-3.5">
             {benefits.map((benefit, index) => (
               <View key={index} className="flex-row items-center mb-3">
-                {/* Mint Green Double Checkbox Badge */}
                 <View className="h-5 w-5 items-center justify-center rounded-[6px] bg-[#DCFCE7] mr-3">
                   <Ionicons name="checkmark-done" size={13} color="#16A34A" />
                 </View>

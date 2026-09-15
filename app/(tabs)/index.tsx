@@ -125,7 +125,7 @@ function GymCard({
 
   const handleOpenDetail = () => {
     router.push({
-      pathname: '/gym-detail',
+      pathname: '/gym/gym-detail' as any,
       params: { id: gym.id },
     });
   };
@@ -186,12 +186,13 @@ function GymCard({
         )}
 
         {/* Bottom Right: Dynamic Carousel Pagination Dots */}
-        <View className="absolute bottom-3 right-3 z-10 flex-row items-center space-x-1.5">
+        <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
           {gym.images.map((_, idx) => (
             <View
               key={idx}
+              style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
               className={`h-1.5 rounded-full ${
-                idx === activeIndex ? 'w-5 bg-[#E23744]' : 'ml-1 h-1.5 w-1.5 bg-white/70'
+                idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
               }`}
             />
           ))}
@@ -263,7 +264,7 @@ export default function HomeScreen() {
           {/* Action Icons */}
           <View className="flex-row items-center space-x-3">
             <TouchableOpacity
-              onPress={() => router.push('/notifications')}
+              onPress={() => router.push('/account/notifications' as any)}
               className="h-10 w-10 items-center justify-center rounded-full bg-[#FFEAEF]">
               <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
                 <Path
@@ -283,7 +284,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/profile')}
+              onPress={() => router.push('/account/profile' as any)}
               className="ml-2 h-10 w-10 items-center justify-center rounded-full bg-[#FFEAEF]">
               <Svg width={18} height={18} viewBox="0 0 20 20" fill="none">
                 <Path
@@ -357,9 +358,11 @@ export default function HomeScreen() {
         {/* 5. Nearby Gym Section Header */}
         <View className="mb-3 mt-4 flex-row items-center justify-between px-4">
           <Text className="font-bold text-xl text-darkText">Nearby Gym</Text>
-          <TouchableOpacity className="flex-row items-center space-x-1.5 rounded-full border border-[#E5E7EB] bg-white px-4 py-1.5 shadow-sm">
-            <Ionicons name="options-outline" size={16} color="#E23744" />
-            <Text className="ml-1 font-semibold text-sm text-darkText">Filter</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/gym/ViewAllScreen' as any)}
+            className="flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1.5 shadow-sm">
+            <Text className="font-semibold text-sm text-darkText">View All</Text>
+            <Ionicons name="chevron-forward" size={14} color="#E23744" style={{ marginLeft: 3 }} />
           </TouchableOpacity>
         </View>
 
