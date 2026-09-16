@@ -15,12 +15,56 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import * as Location from 'expo-location';
+import GymDetailMapView from '@/components/modules/GymDetailMapView';
+
+export interface GymBranchItem {
+  id: string;
+  name: string;
+  address?: string;
+  coordinate: { latitude: number; longitude: number };
+  isMain?: boolean;
+}
 
 export const GYM_DETAILS = {
   '1': {
     id: '1',
     title: 'Anytime Fitness Gym',
     address: 'Sector 71, Mohali, Punjab',
+    coordinate: { latitude: 30.7046, longitude: 76.7179 },
+    branches: [
+      {
+        id: 'b1-1',
+        name: 'Anytime Fitness - Sector 71 (Selected)',
+        address: 'Sector 71, Mohali, Punjab',
+        coordinate: { latitude: 30.7046, longitude: 76.7179 },
+        isMain: true,
+      },
+      {
+        id: 'b1-2',
+        name: 'Anytime Fitness - Phase 5 Branch',
+        address: 'SCF 32, Phase 5, Mohali, Punjab',
+        coordinate: { latitude: 30.7188, longitude: 76.7145 },
+      },
+      {
+        id: 'b1-3',
+        name: 'Anytime Fitness - Phase 8B Industrial Branch',
+        address: 'Plot 42, Phase 8B, Industrial Area, Mohali',
+        coordinate: { latitude: 30.7090, longitude: 76.6960 },
+      },
+      {
+        id: 'b1-4',
+        name: 'Anytime Fitness - Sector 68 Branch',
+        address: 'SCO 55, Sector 68, Mohali, Punjab',
+        coordinate: { latitude: 30.6970, longitude: 76.7260 },
+      },
+      {
+        id: 'b1-5',
+        name: 'Anytime Fitness - Sector 82 JLPL Branch',
+        address: 'Commercial Hub, Sector 82, Mohali, Punjab',
+        coordinate: { latitude: 30.6720, longitude: 76.7350 },
+      },
+    ],
     rating: '4.5',
     totalReviews: 52,
     openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
@@ -107,6 +151,34 @@ export const GYM_DETAILS = {
     id: '2',
     title: 'Gold’s Fitness Club',
     address: 'Phase 5, Mohali, Punjab',
+    coordinate: { latitude: 30.7188, longitude: 76.7145 },
+    branches: [
+      {
+        id: 'b2-1',
+        name: 'Gold’s Fitness Club - Phase 5 (Selected)',
+        address: 'Phase 5, Mohali, Punjab',
+        coordinate: { latitude: 30.7188, longitude: 76.7145 },
+        isMain: true,
+      },
+      {
+        id: 'b2-2',
+        name: 'Gold’s Fitness Club - Sector 70 Branch',
+        address: 'SCO 21, Sector 70, Mohali, Punjab',
+        coordinate: { latitude: 30.6980, longitude: 76.7120 },
+      },
+      {
+        id: 'b2-3',
+        name: 'Gold’s Fitness Club - Phase 3B2 Branch',
+        address: 'Market Complex, Phase 3B2, Mohali, Punjab',
+        coordinate: { latitude: 30.7135, longitude: 76.7235 },
+      },
+      {
+        id: 'b2-4',
+        name: 'Gold’s Fitness Club - Sector 80 Branch',
+        address: 'Near IT City Road, Sector 80, Mohali, Punjab',
+        coordinate: { latitude: 30.6860, longitude: 76.7240 },
+      },
+    ],
     rating: '4.8',
     totalReviews: 68,
     openHours: 'Mon - Sun: 05:30 AM - 10:30 PM',
@@ -189,6 +261,209 @@ export const GYM_DETAILS = {
       'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1000&auto=format&fit=crop',
     ],
   },
+  '3': {
+    id: '3',
+    title: 'Cult.Fit Elite Center',
+    address: 'Phase 7, Mohali, Punjab',
+    coordinate: { latitude: 30.7095, longitude: 76.7095 },
+    branches: [
+      {
+        id: 'b3-1',
+        name: 'Cult.Fit - Phase 7 Center (Selected)',
+        address: 'Phase 7, Mohali, Punjab',
+        coordinate: { latitude: 30.7095, longitude: 76.7095 },
+        isMain: true,
+      },
+      {
+        id: 'b3-2',
+        name: 'Cult.Fit - Sector 67 Center',
+        address: 'SCO 18, Sector 67, Mohali, Punjab',
+        coordinate: { latitude: 30.6880, longitude: 76.7340 },
+      },
+      {
+        id: 'b3-3',
+        name: 'Cult.Fit - Phase 3B2 Center',
+        address: 'Phase 3B2, Mohali, Punjab',
+        coordinate: { latitude: 30.7140, longitude: 76.7220 },
+      },
+    ],
+    rating: '4.7',
+    totalReviews: 44,
+    openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
+    description:
+      'State-of-the-art functional fitness, high-intensity boxing arenas, CrossFit rigs, and recovery steam amenities coached by certified elite masters.',
+    amenities: [
+      { name: 'Boxing', icon: 'fitness-outline', library: 'ionicons' },
+      { name: 'CrossFit', icon: 'barbell-outline', library: 'ionicons' },
+      { name: 'Steam', icon: 'water-outline', library: 'ionicons' },
+      { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
+      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
+    ],
+    exerciseZones: [
+      {
+        title: 'CrossFit Rig & Turf',
+        image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop',
+      },
+      {
+        title: 'Combat & Boxing Ring',
+        image: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=600&auto=format&fit=crop',
+      },
+    ],
+    ratingBreakdown: [
+      { star: 5, pct: '78%' },
+      { star: 4, pct: '50%' },
+      { star: 3, pct: '25%' },
+      { star: 2, pct: '10%' },
+      { star: 1, pct: '4%' },
+    ],
+    reviews: [
+      {
+        id: 'r1',
+        name: 'Amanpreet Singh',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+        rating: 5,
+        time: '2 hours ago',
+        comment: 'Best CrossFit facility in Phase 7 Mohali. Coaches are world class!',
+      },
+    ],
+    images: [
+      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  '4': {
+    id: '4',
+    title: 'Prana Yoga & Wellness',
+    address: 'Phase 3B2, Mohali, Punjab',
+    coordinate: { latitude: 30.7135, longitude: 76.7235 },
+    rating: '4.9',
+    totalReviews: 89,
+    openHours: 'Mon - Sat: 06:00 AM - 08:30 PM',
+    description:
+      'Holistic mind and body wellness sanctuary offering traditional Ashtanga, Hatha Yoga, calming sound baths, and natural detox tea lounge.',
+    amenities: [
+      { name: 'Meditation', icon: 'flower-outline', library: 'ionicons' },
+      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
+      { name: 'Locker', icon: 'lock-closed-outline', library: 'ionicons' },
+      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
+    ],
+    exerciseZones: [
+      {
+        title: 'Zen Meditation Studio',
+        image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=600&auto=format&fit=crop',
+      },
+    ],
+    ratingBreakdown: [
+      { star: 5, pct: '90%' },
+      { star: 4, pct: '40%' },
+      { star: 3, pct: '15%' },
+      { star: 2, pct: '5%' },
+      { star: 1, pct: '2%' },
+    ],
+    reviews: [
+      {
+        id: 'r1',
+        name: 'Neha Verma',
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&auto=format&fit=crop',
+        rating: 5,
+        time: '1 day ago',
+        comment: 'Peaceful ambience and authentic yoga masters. Recharges your soul!',
+      },
+    ],
+    images: [
+      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  '5': {
+    id: '5',
+    title: 'Powerhouse Gym & Spa',
+    address: 'Sector 70, Mohali, Punjab',
+    coordinate: { latitude: 30.6980, longitude: 76.7120 },
+    rating: '4.6',
+    totalReviews: 61,
+    openHours: 'Mon - Sun: 05:30 AM - 10:30 PM',
+    description:
+      'Heavy duty weight training, Olympic lifting platforms, luxury pool, and Scandinavian sauna facilities.',
+    amenities: [
+      { name: 'Pool', icon: 'water-outline', library: 'ionicons' },
+      { name: 'Sauna', icon: 'flame-outline', library: 'ionicons' },
+      { name: 'Trainers', icon: 'barbell-outline', library: 'ionicons' },
+      { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
+    ],
+    exerciseZones: [
+      {
+        title: 'Olympic Free Weights',
+        image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=600&auto=format&fit=crop',
+      },
+    ],
+    ratingBreakdown: [
+      { star: 5, pct: '70%' },
+      { star: 4, pct: '50%' },
+      { star: 3, pct: '28%' },
+      { star: 2, pct: '12%' },
+      { star: 1, pct: '5%' },
+    ],
+    reviews: [
+      {
+        id: 'r1',
+        name: 'Jasmeet Dhillon',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop',
+        rating: 5,
+        time: '3 days ago',
+        comment: 'Fantastic gym with great pool and sauna. Highly recommended!',
+      },
+    ],
+    images: [
+      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  '6': {
+    id: '6',
+    title: 'Ozone Fitness Club',
+    address: 'Phase 9, Mohali, Punjab',
+    coordinate: { latitude: 30.6890, longitude: 76.7310 },
+    rating: '4.6',
+    totalReviews: 38,
+    openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
+    description:
+      'Premier fitness club offering high-performance functional fitness, spinning studios, and expert nutritional guidance.',
+    amenities: [
+      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
+      { name: 'Spinning', icon: 'bicycle-outline', library: 'ionicons' },
+      { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
+      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
+    ],
+    exerciseZones: [
+      {
+        title: 'Cardio & Strength',
+        image: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop',
+      },
+    ],
+    ratingBreakdown: [
+      { star: 5, pct: '75%' },
+      { star: 4, pct: '45%' },
+      { star: 3, pct: '20%' },
+      { star: 2, pct: '8%' },
+      { star: 1, pct: '3%' },
+    ],
+    reviews: [
+      {
+        id: 'r1',
+        name: 'Ritu Sen',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop',
+        rating: 5,
+        time: '5 days ago',
+        comment: 'Super clean and great community vibe in Phase 9!',
+      },
+    ],
+    images: [
+      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
 };
 
 export default function GymDetailScreen() {
@@ -200,20 +475,82 @@ export default function GymDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isMapInteracting, setIsMapInteracting] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<GymBranchItem | null>(null);
+  const mapInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const currentIndexRef = useRef(0);
   const scrollY = useRef(new Animated.Value(0)).current;
   const HERO_HEIGHT = 330;
 
+  useEffect(() => {
+    setSelectedBranch(null);
+  }, [gymId]);
+
+  // Fetch user GPS location to show on the map and display nearby area gyms
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getLastKnownPositionAsync();
+          if (loc && isMounted) {
+            setUserLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+            .then((fresh) => {
+              if (fresh && isMounted) {
+                setUserLocation({
+                  latitude: fresh.coords.latitude,
+                  longitude: fresh.coords.longitude,
+                });
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        // ignore location error
+      }
+    })();
+    return () => {
+      isMounted = false;
+      if (mapInteractionTimerRef.current) {
+        clearTimeout(mapInteractionTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleMapTouchStart = () => {
+    if (mapInteractionTimerRef.current) {
+      clearTimeout(mapInteractionTimerRef.current);
+    }
+    setIsMapInteracting(true);
+  };
+
+  const handleMapTouchEnd = () => {
+    if (mapInteractionTimerRef.current) {
+      clearTimeout(mapInteractionTimerRef.current);
+    }
+    setIsMapInteracting(false);
+  };
+
+  const handleSelectGym = (selectedId: string) => {
+    if (selectedId && selectedId !== gym.id) {
+      router.push({
+        pathname: '/gym/gym-detail' as any,
+        params: { id: selectedId },
+      });
+    }
+  };
+
   // 5 slides + 1 cloned slide for continuous forward loop
   const slides = [...gym.images, gym.images[0]];
 
-  // Hero Parallax: image stays and moves at slower speed while sheet scrolls over it
-  const heroTranslateY = scrollY.interpolate({
-    inputRange: [-HERO_HEIGHT, 0, HERO_HEIGHT],
-    outputRange: [-HERO_HEIGHT / 2, 0, HERO_HEIGHT * 0.55],
-    extrapolate: 'clamp',
-  });
 
   // Pull-down elastic zoom effect
   const heroScale = scrollY.interpolate({
@@ -318,9 +655,46 @@ export default function GymDetailScreen() {
     }
   };
 
-  const handleGetDirections = () => {
-    const encoded = encodeURIComponent(`${gym.title}, ${gym.address}`);
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encoded}`);
+  const handleGetDirections = (targetBranch?: GymBranchItem) => {
+    const branchToUse = targetBranch || selectedBranch;
+    const lat = branchToUse ? branchToUse.coordinate.latitude : (gym as any).coordinate?.latitude || 30.7046;
+    const lng = branchToUse ? branchToUse.coordinate.longitude : (gym as any).coordinate?.longitude || 76.7179;
+    const branchName = branchToUse ? branchToUse.name : gym.title;
+    const encodedName = encodeURIComponent(branchName);
+
+    // Direct Google Maps navigation URLs (opens Google Maps App directly in turn-by-turn navigation mode)
+    const googleMapsAppUrl = Platform.select({
+      ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+      android: `google.navigation:q=${lat},${lng}&mode=d`,
+    });
+
+    const nativeMapScheme = Platform.select({
+      ios: `maps://app?daddr=${lat},${lng}&q=${encodedName}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`,
+    });
+
+    const webGoogleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving`;
+
+    (async () => {
+      try {
+        if (googleMapsAppUrl && (await Linking.canOpenURL(googleMapsAppUrl))) {
+          await Linking.openURL(googleMapsAppUrl);
+          return;
+        }
+      } catch {}
+
+      try {
+        if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {
+          await Linking.openURL(nativeMapScheme);
+          return;
+        }
+      } catch {}
+
+      // Reliable universal fallback
+      Linking.openURL(webGoogleMapsUrl).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+      });
+    })();
   };
 
   return (
@@ -506,20 +880,20 @@ export default function GymDetailScreen() {
 
       {/* 2. Scrollable Bottom Sheet Content */}
       <Animated.ScrollView
+        scrollEnabled={true}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 10 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
         className="flex-1">
-        {/* 1. Hero Image Carousel (with Parallax & Zoom) */}
+        {/* 1. Hero Image Carousel (with Zoom) */}
         <Animated.View
           style={{
             height: HERO_HEIGHT,
             transform: [
-              { translateY: heroTranslateY },
               { scale: heroScale },
             ],
           }}
@@ -528,6 +902,7 @@ export default function GymDetailScreen() {
             ref={scrollRef}
             horizontal
             pagingEnabled
+            nestedScrollEnabled={true}
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(e) => {
               let idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
@@ -579,7 +954,7 @@ export default function GymDetailScreen() {
           })}
           className="-mt-9 min-h-screen rounded-t-[36px] bg-white px-5 pb-32 pt-3">
           {/* Bottom Sheet Pull Handle */}
-          <View className="mb-3 mt-1 items-center">
+          <View pointerEvents="none" className="mb-3 mt-1 items-center">
             <View className="h-1.5 w-12 rounded-full bg-slate-300" />
           </View>
 
@@ -638,6 +1013,7 @@ export default function GymDetailScreen() {
 
             <ScrollView
               horizontal
+              nestedScrollEnabled={true}
               showsHorizontalScrollIndicator={false}
               className="mt-3 -mx-5 px-5">
               {gym.exerciseZones.map((zone, idx) => (
@@ -685,34 +1061,35 @@ export default function GymDetailScreen() {
 
           {/* 6. Where you'll be (Location & Map) */}
           <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
-            <Text className="mt-1 font-medium text-xs text-slate-500">{gym.address}</Text>
-
-            {/* Map Graphic Preview Card */}
-            <View className="relative mt-3 h-48 w-full overflow-hidden rounded-3xl border border-slate-200">
-              <Image
-                source={require('../../assets/images/gym-map.png')}
-                className="h-full w-full"
-                resizeMode="cover"
-              />
-
-              {/* Pulsing Map Pin in the center */}
-              <View className="absolute inset-0 items-center justify-center pointer-events-none">
-                <View className="h-10 w-10 items-center justify-center rounded-full bg-[#E23744]/20">
-                  <View className="h-7 w-7 items-center justify-center rounded-full bg-[#E23744] shadow-md">
-                    <Ionicons name="location" size={16} color="#FFFFFF" />
-                  </View>
-                </View>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
+                <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
+                  {gym.address}
+                </Text>
               </View>
 
-              {/* Floating Get Directions Button */}
+              {/* Right Side Directions Button */}
               <TouchableOpacity
-                onPress={handleGetDirections}
-                activeOpacity={0.9}
-                className="absolute bottom-3 right-3 flex-row items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 px-3.5 py-2 shadow-sm">
+                onPress={() => handleGetDirections()}
+                activeOpacity={0.85}
+                className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3.5 py-2 shadow-xs">
                 <Ionicons name="navigate" size={14} color="#E23744" />
-                <Text className="font-bold text-xs text-slate-800">Get Directions</Text>
+                <Text className="font-bold text-xs text-[#E23744]">Directions</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Live Interactive Dedicated Gym Map */}
+            <View className="mt-3 overflow-hidden rounded-[10px] border border-slate-200 shadow-sm" style={{ height: 260 }}>
+              <GymDetailMapView
+                title={gym.title}
+                address={gym.address}
+                coordinate={gym.coordinate}
+                userLocation={userLocation}
+                height={260}
+                onGetDirections={() => handleGetDirections()}
+                onOpenAllGymsMap={() => router.push('/gym/Mapviewscreen' as any)}
+              />
             </View>
           </View>
 
@@ -757,6 +1134,7 @@ export default function GymDetailScreen() {
               <Animated.ScrollView
                 ref={reviewScrollRef as any}
                 horizontal
+                nestedScrollEnabled={true}
                 pagingEnabled={false}
                 decelerationRate="fast"
                 snapToInterval={reviewCardStep}

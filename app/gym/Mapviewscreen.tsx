@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
+import AllGymsMapView, { AllGymsMapViewHandle, MapGymItem } from '@/components/modules/AllGymsMapView';
 
 export interface GymItem {
   id: string;
@@ -43,7 +45,7 @@ const GYMS_LIST: GymItem[] = [
     isOpen: true,
     isVerified: true,
     category: 'Gyms',
-    coordinate: { latitude: 30.7355, longitude: 76.7782 },
+    coordinate: { latitude: 30.7046, longitude: 76.7179 },
     images: [
       'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
@@ -61,7 +63,7 @@ const GYMS_LIST: GymItem[] = [
     isOpen: true,
     isVerified: true,
     category: 'Gyms',
-    coordinate: { latitude: 30.7392, longitude: 76.7845 },
+    coordinate: { latitude: 30.7188, longitude: 76.7145 },
     images: [
       'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
@@ -79,7 +81,7 @@ const GYMS_LIST: GymItem[] = [
     isOpen: true,
     isVerified: true,
     category: 'Boxing',
-    coordinate: { latitude: 30.7295, longitude: 76.7695 },
+    coordinate: { latitude: 30.7265, longitude: 76.7095 },
     images: [
       'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
@@ -95,7 +97,7 @@ const GYMS_LIST: GymItem[] = [
     isOpen: true,
     isVerified: true,
     category: 'Yoga',
-    coordinate: { latitude: 30.7435, longitude: 76.7735 },
+    coordinate: { latitude: 30.7150, longitude: 76.7230 },
     images: [
       'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop',
@@ -110,10 +112,25 @@ const GYMS_LIST: GymItem[] = [
     isOpen: false,
     isVerified: true,
     category: 'Gyms',
-    coordinate: { latitude: 30.7320, longitude: 76.7885 },
+    coordinate: { latitude: 30.6970, longitude: 76.7260 },
     images: [
       'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  {
+    id: '6',
+    title: 'Ozone Fitness Club',
+    rating: '4.6/5',
+    amenities: ['AC', 'Wi-Fi', 'Spinning', 'Shower', 'Parking'],
+    price: '₹1400/Monthly',
+    isOpen: true,
+    isVerified: true,
+    category: 'Gyms',
+    coordinate: { latitude: 30.6720, longitude: 76.7350 },
+    images: [
+      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
     ],
   },
 ];
@@ -188,23 +205,7 @@ function GymCardItem({
   };
 
   return (
-    <View
-      className={`mb-4 overflow-hidden rounded-3xl bg-[#F8FAFC] shadow-sm ${
-        isSelected ? 'border-2 border-[#E23744]' : 'border-[1.5px] border-[#CBD5E1]'
-      }`}>
-      {/* Top Banner if selected on map */}
-      {isSelected && (
-        <View className="flex-row items-center justify-between bg-[#FFEAEF] px-4 py-1.5">
-          <View className="flex-row items-center">
-            <Ionicons name="location" size={14} color="#E23744" />
-            <Text className="ml-1 text-xs font-bold text-[#E23744]">Selected on Map</Text>
-          </View>
-          <TouchableOpacity onPress={onFocusOnMap}>
-            <Text className="text-xs font-semibold text-[#E23744]">Center Map</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
+    <View className="mb-4 overflow-hidden rounded-3xl bg-[#F8FAFC] border-[1.5px] border-[#CBD5E1] shadow-sm">
       {/* Image Carousel */}
       <View className="relative h-52 w-full bg-gray-200">
         <ScrollView
@@ -340,13 +341,44 @@ export default function Mapviewscreen() {
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGymId, setSelectedGymId] = useState<string>('1');
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'all'>('all');
   const [onlyOpen, setOnlyOpen] = useState(false);
 
+  // Fetch user location for full map view
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getLastKnownPositionAsync();
+          if (loc) {
+            setUserLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+            .then((fresh) => {
+              if (fresh) {
+                setUserLocation({
+                  latitude: fresh.coords.latitude,
+                  longitude: fresh.coords.longitude,
+                });
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, []);
+
   const scrollViewRef = useRef<ScrollView>(null);
-  const webViewRef = useRef<WebView>(null);
+  const mapRef = useRef<AllGymsMapViewHandle>(null);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -450,173 +482,36 @@ export default function Mapviewscreen() {
     });
   }, [selectedCategory, searchQuery, onlyOpen, sortBy]);
 
-  // Leaflet HTML source for map with custom red gym markers
-  const mapHtml = useMemo(() => {
-    const markersData = JSON.stringify(
-      filteredGyms.map((g) => ({
-        id: g.id,
-        title: g.title,
-        lat: g.coordinate.latitude,
-        lng: g.coordinate.longitude,
-      }))
-    );
+  const selectedGym = useMemo(() => {
+    return filteredGyms.find((g) => g.id === selectedGymId) || filteredGyms[0] || GYMS_LIST[0];
+  }, [filteredGyms, selectedGymId]);
 
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossOrigin="" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossOrigin=""></script>
-        <style>
-          * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-          html, body, #map {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            background-color: #F8F9FA;
-            -webkit-user-select: none;
-            user-select: none;
-          }
-          .leaflet-container {
-            background: #F8F9FA !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          }
-          .leaflet-control-attribution {
-            display: none !important;
-          }
-          .custom-pin {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-          }
-          .custom-pin:active {
-            transform: scale(0.92);
-          }
-        </style>
-      </head>
-      <body>
-        <div id="map"></div>
-
-        <script>
-          var gyms = ${markersData};
-          var centerLat = 30.7355;
-          var centerLng = 76.7782;
-
-          var map = L.map('map', {
-            center: [centerLat, centerLng],
-            zoom: 14.5,
-            zoomControl: false,
-            attributionControl: false
-          });
-
-          // Soft aesthetic street tiles
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19,
-            subdomains: 'abcd'
-          }).addTo(map);
-
-          var markers = {};
-
-          function createPinSvg(isSelected) {
-            var bg = isSelected ? '#991B1B' : '#E23744';
-            var scale = isSelected ? 1.25 : 1.0;
-            return '<div class="custom-pin" style="transform: scale(' + scale + ');">' +
-              '<svg width="34" height="42" viewBox="0 0 34 42" fill="none">' +
-                '<path d="M17 0C7.61 0 0 7.61 0 17C0 26.5 15.2 41 16.2 41.9C16.6 42.3 17.4 42.3 17.8 41.9C18.8 41 34 26.5 34 17C34 7.61 26.39 0 17 0Z" fill="' + bg + '"/>' +
-                '<circle cx="17" cy="16" r="10" fill="' + bg + '"/>' +
-                '<path d="M11 16H23M13 13V19M21 13V19M10 14H12V18H10ZM22 14H24V18H22Z" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>' +
-              '</svg>' +
-            '</div>';
-          }
-
-          gyms.forEach(function(gym, idx) {
-            var isSelected = (idx === 0);
-            var icon = L.divIcon({
-              html: createPinSvg(isSelected),
-              className: 'gym-marker-icon',
-              iconSize: [34, 42],
-              iconAnchor: [17, 42]
-            });
-
-            var marker = L.marker([gym.lat, gym.lng], { icon: icon }).addTo(map);
-            markers[gym.id] = marker;
-
-            // When marker is clicked
-            marker.on('click', function() {
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'SELECT_GYM',
-                  gymId: gym.id
-                }));
-              }
-              selectPin(gym.id);
-            });
-          });
-
-          function selectPin(selectedId) {
-            gyms.forEach(function(gym) {
-              if (markers[gym.id]) {
-                var isSelected = (gym.id === selectedId);
-                var newIcon = L.divIcon({
-                  html: createPinSvg(isSelected),
-                  className: 'gym-marker-icon',
-                  iconSize: isSelected ? [40, 50] : [34, 42],
-                  iconAnchor: isSelected ? [20, 50] : [17, 42]
-                });
-                markers[gym.id].setIcon(newIcon);
-                if (isSelected) {
-                  map.panTo([gym.lat, gym.lng], { animate: true });
-                }
-              }
-            });
-          }
-
-          window.focusGym = function(gymId) {
-            selectPin(gymId);
-          };
-        </script>
-      </body>
-      </html>
-    `;
+  // Gyms mapped for AllGymsMapView with title, category, price, coordinates
+  const mapGyms: MapGymItem[] = useMemo(() => {
+    return filteredGyms.map((g) => ({
+      id: g.id,
+      title: g.title,
+      rating: g.rating,
+      price: g.price,
+      category: g.category,
+      isOpen: g.isOpen,
+      image: g.images && g.images.length > 0 ? g.images[0] : '',
+      coordinate: g.coordinate,
+    }));
   }, [filteredGyms]);
 
-  // When user clicks a pin on the map
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'SELECT_GYM' && data.gymId) {
-        setSelectedGymId(data.gymId);
-        // If sheet is minimized, bring to half state so card is visible!
-        if (sheetState === 'minimized') {
-          snapTo('half');
-        }
-        const index = filteredGyms.findIndex((g) => g.id === data.gymId);
-        if (index >= 0) {
-          setTimeout(() => {
-            scrollViewRef.current?.scrollTo({
-              y: index * 340,
-              animated: true,
-            });
-          }, 200);
-        }
-      }
-    } catch (err) {
-      // Ignore parse error
-    }
-  };
+  // Reorder so that the selected gym on the map always comes to the very top of the list
+  const displayGyms = useMemo(() => {
+    if (!selectedGymId) return filteredGyms;
+    const selected = filteredGyms.find((g) => g.id === selectedGymId);
+    if (!selected) return filteredGyms;
+    return [selected, ...filteredGyms.filter((g) => g.id !== selectedGymId)];
+  }, [filteredGyms, selectedGymId]);
 
   const focusGymOnMap = (gym: GymItem) => {
     setSelectedGymId(gym.id);
-    // Snap to minimized so map is completely full screen!
+    mapRef.current?.focusGym(gym.id);
     snapTo('minimized');
-    webViewRef.current?.injectJavaScript(
-      `if (window.focusGym) { window.focusGym("${gym.id}"); } true;`
-    );
   };
 
   return (
@@ -658,17 +553,31 @@ export default function Mapviewscreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 2. FULL MAP AREA (Extends full screen behind the sliding bottom sheet) */}
-      <View className="flex-1 w-full overflow-hidden bg-[#F8F9FA]">
-        <WebView
-          ref={webViewRef}
-          originWhitelist={['*']}
-          source={{ html: mapHtml }}
-          onMessage={handleWebViewMessage}
-          style={{ flex: 1, backgroundColor: '#F8F9FA' }}
-          javaScriptEnabled
-          domStorageEnabled
-          scrollEnabled={false}
+      {/* 2. FULL MAP AREA (Dedicated AllGymsMapView showing all gyms with name badges & interactive popups) */}
+      <View style={{ flex: 1, width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#FAF7F8' }}>
+        <AllGymsMapView
+          ref={mapRef}
+          gyms={mapGyms}
+          selectedGymId={selectedGymId}
+          userLocation={userLocation}
+          onSelectGym={(gymId) => {
+            setSelectedGymId(gymId);
+            if (sheetState === 'minimized') {
+              snapTo('half');
+            }
+            // Smoothly scroll list to the very top so the selected gym card is immediately at top
+            scrollViewRef.current?.scrollTo({
+              y: 0,
+              animated: true,
+            });
+          }}
+          onOpenGymDetail={(gymId) => {
+            router.push({
+              pathname: '/gym/gym-detail' as any,
+              params: { id: gymId },
+            });
+          }}
+          style={{ flex: 1, width: '100%', height: '100%' }}
         />
       </View>
 
@@ -740,13 +649,13 @@ export default function Mapviewscreen() {
             paddingTop: 12,
             paddingBottom: 70,
           }}>
-          {filteredGyms.length === 0 ? (
+          {displayGyms.length === 0 ? (
             <View className="items-center justify-center py-12">
               <Ionicons name="fitness-outline" size={44} color="#D1D5DB" />
               <Text className="mt-2 font-medium text-sm text-gray-400">No gyms found</Text>
             </View>
           ) : (
-            filteredGyms.map((gym) => (
+            displayGyms.map((gym) => (
               <GymCardItem
                 key={gym.id}
                 gym={gym}

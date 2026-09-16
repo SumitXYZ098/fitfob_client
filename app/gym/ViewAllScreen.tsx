@@ -14,6 +14,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Polygon, Line, Circle } from 'react-native-svg';
+import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
 
 export interface GymItem {
   id: string;
@@ -27,8 +28,6 @@ export interface GymItem {
   images: string[];
   coordinate?: { latitude: number; longitude: number };
 }
-
-const CATEGORIES = ['Gyms', 'Yoga', 'Boxing', 'Dance', 'Crossfit', 'Zumba', 'Pilates'];
 
 const ALL_GYMS: GymItem[] = [
   {
@@ -96,6 +95,36 @@ const ALL_GYMS: GymItem[] = [
     images: [
       'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  {
+    id: '5',
+    title: 'Powerhouse Gym & Spa',
+    rating: '4.6/5',
+    amenities: ['AC', 'Wi-Fi', 'Swimming Pool', 'Sauna', 'Parking'],
+    price: '₹1600/Monthly',
+    isOpen: false,
+    isVerified: true,
+    category: 'Gyms',
+    coordinate: { latitude: 30.6970, longitude: 76.7260 },
+    images: [
+      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    ],
+  },
+  {
+    id: '6',
+    title: 'Ozone Fitness Club',
+    rating: '4.6/5',
+    amenities: ['AC', 'Wi-Fi', 'Spinning', 'Shower', 'Parking'],
+    price: '₹1400/Monthly',
+    isOpen: true,
+    isVerified: true,
+    category: 'Gyms',
+    coordinate: { latitude: 30.6720, longitude: 76.7350 },
+    images: [
+      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
     ],
   },
 ];
@@ -263,6 +292,15 @@ function GymCard({
 export default function ViewAllScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('Gyms');
+  const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
+    id: 'Gyms',
+    time: 0,
+  });
+
+  const handleSelectCategory = (catId: string) => {
+    setSelectedCategory(catId);
+    setCategoryAnimTrigger({ id: catId, time: Date.now() });
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -330,24 +368,15 @@ export default function ViewAllScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16 }}>
-          {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
-                className={`mr-2.5 rounded-full border px-5 py-2 ${
-                  isSelected ? 'border-[#E23744] bg-[#E23744]' : 'border-[#E5E7EB] bg-white'
-                }`}>
-                <Text
-                  className={`font-semibold text-sm ${
-                    isSelected ? 'text-white' : 'text-[#6B7280]'
-                  }`}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {CATEGORIES.map((cat) => (
+            <CategoryPillItem
+              key={cat.id}
+              cat={cat}
+              isSelected={selectedCategory === cat.id}
+              animTrigger={categoryAnimTrigger.id === cat.id ? categoryAnimTrigger.time : 0}
+              onPress={() => handleSelectCategory(cat.id)}
+            />
+          ))}
         </ScrollView>
       </View>
 

@@ -14,6 +14,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
+import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
 
 interface GymItem {
   id: string;
@@ -25,8 +26,6 @@ interface GymItem {
   isVerified: boolean;
   images: string[];
 }
-
-const CATEGORIES = ['Gyms', 'Yoga', 'Boxing', 'Dance', 'Crossfit', 'Zumba', 'Pilates'];
 
 const GYM_DATA: GymItem[] = [
   {
@@ -191,9 +190,8 @@ function GymCard({
             <View
               key={idx}
               style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-              className={`h-1.5 rounded-full ${
-                idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
-              }`}
+              className={`h-1.5 rounded-full ${idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
+                }`}
             />
           ))}
         </View>
@@ -228,6 +226,15 @@ function GymCard({
 export default function HomeScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('Gyms');
+  const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
+    id: 'Gyms',
+    time: 0,
+  });
+
+  const handleSelectCategory = (catId: string) => {
+    setSelectedCategory(catId);
+    setCategoryAnimTrigger({ id: catId, time: Date.now() });
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -318,24 +325,15 @@ export default function HomeScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16 }}>
-            {CATEGORIES.map((cat) => {
-              const isSelected = selectedCategory === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setSelectedCategory(cat)}
-                  className={`mr-2.5 rounded-full border px-5 py-2.5 ${
-                    isSelected ? 'border-[#E23744] bg-[#E23744]' : 'border-[#E5E7EB] bg-white'
-                  }`}>
-                  <Text
-                    className={`font-semibold text-sm ${
-                      isSelected ? 'text-white' : 'text-[#6B7280]'
-                    }`}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {CATEGORIES.map((cat) => (
+              <CategoryPillItem
+                key={cat.id}
+                cat={cat}
+                isSelected={selectedCategory === cat.id}
+                animTrigger={categoryAnimTrigger.id === cat.id ? categoryAnimTrigger.time : 0}
+                onPress={() => handleSelectCategory(cat.id)}
+              />
+            ))}
           </ScrollView>
         </View>
 
@@ -360,8 +358,8 @@ export default function HomeScreen() {
           <Text className="font-bold text-xl text-darkText">Nearby Gym</Text>
           <TouchableOpacity
             onPress={() => router.push('/gym/ViewAllScreen' as any)}
-            className="flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1.5 shadow-sm">
-            <Text className="font-semibold text-sm text-darkText">View All</Text>
+            className="flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1.5 ">
+            <Text className="font-semibold text-sm text-[#E23744]">View All</Text>
             <Ionicons name="chevron-forward" size={14} color="#E23744" style={{ marginLeft: 3 }} />
           </TouchableOpacity>
         </View>

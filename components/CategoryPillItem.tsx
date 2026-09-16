@@ -64,143 +64,99 @@ export default function CategoryPillItem({
     outputRange: [0.05, 0.35],
   });
 
-  // 2. 3-Second Playful Icon Workout Animation (Jump, Bounce & Wiggle Tilt)
+  // 2. Strict Under-2-Second Wiggle Animation (Strictly <= 1.8s total, stops cleanly)
   const animScale = useRef(new Animated.Value(1)).current;
   const animRotate = useRef(new Animated.Value(0)).current;
   const animTranslateY = useRef(new Animated.Value(0)).current;
-  const loopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const currentAnim = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    if (isSelected && animTrigger > 0) {
-      if (loopRef.current) {
-        loopRef.current.stop();
-      }
-
-      animScale.setValue(1);
-      animRotate.setValue(0);
-      animTranslateY.setValue(0);
-
-      const animationLoop = Animated.loop(
-        Animated.sequence([
-          // Jump & scale up
-          Animated.parallel([
-            Animated.timing(animScale, {
-              toValue: 1.34,
-              duration: 250,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(animTranslateY, {
-              toValue: -3,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animRotate, {
-              toValue: 1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]),
-          // Bounce down with counter tilt
-          Animated.parallel([
-            Animated.timing(animScale, {
-              toValue: 0.92,
-              duration: 250,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(animTranslateY, {
-              toValue: 1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animRotate, {
-              toValue: -1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]),
-          // Settle bounce
-          Animated.parallel([
-            Animated.timing(animScale, {
-              toValue: 1.15,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animTranslateY, {
-              toValue: -1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animRotate, {
-              toValue: 0.5,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]),
-          // Return to base
-          Animated.parallel([
-            Animated.timing(animScale, {
-              toValue: 1.0,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animTranslateY, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animRotate, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]),
-        ])
-      );
-
-      loopRef.current = animationLoop;
-      animationLoop.start();
-
-      // Stop after exactly 3 seconds
-      const timer = setTimeout(() => {
-        animationLoop.stop();
-        Animated.parallel([
-          Animated.spring(animScale, {
-            toValue: 1.0,
-            friction: 6,
-            useNativeDriver: true,
-          }),
-          Animated.spring(animTranslateY, {
-            toValue: 0,
-            friction: 6,
-            useNativeDriver: true,
-          }),
-          Animated.spring(animRotate, {
-            toValue: 0,
-            friction: 6,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 3000);
-
-      return () => {
-        clearTimeout(timer);
-        animationLoop.stop();
-      };
-    } else {
-      if (loopRef.current) {
-        loopRef.current.stop();
+    // If not selected, cancel immediately and reset
+    if (!isSelected || animTrigger <= 0) {
+      if (currentAnim.current) {
+        currentAnim.current.stop();
       }
       animScale.setValue(1);
       animTranslateY.setValue(0);
       animRotate.setValue(0);
+      return;
     }
+
+    // Stop any previous running animation
+    if (currentAnim.current) {
+      currentAnim.current.stop();
+    }
+    animScale.setValue(1);
+    animRotate.setValue(0);
+    animTranslateY.setValue(0);
+
+    // Single 400ms wiggle cycle (runs 4 times = 1600ms)
+    const singleCycle = Animated.sequence([
+      Animated.parallel([
+        Animated.timing(animScale, { toValue: 1.25, duration: 100, useNativeDriver: true }),
+        Animated.timing(animTranslateY, { toValue: -2.5, duration: 100, useNativeDriver: true }),
+        Animated.timing(animRotate, { toValue: 1, duration: 100, useNativeDriver: true }), // +18deg
+      ]),
+      Animated.parallel([
+        Animated.timing(animScale, { toValue: 1.12, duration: 100, useNativeDriver: true }),
+        Animated.timing(animTranslateY, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(animRotate, { toValue: -1, duration: 100, useNativeDriver: true }), // -18deg
+      ]),
+      Animated.parallel([
+        Animated.timing(animScale, { toValue: 1.2, duration: 100, useNativeDriver: true }),
+        Animated.timing(animTranslateY, { toValue: -1.5, duration: 100, useNativeDriver: true }),
+        Animated.timing(animRotate, { toValue: 0.7, duration: 100, useNativeDriver: true }), // +12deg
+      ]),
+      Animated.parallel([
+        Animated.timing(animScale, { toValue: 1.06, duration: 100, useNativeDriver: true }),
+        Animated.timing(animTranslateY, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.timing(animRotate, { toValue: -0.7, duration: 100, useNativeDriver: true }), // -12deg
+      ]),
+    ]);
+
+    // Total sequence = (400ms * 4) + 180ms smooth settle = 1780ms (1.78s, strictly under 2 sec!)
+    const finiteAnimation = Animated.sequence([
+      Animated.loop(singleCycle, { iterations: 4 }),
+      Animated.parallel([
+        Animated.timing(animScale, { toValue: 1.0, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(animTranslateY, { toValue: 0, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(animRotate, { toValue: 0, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      ]),
+    ]);
+
+    currentAnim.current = finiteAnimation;
+    finiteAnimation.start(({ finished }) => {
+      if (finished) {
+        animScale.setValue(1);
+        animTranslateY.setValue(0);
+        animRotate.setValue(0);
+      }
+    });
+
+    // Hard cutoff safety timer at exactly 1850ms to guarantee zero lingering
+    const hardCutoff = setTimeout(() => {
+      if (currentAnim.current) {
+        currentAnim.current.stop();
+      }
+      animScale.setValue(1);
+      animTranslateY.setValue(0);
+      animRotate.setValue(0);
+    }, 1850);
+
+    return () => {
+      clearTimeout(hardCutoff);
+      if (currentAnim.current) {
+        currentAnim.current.stop();
+      }
+      animScale.setValue(1);
+      animTranslateY.setValue(0);
+      animRotate.setValue(0);
+    };
   }, [isSelected, animTrigger]);
 
   const spin = animRotate.interpolate({
     inputRange: [-1, 0, 1],
-    outputRange: ['-16deg', '0deg', '16deg'],
+    outputRange: ['-18deg', '0deg', '18deg'],
   });
 
   return (
@@ -212,14 +168,14 @@ export default function CategoryPillItem({
         style={{
           backgroundColor,
           borderColor,
-          borderWidth: 1,
+          borderWidth: 1.2,
           shadowColor: isSelected ? '#E23744' : '#000000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity,
           shadowRadius: isSelected ? 6 : 2,
-          elevation: isSelected ? 4 : 1,
+          elevation: isSelected ? 3 : 1,
         }}
-        className="flex-row items-center rounded-2xl px-3.5 py-2">
+        className="flex-row items-center rounded-full px-4 py-2">
         {/* Animated Icon container with smooth crossfade */}
         <Animated.View
           style={{
@@ -239,7 +195,7 @@ export default function CategoryPillItem({
                   outputRange: [1, 0],
                 }),
               }}>
-              <Ionicons name={cat.iconInactive} size={16} color="#64748B" />
+              <Ionicons name={cat.iconInactive} size={16} color="#6B7280" />
             </Animated.View>
 
             {/* Active Icon (fades in smoothly) */}
@@ -256,7 +212,7 @@ export default function CategoryPillItem({
         {/* Animated Text Label (color smoothly transitions) */}
         <Animated.Text
           style={{ color: textColor }}
-          className="ml-1.5 text-xs font-semibold">
+          className="ml-1.5 text-sm font-semibold">
           {cat.name}
         </Animated.Text>
       </Animated.View>
