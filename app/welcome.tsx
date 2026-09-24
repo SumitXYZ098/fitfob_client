@@ -189,7 +189,7 @@ export default function Welcome() {
           style={{
             height: '100%',
             justifyContent: 'space-between',
-            paddingHorizontal: 24,
+            paddingHorizontal: 16,
             paddingTop: Math.max(insets.top + 16, 54),
             paddingBottom: Math.max(insets.bottom + 16, 28),
           }}>
@@ -201,7 +201,7 @@ export default function Welcome() {
                 className="h-[46px] w-[46px]"
                 resizeMode="contain"
               />
-              <Text className="font-bold text-xl tracking-wide text-white">fitfob</Text>
+              {/* <Text className="font-bold text-xl tracking-wide text-white">fitfob</Text> */}
             </View>
 
             {/* Interactive Indicators */}
@@ -226,7 +226,7 @@ export default function Welcome() {
                 opacity: fadeAnim,
                 transform: [{ translateY: translateYAnim }],
               }}
-              className="mb-8 px-1">
+              className="mb-8">
               {/* Badge & Quote Icon */}
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-1.5 rounded-full border border-primary/70 px-3 py-1">

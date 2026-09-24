@@ -85,7 +85,7 @@ export default function Splash() {
         <Animated.Text
           style={textStyle}
           className="font-bold text-[40px] leading-[44px] text-background">
-          fit fob
+          fitfob
         </Animated.Text>
       </View>
 

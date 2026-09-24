@@ -66,7 +66,7 @@ export default function ProfileScreen() {
       title: 'ID Verification',
       iconName: 'id-card-outline',
       badge: <Ionicons name="checkmark-circle" size={20} color="#10B981" className="mr-2" />,
-      route: '/id-verification',
+      route: '/account/id-verification',
     },
     {
       id: 'favorites',

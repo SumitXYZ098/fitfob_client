@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "fitFob",
+    "name": "FitFob",
     "slug": "fitFob",
     "version": "1.0.0",
     "scheme": "fitfob",
@@ -72,7 +72,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUseDescription": "Allow fitFob to use your location."
+          "locationWhenInUseDescription": "Allow FitFob to use your location."
         }
       ],
       "expo-image",
