@@ -305,22 +305,16 @@ export const AllGymsMapView = forwardRef<AllGymsMapViewHandle, AllGymsMapViewPro
             var markersGroup = null;
             var currentMode = 'streets';
 
-            var googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            var osmStreets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
               maxZoom: 24,
-              maxNativeZoom: 21,
+              maxNativeZoom: 19,
+              tileSize: 256,
               attribution: ''
             });
 
             var googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
               maxZoom: 24,
               maxNativeZoom: 20,
-              attribution: ''
-            });
-
-            var osmFallback = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 24,
-              maxNativeZoom: 19,
-              tileSize: 256,
               attribution: ''
             });
 
@@ -355,8 +349,8 @@ export const AllGymsMapView = forwardRef<AllGymsMapViewHandle, AllGymsMapViewPro
                   maxZoom: 24
                 }).setView([30.7046, 76.7179], 14);
 
-                // Add Google Streets layer (fast, reliable worldwide, 0 blocks in India)
-                googleStreets.addTo(map);
+                // Add OpenStreetMap layer (clean, official OSM)
+                osmStreets.addTo(map);
 
                 markersGroup = L.featureGroup();
 
@@ -481,13 +475,13 @@ export const AllGymsMapView = forwardRef<AllGymsMapViewHandle, AllGymsMapViewPro
             window.toggleSatellite = function() {
               var satBtn = document.getElementById('satBtn');
               if (currentMode === 'streets') {
-                map.removeLayer(googleStreets);
+                map.removeLayer(osmStreets);
                 googleSatellite.addTo(map);
                 currentMode = 'satellite';
                 if (satBtn) satBtn.innerHTML = '🗺️';
               } else {
                 map.removeLayer(googleSatellite);
-                googleStreets.addTo(map);
+                osmStreets.addTo(map);
                 currentMode = 'streets';
                 if (satBtn) satBtn.innerHTML = '🛰️';
               }

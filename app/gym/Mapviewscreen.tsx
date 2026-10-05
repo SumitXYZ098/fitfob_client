@@ -19,6 +19,7 @@ import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import AllGymsMapView, { AllGymsMapViewHandle, MapGymItem } from '@/components/modules/AllGymsMapView';
+import { useNearbyGyms } from '@/hook/useClient';
 
 export interface GymItem {
   id: string;
@@ -134,6 +135,151 @@ const GYMS_LIST: GymItem[] = [
     ],
   },
 ];
+
+const mapClubOwnerToGym = (item: any): GymItem => {
+  const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
+
+  const title =
+    data.clubName ||
+    data.businessName ||
+    data.gymName ||
+    data.name ||
+    data.title ||
+    data.club_name ||
+    'Fitness Club';
+
+  const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
+  const rating =
+    typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
+
+  let amenities: string[] = [];
+  if (Array.isArray(data.amenities)) {
+    amenities = data.amenities
+      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
+      .filter(Boolean);
+  } else if (typeof data.amenities === 'string') {
+    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(data.facilities)) {
+    amenities = data.facilities
+      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
+      .filter(Boolean);
+  }
+  if (!amenities.length) {
+    amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
+  }
+
+  let price = '₹1200/Monthly';
+  if (data.price) {
+    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
+  } else if (data.monthlyPrice) {
+    price = `₹${data.monthlyPrice}/Monthly`;
+  } else if (data.startingPrice) {
+    price = `₹${data.startingPrice}/Monthly`;
+  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
+    price = `₹${data.membershipPlans[0].price}/Monthly`;
+  }
+
+  const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
+  const isVerified =
+    data.isVerified !== undefined
+      ? Boolean(data.isVerified)
+      : data.verification_status === 'approved' || true;
+
+  const fallbackImages = [
+    'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
+  ];
+
+  let images: string[] = [];
+  const rawImages =
+    data.club_photos ||
+    data.clubPhotos ||
+    data.photos ||
+    data.images ||
+    data.gallery ||
+    [];
+
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages
+      .map((img: any) => {
+        const url =
+          img?.url ||
+          img?.formats?.large?.url ||
+          img?.formats?.medium?.url ||
+          img?.formats?.small?.url ||
+          (typeof img === 'string' ? img : null);
+        if (!url) return null;
+        return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+      })
+      .filter(Boolean) as string[];
+  } else if (data.coverImage?.url || data.logo?.url) {
+    const single = data.coverImage?.url || data.logo?.url;
+    images = [single.startsWith('http') ? single : `${process.env.EXPO_PUBLIC_API_URL}${single}`];
+  }
+
+  if (!images.length) {
+    images = fallbackImages;
+  }
+
+  return {
+    id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    title,
+    rating,
+    amenities,
+    price,
+    isOpen,
+    isVerified,
+    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
+    images,
+    coordinate: {
+      latitude: Number(data.latitude || data.lat || 30.7046),
+      longitude: Number(data.longitude || data.lng || 76.7179),
+    },
+  };
+};
+
+function MapSkeletonBox({ style }: { style?: object }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
+  return (
+    <Animated.View
+      style={[{ backgroundColor: '#E2E8F0', borderRadius: 8, opacity }, style]}
+    />
+  );
+}
+
+function MapCardSkeleton() {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 32;
+
+  return (
+    <View className="mb-4 overflow-hidden rounded-3xl bg-[#F8FAFC] border-[1.5px] border-[#E2E8F0] shadow-sm">
+      <MapSkeletonBox style={{ width: cardWidth, height: 208, borderRadius: 0 }} />
+      <View className="p-4">
+        <View className="flex-row items-center justify-between">
+          <MapSkeletonBox style={{ height: 18, width: '60%' }} />
+          <MapSkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
+        </View>
+        <MapSkeletonBox style={{ height: 12, width: '50%', marginTop: 10 }} />
+        <View className="mt-3 flex-row items-center justify-between">
+          <MapSkeletonBox style={{ height: 16, width: '35%' }} />
+          <MapSkeletonBox style={{ height: 26, width: 70, borderRadius: 13 }} />
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function GymCardItem({
   gym,
@@ -289,9 +435,9 @@ function GymCardItem({
           </View>
         </View>
 
-        {/* Amenities */}
+        {/* Amenities (Limited to 4 items on card) */}
         <Text className="font-regular mt-1.5 text-sm text-secondaryText" numberOfLines={1}>
-          {gym.amenities.map((item) => `• ${item}`).join('  ')}
+          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
         </Text>
 
         {/* Pricing & Locate Button */}
@@ -340,8 +486,9 @@ export default function Mapviewscreen() {
     setCategoryAnimTrigger({ id: catId, time: Date.now() });
   };
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGymId, setSelectedGymId] = useState<string>('1');
+  const [selectedGymId, setSelectedGymId] = useState<string>('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [city, setCity] = useState<string>('');
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'all'>('all');
@@ -349,33 +496,67 @@ export default function Mapviewscreen() {
 
   // Fetch user location for full map view
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getLastKnownPositionAsync();
-          if (loc) {
+          if (loc && isMounted) {
             setUserLocation({
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
             });
           }
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-            .then((fresh) => {
-              if (fresh) {
-                setUserLocation({
-                  latitude: fresh.coords.latitude,
-                  longitude: fresh.coords.longitude,
-                });
-              }
-            })
-            .catch(() => {});
+          const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (fresh && isMounted) {
+            setUserLocation({
+              latitude: fresh.coords.latitude,
+              longitude: fresh.coords.longitude,
+            });
+            const [geo] = await Location.reverseGeocodeAsync({
+              latitude: fresh.coords.latitude,
+              longitude: fresh.coords.longitude,
+            });
+            if (geo?.city && isMounted) setCity(geo.city);
+          }
         }
       } catch (e) {
         // ignore
       }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
+  const {
+    data: nearbyData,
+    isLoading,
+    isPending,
+  } = useNearbyGyms({
+    city: city || undefined,
+    latitude: userLocation?.latitude,
+    longitude: userLocation?.longitude,
+    query: searchQuery.trim() || undefined,
+  });
+
+  const rawGyms: GymItem[] = useMemo(() => {
+    if (!nearbyData) return [];
+
+    const rawList = Array.isArray(nearbyData)
+      ? nearbyData
+      : Array.isArray(nearbyData?.data)
+      ? nearbyData.data
+      : Array.isArray(nearbyData?.clubs)
+      ? nearbyData.clubs
+      : Array.isArray(nearbyData?.results)
+      ? nearbyData.results
+      : [];
+
+    return rawList.map(mapClubOwnerToGym);
+  }, [nearbyData]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const mapRef = useRef<AllGymsMapViewHandle>(null);
@@ -461,33 +642,48 @@ export default function Mapviewscreen() {
 
   // Filter and sort gyms
   const filteredGyms = useMemo(() => {
-    return GYMS_LIST.filter((gym) => {
-      const matchesCategory =
-        selectedCategory === 'Gyms' || gym.category.toLowerCase() === selectedCategory.toLowerCase();
-      const matchesSearch =
-        gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesOpen = !onlyOpen || gym.isOpen;
-      return matchesCategory && matchesSearch && matchesOpen;
-    }).sort((a, b) => {
-      if (sortBy === 'rating') {
-        return parseFloat(b.rating) - parseFloat(a.rating);
+    return rawGyms
+      .filter((gym) => {
+        const matchesCategory =
+          selectedCategory === 'Gyms' ||
+          gym.category?.toLowerCase() === selectedCategory.toLowerCase();
+        const matchesSearch =
+          gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesOpen = !onlyOpen || gym.isOpen;
+        return matchesCategory && matchesSearch && matchesOpen;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'rating') {
+          return parseFloat(b.rating) - parseFloat(a.rating);
+        }
+        if (sortBy === 'price') {
+          const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
+          const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
+          return priceA - priceB;
+        }
+        return 0;
+      });
+  }, [rawGyms, selectedCategory, searchQuery, onlyOpen, sortBy]);
+
+  // Keep selected gym updated when list changes
+  useEffect(() => {
+    if (filteredGyms.length > 0) {
+      if (!selectedGymId || !filteredGyms.some((g) => g.id === selectedGymId)) {
+        setSelectedGymId(filteredGyms[0].id);
       }
-      if (sortBy === 'price') {
-        const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
-        const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
-        return priceA - priceB;
-      }
-      return 0;
-    });
-  }, [selectedCategory, searchQuery, onlyOpen, sortBy]);
+    }
+  }, [filteredGyms, selectedGymId]);
 
   const selectedGym = useMemo(() => {
-    return filteredGyms.find((g) => g.id === selectedGymId) || filteredGyms[0] || GYMS_LIST[0];
+    return filteredGyms.find((g) => g.id === selectedGymId) || filteredGyms[0] || null;
   }, [filteredGyms, selectedGymId]);
 
   // Gyms mapped for AllGymsMapView with title, category, price, coordinates
   const mapGyms: MapGymItem[] = useMemo(() => {
+    if (isLoading || (isPending && !nearbyData)) {
+      return [];
+    }
     return filteredGyms.map((g) => ({
       id: g.id,
       title: g.title,
@@ -498,7 +694,7 @@ export default function Mapviewscreen() {
       image: g.images && g.images.length > 0 ? g.images[0] : '',
       coordinate: g.coordinate,
     }));
-  }, [filteredGyms]);
+  }, [filteredGyms, isLoading, isPending, nearbyData]);
 
   // Reorder so that the selected gym on the map always comes to the very top of the list
   const displayGyms = useMemo(() => {
@@ -609,7 +805,9 @@ export default function Mapviewscreen() {
           <View className="flex-row items-center justify-between w-full px-2 mb-2.5">
             <View className="w-8" />
             <Text className="font-bold text-base text-[#1E293B] text-center">
-              {filteredGyms.length} Gym's in Near You
+              {(isLoading || (isPending && !nearbyData))
+                ? 'Finding gyms near you...'
+                : `${filteredGyms.length} Gym's Near You`}
             </Text>
             {/* Quick minimize chevron to slide sheet down */}
             <TouchableOpacity
@@ -649,7 +847,13 @@ export default function Mapviewscreen() {
             paddingTop: 12,
             paddingBottom: 70,
           }}>
-          {displayGyms.length === 0 ? (
+          {(isLoading || (isPending && !nearbyData)) ? (
+            <View>
+              <MapCardSkeleton />
+              <MapCardSkeleton />
+              <MapCardSkeleton />
+            </View>
+          ) : displayGyms.length === 0 ? (
             <View className="items-center justify-center py-12">
               <Ionicons name="fitness-outline" size={44} color="#D1D5DB" />
               <Text className="mt-2 font-medium text-sm text-gray-400">No gyms found</Text>

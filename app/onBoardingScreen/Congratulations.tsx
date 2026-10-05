@@ -5,14 +5,46 @@ import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { Container } from '@/components/modules/Container';
 import { Button } from '@/components/modules/Button';
 import { useAuthStore } from '@/store/useAuthStore';
+import { checkUserStep } from '@/api/clientApi';
 
 export default function Congratulations() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const cardSlideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    const fetchLatestUser = async () => {
+      if (!user?.name && !user?.clientDetail?.name) {
+        try {
+          const res = await checkUserStep();
+          if (res?.details && user) {
+            await setUser(
+              {
+                ...user,
+                name: res.details.name || user.name,
+                clientDetail: {
+                  ...(user.clientDetail || {}),
+                  name: res.details.name || user.clientDetail?.name,
+                  phoneNumber: res.details.phoneNumber || user.clientDetail?.phoneNumber,
+                  email: res.details.email || user.clientDetail?.email,
+                  gender: res.details.gender || user.clientDetail?.gender,
+                  clientId: res.details.clientId || res.details.id || user.clientDetail?.clientId,
+                  selfieUrl: res.details.selfieUpload?.url || user.clientDetail?.selfieUrl,
+                },
+              },
+              true
+            );
+          }
+        } catch (e) {
+          console.log('Error refreshing user in Congratulations:', e);
+        }
+      }
+    };
+    fetchLatestUser();
+  }, [user?.name, user?.clientDetail?.name]);
 
   useEffect(() => {
     Animated.parallel([
@@ -40,8 +72,13 @@ export default function Congratulations() {
     router.replace('/(tabs)');
   };
 
-  console.log(user)
-  const displayName = user?.name || user?.username?.split('@')[0] || '';
+  const displayName =
+    user?.clientDetail?.name ||
+    user?.name ||
+    user?.fullName ||
+    (user?.username && !user.username.includes('phone.user') && !user.username.startsWith('+')
+      ? user.username
+      : '');
 
   return (
     <Container>
@@ -82,7 +119,7 @@ export default function Congratulations() {
 
           {/* Heading */}
           <Text className="mb-2 text-center font-black text-3xl tracking-tight text-slate-900">
-            Congratulations{displayName ? `, ${displayName}!` : '!'}
+            Congratulations{displayName ? `, ${displayName}` : ''}
           </Text>
 
           <Text className="mb-6 px-4 text-center text-[15px] leading-relaxed text-slate-500">

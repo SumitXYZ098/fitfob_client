@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
+import { checkUserStep } from '@/api/clientApi';
 
 interface MenuItem {
   id: string;
@@ -16,7 +17,54 @@ interface MenuItem {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logOut } = useAuthStore();
+  const { user, setUser, logOut } = useAuthStore();
+
+  useEffect(() => {
+    const fetchLatestProfile = async () => {
+      if (!user?.clientDetail?.name && !user?.name) {
+        try {
+          const res = await checkUserStep();
+          if (res?.details?.name && user) {
+            await setUser(
+              {
+                ...user,
+                name: res.details.name,
+                clientDetail: {
+                  ...(user?.clientDetail || {}),
+                  name: res.details.name,
+                  phoneNumber: res.details.phoneNumber || user?.clientDetail?.phoneNumber,
+                  email: res.details.email || user?.clientDetail?.email,
+                  gender: res.details.gender || user?.clientDetail?.gender,
+                  clientId: res.details.clientId || res.details.id || user?.clientDetail?.clientId,
+                  selfieUrl: res.details.selfieUpload?.url || user?.clientDetail?.selfieUrl,
+                },
+              },
+              true
+            );
+          }
+        } catch (e) {
+          console.log('Error refreshing profile in ProfileScreen:', e);
+        }
+      }
+    };
+    fetchLatestProfile();
+  }, [user?.clientDetail?.name, user?.name]);
+
+  const isDummyPhoneEmail = Boolean(
+    user?.email && (
+      user.email.endsWith('@phone.user') ||
+      user.email.includes('phone.user') ||
+      user.email.startsWith('+')
+    )
+  );
+
+  const userPhone =
+    user?.clientDetail?.phoneNumber ||
+    user?.phoneNumber ||
+    (isDummyPhoneEmail ? user?.email?.split('@')[0] : null) ||
+    '';
+
+  const displayContact = isDummyPhoneEmail ? userPhone : user?.email || userPhone || '';
 
   const handleLogout = async () => {
     try {
@@ -145,16 +193,23 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Name & Email */}
+              {/* Name & Email / Phone */}
               <View className="ml-3 flex-1 justify-center">
                 <View className="flex-row items-center">
                   <Text className="font-bold text-xl text-white">
-                    {user?.clientDetail?.name || user?.username || 'Alex Carter'}
+                    {user?.clientDetail?.name ||
+                      user?.name ||
+                      user?.fullName ||
+                      (user?.username &&
+                      !user.username.includes('phone.user') &&
+                      !user.username.startsWith('+')
+                        ? user.username
+                        : 'Member')}
                   </Text>
                   <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" className="ml-1.5" />
                 </View>
                 <Text className="font-regular mt-0.5 text-xs text-white/80">
-                  {user?.email || 'alexcarter@gmail.com'}
+                  {displayContact}
                 </Text>
               </View>
             </View>

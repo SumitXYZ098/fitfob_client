@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Linking,
   Share,
   Animated,
+  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -17,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import GymDetailMapView from '@/components/modules/GymDetailMapView';
+import { useGymDetail } from '@/hook/useClient';
 
 export interface GymBranchItem {
   id: string;
@@ -24,6 +27,16 @@ export interface GymBranchItem {
   address?: string;
   coordinate: { latitude: number; longitude: number };
   isMain?: boolean;
+}
+
+export interface RatingBreakdownItem {
+  star: number;
+  pct: string;
+}
+
+export interface ExerciseZoneItem {
+  title: string;
+  image: string;
 }
 
 export const GYM_DETAILS = {
@@ -68,8 +81,8 @@ export const GYM_DETAILS = {
     rating: '4.5',
     totalReviews: 52,
     openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
-    description:
-      'Experience elite fitness training with state-of-the-art strength machinery, certified personal trainers, dedicated cardio arenas, and a rejuvenating steam/sauna experience tailored to help you crush your daily fitness goals.',
+    // description:
+    //   'Experience elite fitness training with state-of-the-art strength machinery, certified personal trainers, dedicated cardio arenas, and a rejuvenating steam/sauna experience tailored to help you crush your daily fitness goals.',
     amenities: [
       { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
       { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
@@ -466,11 +479,294 @@ export const GYM_DETAILS = {
   },
 };
 
+// ─── Skeleton for gym detail ─────────────────────────────────────────────────
+function GymDetailSkeletonBox({ style }: { style?: object }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
+  return (
+    <Animated.View
+      style={[{ backgroundColor: '#E2E8F0', borderRadius: 8, opacity }, style]}
+    />
+  );
+}
+
+function GymDetailSkeletonScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        {/* Top Header Placeholder */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: '#F1F5F9',
+          }}>
+          <TouchableOpacity
+            onPress={onBack}
+            activeOpacity={0.7}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#F1F5F9',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Ionicons name="chevron-back" size={22} color="#475569" />
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: '#F1F5F9',
+              }}
+            />
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: '#F1F5F9',
+              }}
+            />
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+          {/* Hero Banner Skeleton */}
+          <View style={{ width: '100%', height: 280, backgroundColor: '#F8FAFC', position: 'relative' }}>
+            <GymDetailSkeletonBox style={{ width: '100%', height: '100%', borderRadius: 0 }} />
+            {/* Carousel indicator dots */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 14,
+                alignSelf: 'center',
+                flexDirection: 'row',
+                gap: 6,
+              }}>
+              <View style={{ width: 22, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1' }} />
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1' }} />
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1' }} />
+            </View>
+          </View>
+
+          {/* Main Content Details */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 18 }}>
+            {/* Title & Badge */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+              <GymDetailSkeletonBox style={{ height: 26, width: '68%', borderRadius: 6 }} />
+              <GymDetailSkeletonBox style={{ height: 24, width: 65, borderRadius: 12 }} />
+            </View>
+
+            {/* Rating & Review Count */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <GymDetailSkeletonBox style={{ height: 18, width: 65, borderRadius: 4 }} />
+              <GymDetailSkeletonBox style={{ height: 18, width: 95, borderRadius: 4 }} />
+            </View>
+
+            {/* Timings row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <GymDetailSkeletonBox style={{ height: 16, width: 16, borderRadius: 8 }} />
+              <GymDetailSkeletonBox style={{ height: 14, width: '55%', borderRadius: 4 }} />
+            </View>
+
+            {/* Address row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <GymDetailSkeletonBox style={{ height: 16, width: 16, borderRadius: 8 }} />
+              <GymDetailSkeletonBox style={{ height: 14, width: '75%', borderRadius: 4 }} />
+            </View>
+
+            {/* Action buttons row */}
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+              {[1, 2, 3].map((_, i) => (
+                <GymDetailSkeletonBox key={i} style={{ flex: 1, height: 42, borderRadius: 12 }} />
+              ))}
+            </View>
+
+            {/* Amenities Section */}
+            <GymDetailSkeletonBox style={{ height: 20, width: 110, borderRadius: 4, marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+              {[80, 95, 75, 110, 85].map((w, i) => (
+                <GymDetailSkeletonBox key={i} style={{ height: 34, width: w, borderRadius: 17 }} />
+              ))}
+            </View>
+
+            {/* About / Description */}
+            <GymDetailSkeletonBox style={{ height: 20, width: 90, borderRadius: 4, marginBottom: 12 }} />
+            <GymDetailSkeletonBox style={{ height: 14, width: '100%', borderRadius: 4, marginBottom: 8 }} />
+            <GymDetailSkeletonBox style={{ height: 14, width: '92%', borderRadius: 4, marginBottom: 8 }} />
+            <GymDetailSkeletonBox style={{ height: 14, width: '70%', borderRadius: 4, marginBottom: 24 }} />
+
+            {/* Location Map Preview Skeleton */}
+            <GymDetailSkeletonBox style={{ height: 20, width: 110, borderRadius: 4, marginBottom: 12 }} />
+            <GymDetailSkeletonBox style={{ height: 150, width: '100%', borderRadius: 18, marginBottom: 24 }} />
+          </View>
+        </ScrollView>
+
+        {/* Bottom Bar Skeleton */}
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 76,
+            backgroundColor: '#FFFFFF',
+            borderTopWidth: 1,
+            borderTopColor: '#F1F5F9',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+          }}>
+          <View>
+            <GymDetailSkeletonBox style={{ height: 12, width: 50, borderRadius: 4, marginBottom: 6 }} />
+            <GymDetailSkeletonBox style={{ height: 22, width: 95, borderRadius: 4 }} />
+          </View>
+          <GymDetailSkeletonBox style={{ height: 48, width: 160, borderRadius: 24 }} />
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function GymDetailScreen() {
+
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const gymId = params.id || '1';
-  const gym = GYM_DETAILS[gymId as keyof typeof GYM_DETAILS] || GYM_DETAILS['1'];
+
+  // ── Live API data ──────────────────────────────────────────────────────────
+  // Only fetch from API for real string IDs (not static mock IDs 1-6)
+  const isStaticId = ['1','2','3','4','5','6'].includes(gymId);
+  const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(isStaticId ? undefined : gymId);
+  const isGymLoading = !isStaticId && (isDetailLoading || isPending) && !apiData;
+
+  useEffect(() => {
+    if (apiData) {
+      console.log('📋 [GymDetail Screen] Received apiData for gymId:', gymId);
+      console.log('📦 [GymDetail Screen Data]:', JSON.stringify(apiData, null, 2));
+    }
+  }, [apiData, gymId]);
+
+  // Map backend response to the shape this screen expects
+  const gym = useMemo(() => {
+    const raw = apiData?.data ?? apiData;
+    if (raw && typeof raw === 'object') {
+      const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
+
+      // images
+      const fallbackImages = [
+        'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+      ];
+      const rawImgs =
+        d.club_photos ||
+        d.clubPhotos ||
+        d.photos ||
+        d.images ||
+        d.gallery ||
+        [];
+      let images: string[] = Array.isArray(rawImgs)
+        ? (rawImgs
+            .map((img: any) => {
+              const url =
+                img?.url ||
+                img?.formats?.large?.url ||
+                img?.formats?.medium?.url ||
+                img?.formats?.small?.url ||
+                (typeof img === 'string' ? img : null);
+              if (!url) return null;
+              return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+            })
+            .filter(Boolean) as string[])
+        : [];
+      if (!images.length) images = fallbackImages;
+
+      // amenities
+      let amenities: { name: string; icon: string; library: string }[] = [];
+      const rawAmen = d.amenities || d.facilities || [];
+      if (Array.isArray(rawAmen) && rawAmen.length) {
+        amenities = rawAmen.map((a: any) => ({
+          name: typeof a === 'string' ? a : (a?.name || a?.title || String(a)),
+          icon: 'checkmark-circle-outline',
+          library: 'ionicons',
+        }));
+      }
+      if (!amenities.length) {
+        amenities = [
+          { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
+          { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
+          { name: 'Trainers', icon: 'barbell-outline', library: 'ionicons' },
+          { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
+          { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
+        ];
+      }
+
+      // membership plans → reviews mock if no real reviews
+      const reviews = Array.isArray(d.reviews) && d.reviews.length ? d.reviews : [
+        {
+          id: 'r1', name: 'FitFob Member', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150',
+          rating: 5, time: 'recently', comment: 'Great gym with professional trainers and excellent equipment!',
+        },
+      ];
+
+      const ratingVal = d.rating || d.avgRating || 4.5;
+      return {
+        id: String(d.documentId || d._id || d.id || gymId),
+        title: d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club',
+        address: d.address || d.clubAddress || d.location?.address || '',
+        coordinate: {
+          latitude: Number(d.latitude || d.lat || d.coordinate?.latitude || 30.8321),
+          longitude: Number(d.longitude || d.lng || d.coordinate?.longitude || 76.6873),
+        },
+        branches: Array.isArray(d.branches) ? d.branches : [],
+        rating: typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal.split('/')[0] : String(ratingVal),
+        totalReviews: d.totalReviews || d.reviewCount || reviews.length,
+        openHours: d.openHours || d.workingHours || d.timings || 'Mon - Sun: 06:00 AM - 10:00 PM',
+        description: d.description || d.about || d.bio || 'A premium fitness club with state-of-the-art equipment and certified trainers.',
+        amenities,
+        exerciseZones: ((Array.isArray(d.exerciseZones) && d.exerciseZones.length
+          ? d.exerciseZones
+          : [{ title: 'Main Training Floor', image: images[0] || fallbackImages[0] }]) as ExerciseZoneItem[]),
+        ratingBreakdown: ((Array.isArray(d.ratingBreakdown) && d.ratingBreakdown.length
+          ? d.ratingBreakdown
+          : [
+              { star: 5, pct: '75%' }, { star: 4, pct: '55%' }, { star: 3, pct: '30%' },
+              { star: 2, pct: '12%' }, { star: 1, pct: '5%' },
+            ]) as RatingBreakdownItem[]),
+        reviews,
+        images,
+      };
+    }
+    // Fallback to static data (for old numeric IDs or when API fails)
+    return GYM_DETAILS[gymId as keyof typeof GYM_DETAILS] || GYM_DETAILS['1'];
+  }, [apiData, gymId]);
+  // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -697,9 +993,14 @@ export default function GymDetailScreen() {
     })();
   };
 
+  if (isGymLoading) {
+    return <GymDetailSkeletonScreen onBack={() => router.back()} />;
+  }
+
   return (
     <View className="flex-1 bg-white">
       {/* 1. Sticky Floating Top Navigation Header */}
+
       <View className="absolute left-0 right-0 top-0 z-50">
         {/* Solid white background layer that fades in when bottom sheet reaches top */}
         <Animated.View
@@ -1003,9 +1304,9 @@ export default function GymDetailScreen() {
           </View>
 
           {/* Description Paragraph */}
-          <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
+          {/* <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
             {gym.description}
-          </Text>
+          </Text> */}
 
           {/* 3. Where you'll exercise */}
           <View className="mt-6">
@@ -1016,7 +1317,7 @@ export default function GymDetailScreen() {
               nestedScrollEnabled={true}
               showsHorizontalScrollIndicator={false}
               className="mt-3 -mx-5 px-5">
-              {gym.exerciseZones.map((zone, idx) => (
+              {gym.exerciseZones.map((zone: ExerciseZoneItem, idx: number) => (
                 <View key={idx} className="mr-3 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                   <Image
                     source={{ uri: zone.image }}
@@ -1101,7 +1402,7 @@ export default function GymDetailScreen() {
             <View className="mt-3 flex-row items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
               {/* Left: Star percentage bars */}
               <View className="flex-1 pr-6 space-y-1.5">
-                {gym.ratingBreakdown.map((r) => (
+                {gym.ratingBreakdown.map((r: RatingBreakdownItem) => (
                   <View key={r.star} className="flex-row items-center">
                     <Text className="w-3 font-semibold text-[11px] text-slate-500">{r.star}</Text>
                     <Ionicons name="star" size={10} color="#F59E0B" className="mx-1" />

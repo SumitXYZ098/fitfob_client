@@ -6,6 +6,8 @@ interface User {
   username: string;
   email: string;
   token: string;
+  name?: string;
+  clientDetail?: any;
   role?: any;
   verification_status?: string;
   [key: string]: any;

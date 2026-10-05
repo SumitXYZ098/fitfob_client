@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   clientBasicDetails,
   clientBodyInfo,
@@ -8,6 +8,10 @@ import {
   clientSubmit,
   checkUserStep,
   getQr,
+  clientVerifyOtp,
+  clientResendOtp,
+  searchNearbyGyms,
+  getGymDetail,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -128,5 +132,75 @@ export const useGetQr = () => {
       const msg = error?.response?.data?.error?.message || 'Failed to fetch QR';
       Toast.show({ type: 'error', text1: 'Error', text2: msg });
     },
+  });
+};
+
+export const useClientVerifyOtp = () => {
+  return useMutation({
+    mutationFn: (param: string | { otp: string; identifier?: string }) => {
+      if (typeof param === 'string') {
+        return clientVerifyOtp(param);
+      }
+      return clientVerifyOtp(param.otp, param.identifier);
+    },
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Invalid or expired OTP';
+      Toast.show({ type: 'error', text1: 'Verification Failed', text2: msg });
+    },
+  });
+};
+
+export const useClientResendOtp = () => {
+  return useMutation({
+    mutationFn: (payload?: { identifier?: string; phoneNumber?: string; email?: string }) =>
+      clientResendOtp(payload),
+    onSuccess: (data: any) => {
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Sent! 📩',
+        text2: data?.message || 'Verification code sent successfully.',
+      });
+    },
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Failed to send OTP';
+      if (msg.toLowerCase().includes('30 seconds') || msg.toLowerCase().includes('wait')) {
+        Toast.show({
+          type: 'info',
+          text1: 'OTP Already Sent 📩',
+          text2: 'Please check your SMS. The code is valid for 2 minutes.',
+        });
+        return;
+      }
+      Toast.show({ type: 'error', text1: 'Request Failed', text2: msg });
+    },
+  });
+};
+
+export const useNearbyGyms = (params: {
+  city?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  query?: string;
+}) => {
+  return useQuery({
+    queryKey: ['nearby-gyms', params.city, params.latitude, params.longitude, params.query],
+    queryFn: () => searchNearbyGyms(params),
+    staleTime: 1000 * 60 * 3, // 3 minutes
+  });
+};
+
+export const useGymDetail = (id: string | undefined) => {
+  return useQuery({
+    queryKey: ['gym-detail', id],
+    queryFn: () => getGymDetail(id!),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1,
   });
 };

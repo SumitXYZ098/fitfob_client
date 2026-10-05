@@ -37,6 +37,7 @@ export default function OnBoardingStep() {
   const checkUserStepMutation = useCheckUserStep();
 
   const [prefillData, setPrefillData] = useState<any>(null);
+  const [isStep1Verified, setIsStep1Verified] = useState(false);
 
   useEffect(() => {
     const checkProgress = async () => {
@@ -49,6 +50,25 @@ export default function OnBoardingStep() {
           }
           if (response.details) {
             setPrefillData(response.details);
+
+            if (user) {
+              await setUser(
+                {
+                  ...user,
+                  name: response.details.name || user.name,
+                  clientDetail: {
+                    ...(user.clientDetail || {}),
+                    name: response.details.name || user.clientDetail?.name,
+                    phoneNumber: response.details.phoneNumber || user.clientDetail?.phoneNumber,
+                    email: response.details.email || user.clientDetail?.email,
+                    gender: response.details.gender || user.clientDetail?.gender,
+                    clientId: response.details.clientId || response.details.id || user.clientDetail?.clientId,
+                    selfieUrl: response.details.selfieUpload?.url || user.clientDetail?.selfieUrl,
+                  },
+                },
+                true
+              );
+            }
 
             // Prefill local state selfieUri and govIdUri if present in response (skip if reupload requested)
             if (response.details.selfieUpload?.url && reupload !== 'selfie') {
@@ -89,7 +109,15 @@ export default function OnBoardingStep() {
     try {
       if (step === 1) {
         const success = await basicDetailsRef.current?.submit();
-        if (success) setStep(2);
+        if (success) {
+          setIsStep1Verified(true);
+          setPrefillData((prev: any) => ({
+            ...prev,
+            isPhoneVerified: true,
+            isEmailVerified: true,
+          }));
+          setStep(2);
+        }
       } else if (step === 2) {
         const success = await bodyInfoRef.current?.submit();
         if (success) setStep(3);
@@ -122,6 +150,16 @@ export default function OnBoardingStep() {
                 {
                   ...user,
                   verification_status: verifyResult.status,
+                  name: prefillData?.name || user.name,
+                  clientDetail: {
+                    ...(user.clientDetail || {}),
+                    name: prefillData?.name || user.clientDetail?.name,
+                    phoneNumber: prefillData?.phoneNumber || user.clientDetail?.phoneNumber,
+                    email: prefillData?.email || user.clientDetail?.email,
+                    gender: prefillData?.gender || user.clientDetail?.gender,
+                    clientId: prefillData?.clientId || prefillData?.id || user.clientDetail?.clientId,
+                    selfieUrl: selfieUri || user.clientDetail?.selfieUrl,
+                  },
                 },
                 true
               );
@@ -227,15 +265,26 @@ export default function OnBoardingStep() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         <View className="mt-6 flex-1">
-          {step === 1 && <BasicDetails ref={basicDetailsRef} prefill={prefillData} />}
-          {step === 2 && <BodyInfo ref={bodyInfoRef} prefill={prefillData} />}
-          {step === 3 && <LocationScreen ref={locationRef} prefill={prefillData} />}
-          {step === 4 && (
+          <View style={{ display: step === 1 ? 'flex' : 'none', flex: 1 }}>
+            <BasicDetails
+              ref={basicDetailsRef}
+              prefill={prefillData}
+              onVerificationChange={setIsStep1Verified}
+              onSaveData={(data) => setPrefillData((prev: any) => ({ ...prev, ...data }))}
+            />
+          </View>
+          <View style={{ display: step === 2 ? 'flex' : 'none', flex: 1 }}>
+            <BodyInfo ref={bodyInfoRef} prefill={prefillData} />
+          </View>
+          <View style={{ display: step === 3 ? 'flex' : 'none', flex: 1 }}>
+            <LocationScreen ref={locationRef} prefill={prefillData} />
+          </View>
+          <View style={{ display: step === 4 ? 'flex' : 'none', flex: 1 }}>
             <SelfieScreen ref={selfieRef} selfieUri={selfieUri} setSelfieUri={setSelfieUri} />
-          )}
-          {step === 5 && (
+          </View>
+          <View style={{ display: step === 5 ? 'flex' : 'none', flex: 1 }}>
             <GovernmentId ref={govIdRef} govIdUri={govIdUri} setGovIdUri={setGovIdUri} />
-          )}
+          </View>
         </View>
 
         <View className="pt-6">
@@ -253,6 +302,7 @@ export default function OnBoardingStep() {
             }
             onPress={handleNext}
             loading={loading}
+            disabled={loading || (step === 1 && !isStep1Verified)}
           />
         </View>
 

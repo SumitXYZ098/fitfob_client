@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,25 @@ import {
   Image,
   Platform,
   RefreshControl,
+  ActivityIndicator,
+  Animated,
   useWindowDimensions,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
+import * as Location from 'expo-location';
 import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
+import OpenStreetMapLocationModal, {
+  SelectedLocationData,
+} from '@/components/modules/OpenStreetMapLocationModal';
+import { useNearbyGyms } from '@/hook/useClient';
+import { useAuthStore } from '@/store/useAuthStore';
 
-interface GymItem {
+export interface GymItem {
   id: string;
   title: string;
   rating: string;
@@ -25,42 +35,180 @@ interface GymItem {
   isOpen: boolean;
   isVerified: boolean;
   images: string[];
+  category?: string;
+  city?: string;
+  address?: string;
+  distance?: string;
+  coordinate?: { latitude: number; longitude: number };
 }
 
-const GYM_DATA: GymItem[] = [
-  {
-    id: '1',
-    title: 'Anytime Fitness Gym',
-    rating: '4.5/5',
-    amenities: ['AC', 'Wi-Fi', 'Trainers', 'SPA', 'Shower', 'Parking'],
-    price: '₹1200/Monthly',
-    isOpen: true,
-    isVerified: true,
-    images: [
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '2',
-    title: 'Gold’s Fitness Club',
-    rating: '4.8/5',
-    amenities: ['AC', 'Wi-Fi', 'Personal Trainer', 'Sauna', 'Locker'],
-    price: '₹1500/Monthly',
-    isOpen: true,
-    isVerified: true,
-    images: [
-      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-];
+const mapClubOwnerToGym = (item: any): GymItem => {
+  const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
+
+  const title =
+    data.clubName ||
+    data.businessName ||
+    data.gymName ||
+    data.name ||
+    data.title ||
+    data.club_name ||
+    'Fitness Club';
+
+  const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
+  const rating =
+    typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
+
+  let amenities: string[] = [];
+  if (Array.isArray(data.amenities)) {
+    amenities = data.amenities
+      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
+      .filter(Boolean);
+  } else if (typeof data.amenities === 'string') {
+    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(data.facilities)) {
+    amenities = data.facilities
+      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
+      .filter(Boolean);
+  }
+  if (!amenities.length) {
+    amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
+  }
+
+  let price = '₹1200/Monthly';
+  if (data.price) {
+    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
+  } else if (data.monthlyPrice) {
+    price = `₹${data.monthlyPrice}/Monthly`;
+  } else if (data.startingPrice) {
+    price = `₹${data.startingPrice}/Monthly`;
+  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
+    price = `₹${data.membershipPlans[0].price}/Monthly`;
+  }
+
+  const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
+  const isVerified =
+    data.isVerified !== undefined
+      ? Boolean(data.isVerified)
+      : data.verification_status === 'approved' || true;
+
+  const fallbackImages = [
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+  ];
+
+  let images: string[] = [];
+  const rawImages =
+    data.club_photos ||
+    data.clubPhotos ||
+    data.photos ||
+    data.images ||
+    data.gallery ||
+    [];
+
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages
+      .map((img: any) => {
+        const url =
+          img?.url ||
+          img?.formats?.large?.url ||
+          img?.formats?.medium?.url ||
+          img?.formats?.small?.url ||
+          (typeof img === 'string' ? img : null);
+        if (!url) return null;
+        return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+      })
+      .filter(Boolean) as string[];
+  } else if (data.coverImage?.url || data.logo?.url) {
+    const single = data.coverImage?.url || data.logo?.url;
+    images = [single.startsWith('http') ? single : `${process.env.EXPO_PUBLIC_API_URL}${single}`];
+  }
+
+  if (!images.length) {
+    images = fallbackImages;
+  }
+
+  return {
+    id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    title,
+    rating,
+    amenities,
+    price,
+    isOpen,
+    isVerified,
+    images,
+    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
+    city: data.city || data.location?.city || '',
+    address: data.address || data.location?.address || data.clubAddress || '',
+    distance: data.distance
+      ? typeof data.distance === 'number'
+        ? `${data.distance.toFixed(1)} ${data.distanceUnit || 'km'}`
+        : `${data.distance} ${data.distanceUnit || 'km'}`
+      : undefined,
+    coordinate: {
+      latitude: Number(data.latitude || data.lat || 30.8321),
+      longitude: Number(data.longitude || data.lng || 76.6873),
+    },
+  };
+};
+
+// ─── Skeleton Loader ───────────────────────────────────────────────────────
+function useShimmer() {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.8] });
+  return opacity;
+}
+
+function SkeletonBox({ style }: { style?: object }) {
+  const opacity = useShimmer();
+  return (
+    <Animated.View
+      style={[{ backgroundColor: '#E5E7EB', borderRadius: 10, opacity }, style]}
+    />
+  );
+}
+
+function GymCardSkeleton() {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 32;
+  return (
+    <View
+      style={{
+        marginBottom: 20,
+        borderRadius: 24,
+        overflow: 'hidden',
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+      }}>
+      {/* Image placeholder */}
+      <SkeletonBox style={{ width: cardWidth, height: 240, borderRadius: 0 }} />
+      {/* Content area */}
+      <View style={{ padding: 16 }}>
+        {/* Title row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <SkeletonBox style={{ height: 18, width: '60%' }} />
+          <SkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
+        </View>
+        {/* Location */}
+        <SkeletonBox style={{ height: 12, width: '45%', marginTop: 10 }} />
+        {/* Amenities */}
+        <SkeletonBox style={{ height: 12, width: '80%', marginTop: 8 }} />
+        {/* Price */}
+        <SkeletonBox style={{ height: 16, width: '35%', marginTop: 10 }} />
+      </View>
+    </View>
+  );
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 function GymCard({
   gym,
@@ -79,10 +227,11 @@ function GymCard({
   const cardWidth = screenWidth - 32;
 
   // Infinite forward loop: append first image at the end
-  const slides = [...gym.images, gym.images[0]];
+  const slides =
+    gym.images && gym.images.length > 1 ? [...gym.images, gym.images[0]] : gym.images || [];
 
   useEffect(() => {
-    if (!cardWidth || gym.images.length <= 1) return;
+    if (!cardWidth || !gym.images || gym.images.length <= 1) return;
 
     const interval = setInterval(() => {
       const nextIndex = currentIndexRef.current + 1;
@@ -109,12 +258,12 @@ function GymCard({
     }, 3200);
 
     return () => clearInterval(interval);
-  }, [cardWidth, gym.images.length]);
+  }, [cardWidth, gym.images?.length]);
 
-  const handleMomentumScrollEnd = (e: any) => {
+  const handleMomentScrollEnd = (e: any) => {
     const scrollX = e.nativeEvent.contentOffset.x;
     let newIndex = Math.round(scrollX / cardWidth);
-    if (newIndex >= gym.images.length) {
+    if (gym.images && newIndex >= gym.images.length) {
       scrollRef.current?.scrollTo({ x: 0, animated: false });
       newIndex = 0;
     }
@@ -138,7 +287,7 @@ function GymCard({
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
+          onMomentumScrollEnd={handleMomentScrollEnd}
           scrollEventThrottle={16}>
           {slides.map((imgUrl, idx) => (
             <TouchableOpacity
@@ -185,16 +334,19 @@ function GymCard({
         )}
 
         {/* Bottom Right: Dynamic Carousel Pagination Dots */}
-        <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
-          {gym.images.map((_, idx) => (
-            <View
-              key={idx}
-              style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-              className={`h-1.5 rounded-full ${idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
+        {gym.images && gym.images.length > 1 && (
+          <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
+            {gym.images.map((_, idx) => (
+              <View
+                key={idx}
+                style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
+                className={`h-1.5 rounded-full ${
+                  idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
                 }`}
-            />
-          ))}
-        </View>
+              />
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Card Details */}
@@ -204,16 +356,28 @@ function GymCard({
         className="p-4">
         {/* Title & Rating */}
         <View className="flex-row items-center justify-between">
-          <Text className="mr-2 flex-1 font-bold text-lg text-darkText">{gym.title}</Text>
+          <Text className="mr-2 flex-1 font-bold text-lg text-darkText" numberOfLines={1}>
+            {gym.title}
+          </Text>
           <View className="flex-row items-center space-x-1">
             <Ionicons name="star" size={14} color="#F59E0B" />
             <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
           </View>
         </View>
 
-        {/* Amenities */}
-        <Text className="font-regular mt-1.5 text-sm text-secondaryText">
-          {gym.amenities.map((item) => `• ${item}`).join('  ')}
+        {/* Location & Distance */}
+        {Boolean(gym.address || gym.city || gym.distance) && (
+          <View className="mt-1 flex-row items-center">
+            <Ionicons name="location-outline" size={13} color="#9CA3AF" />
+            <Text className="ml-1 flex-1 font-regular text-xs text-secondaryText" numberOfLines={1}>
+              {gym.address || gym.city} {gym.distance ? `• ${gym.distance}` : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Amenities (Limited to 4 items on card) */}
+        <Text className="font-regular mt-1.5 text-sm text-secondaryText" numberOfLines={1}>
+          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
         </Text>
 
         {/* Pricing */}
@@ -235,16 +399,124 @@ export default function HomeScreen() {
     setSelectedCategory(catId);
     setCategoryAnimTrigger({ id: catId, time: Date.now() });
   };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+  // Default coordinates from endpoint provided by user
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: 30.832111611338167,
+    longitude: 76.6873704048281,
+  });
+  const [city, setCity] = useState<string>('malikpur');
+  const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
+
+  const handleLocationConfirmed = (locData: SelectedLocationData) => {
+    setCoords({
+      latitude: locData.latitude,
+      longitude: locData.longitude,
+    });
+    setCity(locData.city.toLowerCase());
+  };
+
+  // Auto-detect current device location
+  const detectLocation = useCallback(async () => {
+    try {
+      setIsLocating(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (loc?.coords) {
+          setCoords({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+
+          try {
+            const addresses = await Location.reverseGeocodeAsync({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+            if (addresses && addresses.length > 0) {
+              const addr = addresses[0];
+              const detectedCity =
+                addr.city || addr.subregion || addr.district || addr.region || 'malikpur';
+              setCity(detectedCity.toLowerCase());
+            }
+          } catch (geoErr) {
+            console.log('Reverse geocoding error:', geoErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.log('Location detection error:', err);
+    } finally {
+      setIsLocating(false);
+    }
   }, []);
+
+  useEffect(() => {
+    detectLocation();
+  }, [detectLocation]);
+
+  // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
+  const {
+    data: nearbyData,
+    isLoading,
+    isPending,
+    refetch,
+  } = useNearbyGyms({
+    city,
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    query: searchQuery.trim() || undefined,
+  });
+
+  useEffect(() => {
+    if (nearbyData) {
+      console.log('📋 [HomeScreen] Nearby Gyms API Response:', JSON.stringify(nearbyData, null, 2));
+    }
+  }, [nearbyData]);
+
+  const gyms: GymItem[] = useMemo(() => {
+    if (!nearbyData) return [];
+
+    const rawList = Array.isArray(nearbyData)
+      ? nearbyData
+      : Array.isArray(nearbyData?.data)
+      ? nearbyData.data
+      : Array.isArray(nearbyData?.clubs)
+      ? nearbyData.clubs
+      : Array.isArray(nearbyData?.results)
+      ? nearbyData.results
+      : [];
+
+    return rawList.map(mapClubOwnerToGym);
+  }, [nearbyData]);
+
+  const filteredGyms = useMemo(() => {
+    if (!selectedCategory || selectedCategory === 'Gyms') {
+      return gyms;
+    }
+    return gyms.filter(
+      (g) => g.category?.toLowerCase() === selectedCategory.toLowerCase()
+    );
+  }, [gyms, selectedCategory]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetch(), detectLocation()]);
+    } catch (e) {
+      console.log('Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch, detectLocation]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -261,11 +533,25 @@ export default function HomeScreen() {
         {/* 1. Header Bar */}
         <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
           {/* Location selector */}
-          <TouchableOpacity className="flex-row items-center space-x-2">
+          <TouchableOpacity
+            onPress={() => setIsLocationModalVisible(true)}
+            activeOpacity={0.7}
+            className="flex-row items-center space-x-2">
             <View className="h-9 w-9 items-center justify-center rounded-full bg-[#FFEAEF]">
               <Ionicons name="location" size={20} color="#E23744" />
             </View>
-            <Text className="ml-2 font-bold text-lg text-darkText">Chandigarh</Text>
+            <View className="ml-2">
+              <View className="flex-row items-center">
+                <Text className="font-bold text-lg capitalize text-darkText" numberOfLines={1}>
+                  {city || 'Malikpur'}
+                </Text>
+                <Ionicons name="chevron-down" size={15} color="#1E293B" style={{ marginLeft: 4 }} />
+                {isLocating && (
+                  <ActivityIndicator size="small" color="#E23744" style={{ marginLeft: 6 }} />
+                )}
+              </View>
+              <Text className="font-regular text-[11px] text-slate-400">Tap to change location</Text>
+            </View>
           </TouchableOpacity>
 
           {/* Action Icons */}
@@ -313,7 +599,9 @@ export default function HomeScreen() {
               onChangeText={setSearchQuery}
               className="font-regular flex-1 py-1 pr-2 text-base text-darkText"
             />
-            <TouchableOpacity className="h-10 w-10 items-center justify-center rounded-full bg-[#E23744]">
+            <TouchableOpacity
+              onPress={() => refetch()}
+              className="h-10 w-10 items-center justify-center rounded-full bg-[#E23744]">
               <Feather name="search" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -366,16 +654,63 @@ export default function HomeScreen() {
 
         {/* 6. Gym Cards */}
         <View className="px-4">
-          {GYM_DATA.map((gym) => (
-            <GymCard
-              key={gym.id}
-              gym={gym}
-              isFav={!!favorites[gym.id]}
-              onToggleFavorite={() => toggleFavorite(gym.id)}
-            />
-          ))}
+          {(isLoading || (isPending && !nearbyData)) ? (
+            <View>
+              <GymCardSkeleton />
+              <GymCardSkeleton />
+              <GymCardSkeleton />
+            </View>
+          ) : filteredGyms.length > 0 ? (
+            filteredGyms.map((gym) => (
+              <GymCard
+                key={gym.id}
+                gym={gym}
+                isFav={!!favorites[gym.id]}
+                onToggleFavorite={() => toggleFavorite(gym.id)}
+              />
+            ))
+          ) : (
+            <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <Image
+                source={require('@/assets/images/empty-gyms.png')}
+                style={{ width: 190, height: 190, borderRadius: 24 }}
+                resizeMode="contain"
+              />
+              <Text className="mt-3 text-center font-bold text-lg text-darkText">
+                No Gyms Found Nearby
+              </Text>
+              <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
+                We couldn&apos;t find any fitness clubs or gyms around &quot;{city}&quot;. Try exploring a different area on the map or adjusting your search.
+              </Text>
+              <View className="mt-5 flex-row items-center gap-3">
+                <TouchableOpacity
+                  onPress={() => setIsLocationModalVisible(true)}
+                  activeOpacity={0.85}
+                  className="flex-row items-center rounded-full bg-[#E23744] px-5 py-2.5 shadow-sm">
+                  <Ionicons name="location-outline" size={16} color="#FFF" />
+                  <Text className="ml-1.5 font-semibold text-xs text-white">Change Location</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => refetch()}
+                  activeOpacity={0.8}
+                  className="flex-row items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
+                  <Ionicons name="refresh-outline" size={15} color="#475569" />
+                  <Text className="ml-1.5 font-semibold text-xs text-slate-600">Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {/* Interactive OpenStreetMap Location Selection Modal */}
+      <OpenStreetMapLocationModal
+        visible={isLocationModalVisible}
+        initialCoords={coords}
+        initialCity={city}
+        onClose={() => setIsLocationModalVisible(false)}
+        onConfirm={handleLocationConfirmed}
+      />
     </SafeAreaView>
   );
 }

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
+import { checkUserStep } from '@/api/clientApi';
 
 const GYM_EMOJIS = [
   '🏋️‍♂️',
@@ -45,7 +46,37 @@ const createParticles = (): ConfettiPiece[] => {
 
 export default function IdVerificationScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
+
+  React.useEffect(() => {
+    const fetchLatestDetails = async () => {
+      if (!user?.clientDetail?.clientId || !user?.clientDetail?.phoneNumber) {
+        try {
+          const res = await checkUserStep();
+          if (res?.details && user) {
+            await setUser(
+              {
+                ...user,
+                name: res.details.name || user.name,
+                clientDetail: {
+                  ...(user.clientDetail || {}),
+                  name: res.details.name || user.clientDetail?.name,
+                  phoneNumber: res.details.phoneNumber || user.clientDetail?.phoneNumber,
+                  email: res.details.email || user.clientDetail?.email,
+                  clientId: res.details.clientId || res.details.id || user.clientDetail?.clientId,
+                  selfieUrl: res.details.selfieUpload?.url || user.clientDetail?.selfieUrl,
+                },
+              },
+              true
+            );
+          }
+        } catch (e) {
+          console.log('Error refreshing details in IdVerificationScreen:', e);
+        }
+      }
+    };
+    fetchLatestDetails();
+  }, [user?.clientDetail?.clientId, user?.clientDetail?.phoneNumber]);
 
   // Animation values for check and shield
   const shieldScale = React.useRef(new Animated.Value(0)).current;
@@ -150,9 +181,24 @@ export default function IdVerificationScreen() {
     outputRange: [0.6, 0.2, 0],
   });
 
-  // Format ID or use a default one
-  const ownerId = user?.clientDetail?.clientId;
-  const ownerEmail = user?.email || 'client@fitfob.com';
+  const ownerId =
+    user?.clientDetail?.clientId ||
+    user?.clientDetail?.id ||
+    (user?.id ? `CF-${user.id}` : 'Verified');
+  const isDummyPhoneEmail = Boolean(
+    user?.email && (
+      user.email.endsWith('@phone.user') ||
+      user.email.includes('phone.user') ||
+      user.email.startsWith('+')
+    )
+  );
+  const isPhoneSignUp = isDummyPhoneEmail || Boolean(user?.phoneNumber);
+  const ownerPhone =
+    user?.clientDetail?.phoneNumber ||
+    user?.phoneNumber ||
+    (isDummyPhoneEmail ? user?.email?.split('@')[0] : null) ||
+    '';
+  const ownerEmail = !isDummyPhoneEmail ? (user?.email || 'client@fitfob.com') : '';
 
   return (
     <Container>
@@ -281,9 +327,11 @@ export default function IdVerificationScreen() {
 
           <View className="flex-row justify-between py-3">
             <Text className="font-medium font-sans text-[13px] text-slate-400">
-              Registered Email
+              {isPhoneSignUp ? 'Registered Phone' : 'Registered Email'}
             </Text>
-            <Text className="font-bold font-sans text-[13px] text-[#1C1C1C]">{ownerEmail}</Text>
+            <Text className="font-bold font-sans text-[13px] text-[#1C1C1C]">
+              {isPhoneSignUp ? (ownerPhone || 'N/A') : ownerEmail}
+            </Text>
           </View>
         </View>
       </View>

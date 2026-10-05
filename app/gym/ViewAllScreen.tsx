@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,16 @@ import {
   Platform,
   useWindowDimensions,
   Modal,
+  RefreshControl,
+  Animated,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Polygon, Line, Circle } from 'react-native-svg';
+import * as Location from 'expo-location';
 import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
+import { useNearbyGyms } from '@/hook/useClient';
 
 export interface GymItem {
   id: string;
@@ -128,6 +132,149 @@ const ALL_GYMS: GymItem[] = [
     ],
   },
 ];
+
+const mapClubOwnerToGym = (item: any): GymItem => {
+  const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
+
+  const title =
+    data.clubName ||
+    data.businessName ||
+    data.gymName ||
+    data.name ||
+    data.title ||
+    data.club_name ||
+    'Fitness Club';
+
+  const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
+  const rating =
+    typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
+
+  let amenities: string[] = [];
+  if (Array.isArray(data.amenities)) {
+    amenities = data.amenities
+      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
+      .filter(Boolean);
+  } else if (typeof data.amenities === 'string') {
+    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(data.facilities)) {
+    amenities = data.facilities
+      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
+      .filter(Boolean);
+  }
+  if (!amenities.length) {
+    amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
+  }
+
+  let price = '₹1200/Monthly';
+  if (data.price) {
+    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
+  } else if (data.monthlyPrice) {
+    price = `₹${data.monthlyPrice}/Monthly`;
+  } else if (data.startingPrice) {
+    price = `₹${data.startingPrice}/Monthly`;
+  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
+    price = `₹${data.membershipPlans[0].price}/Monthly`;
+  }
+
+  const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
+  const isVerified =
+    data.isVerified !== undefined
+      ? Boolean(data.isVerified)
+      : data.verification_status === 'approved' || true;
+
+  const fallbackImages = [
+    'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
+  ];
+
+  let images: string[] = [];
+  const rawImages =
+    data.club_photos ||
+    data.clubPhotos ||
+    data.photos ||
+    data.images ||
+    data.gallery ||
+    [];
+
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages
+      .map((img: any) => {
+        const url =
+          img?.url ||
+          img?.formats?.large?.url ||
+          img?.formats?.medium?.url ||
+          img?.formats?.small?.url ||
+          (typeof img === 'string' ? img : null);
+        if (!url) return null;
+        return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+      })
+      .filter(Boolean) as string[];
+  } else if (data.coverImage?.url || data.logo?.url) {
+    const single = data.coverImage?.url || data.logo?.url;
+    images = [single.startsWith('http') ? single : `${process.env.EXPO_PUBLIC_API_URL}${single}`];
+  }
+
+  if (!images.length) {
+    images = fallbackImages;
+  }
+
+  return {
+    id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    title,
+    rating,
+    amenities,
+    price,
+    isOpen,
+    isVerified,
+    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
+    images,
+    coordinate: {
+      latitude: Number(data.latitude || data.lat || 30.7333),
+      longitude: Number(data.longitude || data.lng || 76.7794),
+    },
+  };
+};
+
+function ViewAllSkeletonBox({ style }: { style?: object }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
+  return (
+    <Animated.View
+      style={[{ backgroundColor: '#E2E8F0', borderRadius: 8, opacity }, style]}
+    />
+  );
+}
+
+function ViewAllCardSkeleton() {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 32;
+
+  return (
+    <View className="mb-5 overflow-hidden rounded-3xl border border-[#F3F4F6] bg-white shadow-sm">
+      <ViewAllSkeletonBox style={{ width: cardWidth, height: 240, borderRadius: 0 }} />
+      <View className="p-4">
+        <View className="flex-row items-center justify-between">
+          <ViewAllSkeletonBox style={{ height: 18, width: '60%' }} />
+          <ViewAllSkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
+        </View>
+        <ViewAllSkeletonBox style={{ height: 12, width: '45%', marginTop: 10 }} />
+        <ViewAllSkeletonBox style={{ height: 12, width: '80%', marginTop: 8 }} />
+        <ViewAllSkeletonBox style={{ height: 16, width: '35%', marginTop: 10 }} />
+      </View>
+    </View>
+  );
+}
 
 function GymCard({
   gym,
@@ -270,16 +417,18 @@ function GymCard({
         className="p-4">
         {/* Title & Rating */}
         <View className="flex-row items-center justify-between">
-          <Text className="mr-2 flex-1 font-bold text-lg text-darkText">{gym.title}</Text>
+          <Text numberOfLines={1} className="mr-2 flex-1 font-bold text-lg text-darkText">
+            {gym.title}
+          </Text>
           <View className="flex-row items-center space-x-1">
             <Ionicons name="star" size={14} color="#F59E0B" />
             <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
           </View>
         </View>
 
-        {/* Amenities */}
-        <Text className="font-regular mt-1.5 text-sm text-secondaryText">
-          {gym.amenities.map((item) => `• ${item}`).join('  ')}
+        {/* Amenities (Limited to 4 items on card) */}
+        <Text numberOfLines={1} className="font-regular mt-1.5 text-sm text-secondaryText">
+          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
         </Text>
 
         {/* Pricing */}
@@ -307,30 +456,113 @@ export default function ViewAllScreen() {
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'all'>('all');
   const [onlyOpen, setOnlyOpen] = useState(false);
 
+  const [city, setCity] = useState<string>('');
+  const [coords, setCoords] = useState<{ latitude?: number; longitude?: number }>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Auto-detect user GPS location to search gyms nearby
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getLastKnownPositionAsync();
+          if (loc && isMounted) {
+            setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          }
+          const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (fresh && isMounted) {
+            setCoords({ latitude: fresh.coords.latitude, longitude: fresh.coords.longitude });
+            const [geo] = await Location.reverseGeocodeAsync({
+              latitude: fresh.coords.latitude,
+              longitude: fresh.coords.longitude,
+            });
+            if (geo?.city && isMounted) setCity(geo.city);
+          }
+        }
+      } catch (e) {
+        // Location fallback
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
+  const {
+    data: nearbyData,
+    isLoading,
+    isPending,
+    refetch,
+  } = useNearbyGyms({
+    city: city || undefined,
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    query: searchQuery.trim() || undefined,
+  });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  useEffect(() => {
+    if (nearbyData) {
+      console.log('📋 [ViewAllScreen] Nearby Gyms API Response:', JSON.stringify(nearbyData, null, 2));
+    }
+  }, [nearbyData]);
+
+  const rawGyms: GymItem[] = useMemo(() => {
+    if (!nearbyData) return [];
+
+    const rawList = Array.isArray(nearbyData)
+      ? nearbyData
+      : Array.isArray(nearbyData?.data)
+      ? nearbyData.data
+      : Array.isArray(nearbyData?.clubs)
+      ? nearbyData.clubs
+      : Array.isArray(nearbyData?.results)
+      ? nearbyData.results
+      : [];
+
+    return rawList.map(mapClubOwnerToGym);
+  }, [nearbyData]);
+
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Filter and sort gyms
-  const filteredGyms = ALL_GYMS.filter((gym) => {
-    const matchesCategory =
-      selectedCategory === 'Gyms' || gym.category.toLowerCase() === selectedCategory.toLowerCase();
-    const matchesSearch =
-      gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesOpen = !onlyOpen || gym.isOpen;
-    return matchesCategory && matchesSearch && matchesOpen;
-  }).sort((a, b) => {
-    if (sortBy === 'rating') {
-      return parseFloat(b.rating) - parseFloat(a.rating);
-    }
-    if (sortBy === 'price') {
-      const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
-      const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
-      return priceA - priceB;
-    }
-    return 0;
-  });
+  const filteredGyms = useMemo(() => {
+    return rawGyms
+      .filter((gym) => {
+        const matchesCategory =
+          selectedCategory === 'Gyms' ||
+          gym.category?.toLowerCase() === selectedCategory.toLowerCase();
+        const matchesSearch =
+          gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesOpen = !onlyOpen || gym.isOpen;
+        return matchesCategory && matchesSearch && matchesOpen;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'rating') {
+          return parseFloat(b.rating) - parseFloat(a.rating);
+        }
+        if (sortBy === 'price') {
+          const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
+          const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
+          return priceA - priceB;
+        }
+        return 0;
+      });
+  }, [rawGyms, selectedCategory, searchQuery, onlyOpen, sortBy]);
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]" edges={['top']}>
@@ -396,15 +628,36 @@ export default function ViewAllScreen() {
       {/* 4. Content: Gym List */}
       <ScrollView
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#E23744']}
+            tintColor="#E23744"
+          />
+        }
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingBottom: 110,
         }}>
-        {filteredGyms.length === 0 ? (
-          <View className="items-center justify-center py-16">
-            <Ionicons name="fitness-outline" size={48} color="#D1D5DB" />
-            <Text className="mt-3 font-semibold text-base text-gray-500">
-              No gyms found matching your criteria
+        {(isLoading || (isPending && !nearbyData)) ? (
+          <View>
+            <ViewAllCardSkeleton />
+            <ViewAllCardSkeleton />
+            <ViewAllCardSkeleton />
+          </View>
+        ) : filteredGyms.length === 0 ? (
+          <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <Image
+              source={require('@/assets/images/empty-gyms.png')}
+              style={{ width: 180, height: 180, borderRadius: 24 }}
+              resizeMode="contain"
+            />
+            <Text className="mt-3 text-center font-bold text-lg text-darkText">
+              No Gyms Found Nearby
+            </Text>
+            <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
+              No fitness clubs found matching your selected category or filters. Try resetting filters or choosing another city.
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -413,8 +666,9 @@ export default function ViewAllScreen() {
                 setSortBy('all');
                 setOnlyOpen(false);
               }}
-              className="mt-4 rounded-full bg-[#E23744] px-5 py-2">
-              <Text className="font-semibold text-sm text-white">Reset Filters</Text>
+              activeOpacity={0.85}
+              className="mt-5 rounded-full bg-[#E23744] px-6 py-2.5 shadow-sm">
+              <Text className="font-semibold text-xs text-white">Reset Filters</Text>
             </TouchableOpacity>
           </View>
         ) : (

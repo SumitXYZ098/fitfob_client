@@ -23,7 +23,15 @@ import GoogleButton from '@/components/modules/GoogleButton';
 
 // 1. Validation Schema
 const loginSchema = z.object({
-  identifier: z.string().min(1, 'Email/Phone is required').email('Invalid email format'),
+  identifier: z
+    .string()
+    .min(1, 'Email or Phone is required')
+    .refine((val) => {
+      const clean = val.trim();
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
+      const isPhone = /^\+?[0-9]{8,15}$/.test(clean.replace(/[\s-]/g, ''));
+      return isEmail || isPhone;
+    }, 'Please enter a valid email or phone number'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -73,13 +81,23 @@ export default function Login() {
 
   const { setUser } = useAuthStore();
   const onSubmit = (data: LoginFormData) => {
-    loginMutation(data, {
+    const cleanIdentifier = data.identifier.trim();
+    const formattedIdentifier = cleanIdentifier.includes('@')
+      ? cleanIdentifier.toLowerCase()
+      : cleanIdentifier;
+
+    const payload = {
+      identifier: formattedIdentifier,
+      password: data.password,
+    };
+
+    loginMutation(payload, {
       onSuccess: async (response) => {
         if (response && response.jwt && response.user) {
           if (rememberMe) {
             await AsyncStorage.setItem(
               'rememberedUser',
-              JSON.stringify({ identifier: data.identifier })
+              JSON.stringify({ identifier: formattedIdentifier })
             );
           } else {
             await AsyncStorage.removeItem('rememberedUser');

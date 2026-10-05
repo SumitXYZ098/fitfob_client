@@ -20,10 +20,15 @@ export const ENDPOINTS = {
   GOVERNMENT_ID: `${BASE_URL}/api/pending-client/government-id`,
   VERIFY_PENDING_CLIENT: `${BASE_URL}/api/pending-client/verify`,
   CHECK_STEP: `${BASE_URL}/api/pending-client/me`,
+  CLIENT_VERIFY_OTP: `${BASE_URL}/api/pending-client/verify-otp`,
+  CLIENT_RESEND_OTP: `${BASE_URL}/api/pending-client/resend-otp`,
+
 
   // Dashboard
 
-  // Screen
+  // Clubs & Search
+  SEARCH_CLUBS: `${BASE_URL}/api/club-owners/search`,
+  GET_CLUB_DETAIL: `${BASE_URL}/api/club-owners/client`,
   GET_QR: `${BASE_URL}/api/client-details/me/qr`,
 
   // Notifications
