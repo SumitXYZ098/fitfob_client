@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,9 @@ import {
   ScrollView,
   Image,
   Platform,
-  useWindowDimensions,
   Modal,
   RefreshControl,
-  Animated,
+  StatusBar,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,19 +18,17 @@ import Svg, { Path, Polygon, Line, Circle } from 'react-native-svg';
 import * as Location from 'expo-location';
 import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
 import { useNearbyGyms } from '@/hook/useClient';
+import GymCard, {
+  GymCardSkeleton,
+  GymItem,
+  HolidayItem,
+  gymMatchesCategory,
+  getDisplayFeatures,
+  getFeatureIcon,
+  getHolidayInfo,
+} from '@/components/GymCard';
 
-export interface GymItem {
-  id: string;
-  title: string;
-  rating: string;
-  amenities: string[];
-  price: string;
-  isOpen: boolean;
-  isVerified: boolean;
-  category: string;
-  images: string[];
-  coordinate?: { latitude: number; longitude: number };
-}
+export { GymItem };
 
 const ALL_GYMS: GymItem[] = [
   {
@@ -133,6 +130,29 @@ const ALL_GYMS: GymItem[] = [
   },
 ];
 
+const extractStringList = (val: any): string[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          return String(item.name || item.title || item.category || item.service || item.value || '').trim();
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+  if (typeof val === 'string') {
+    return val.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof val === 'object') {
+    const text = val.name || val.title || val.category || val.service;
+    if (text) return [String(text).trim()];
+  }
+  return [];
+};
+
 const mapClubOwnerToGym = (item: any): GymItem => {
   const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
 
@@ -149,21 +169,44 @@ const mapClubOwnerToGym = (item: any): GymItem => {
   const rating =
     typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
 
-  let amenities: string[] = [];
-  if (Array.isArray(data.amenities)) {
-    amenities = data.amenities
-      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
-      .filter(Boolean);
-  } else if (typeof data.amenities === 'string') {
-    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
-  } else if (Array.isArray(data.facilities)) {
-    amenities = data.facilities
-      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
-      .filter(Boolean);
+  const rawServices = extractStringList(data.services || data.service);
+  const rawCategories = extractStringList(data.categories || data.category);
+  const rawActivities = extractStringList(data.activities || data.activity);
+  const rawFacilities = extractStringList(data.facilities || data.facility);
+  const rawAmenities = extractStringList(data.amenities);
+  const clubType = data.clubType || data.club_type || data.type || '';
+
+  // Determine display category
+  let category = 'Gyms';
+  const lowerTitle = title.toLowerCase();
+  if (rawCategories.length > 0) {
+    category = rawCategories[0];
+  } else if (rawServices.length > 0) {
+    category = rawServices[0];
+  } else if (clubType) {
+    category = clubType;
+  } else if (lowerTitle.includes('yoga')) {
+    category = 'Yoga';
+  } else if (lowerTitle.includes('box')) {
+    category = 'Boxing';
+  } else if (lowerTitle.includes('dance')) {
+    category = 'Dance';
+  } else if (lowerTitle.includes('crossfit')) {
+    category = 'CrossFit';
+  } else if (lowerTitle.includes('zumba')) {
+    category = 'Zumba';
+  } else if (lowerTitle.includes('pilates')) {
+    category = 'Pilates';
   }
+
+  let amenities: string[] = Array.from(new Set([...rawAmenities, ...rawFacilities]));
   if (!amenities.length) {
     amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
   }
+
+  const services: string[] = Array.from(
+    new Set([...rawServices, ...rawActivities, ...rawCategories, category])
+  );
 
   let price = '₹1200/Monthly';
   if (data.price) {
@@ -229,226 +272,39 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     price,
     isOpen,
     isVerified,
-    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
+    category,
+    categories: rawCategories,
+    services,
     images,
     coordinate: {
       latitude: Number(data.latitude || data.lat || 30.7333),
       longitude: Number(data.longitude || data.lng || 76.7794),
     },
+    city: data.city || data.location?.city || '',
+    address: data.address || data.location?.address || data.clubAddress || '',
+    description: data.description || data.about || data.bio || '',
+    holidays: Array.isArray(data.holidays) ? data.holidays : [],
   };
 };
+// ─── ViewAllScreen Component ──────────────────────────────────────────────
 
-function ViewAllSkeletonBox({ style }: { style?: object }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [anim]);
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
-  return (
-    <Animated.View
-      style={[{ backgroundColor: '#E2E8F0', borderRadius: 8, opacity }, style]}
-    />
-  );
-}
-
-function ViewAllCardSkeleton() {
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-
-  return (
-    <View className="mb-5 overflow-hidden rounded-3xl border border-[#F3F4F6] bg-white shadow-sm">
-      <ViewAllSkeletonBox style={{ width: cardWidth, height: 240, borderRadius: 0 }} />
-      <View className="p-4">
-        <View className="flex-row items-center justify-between">
-          <ViewAllSkeletonBox style={{ height: 18, width: '60%' }} />
-          <ViewAllSkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
-        </View>
-        <ViewAllSkeletonBox style={{ height: 12, width: '45%', marginTop: 10 }} />
-        <ViewAllSkeletonBox style={{ height: 12, width: '80%', marginTop: 8 }} />
-        <ViewAllSkeletonBox style={{ height: 16, width: '35%', marginTop: 10 }} />
-      </View>
-    </View>
-  );
-}
-
-function GymCard({
-  gym,
-  isFav,
-  onToggleFavorite,
-}: {
-  gym: GymItem;
-  isFav: boolean;
-  onToggleFavorite: () => void;
-}) {
-  const router = useRouter();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  const currentIndexRef = useRef(0);
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-
-  const slides = [...gym.images, gym.images[0]];
-
-  useEffect(() => {
-    if (!cardWidth || gym.images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      const nextIndex = currentIndexRef.current + 1;
-
-      scrollRef.current?.scrollTo({
-        x: nextIndex * cardWidth,
-        animated: true,
-      });
-
-      if (nextIndex >= gym.images.length) {
-        setActiveIndex(0);
-        currentIndexRef.current = 0;
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({
-            x: 0,
-            animated: false,
-          });
-        }, 450);
-      } else {
-        currentIndexRef.current = nextIndex;
-        setActiveIndex(nextIndex);
-      }
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [cardWidth, gym.images.length]);
-
-  const handleMomentumScrollEnd = (e: any) => {
-    const scrollX = e.nativeEvent.contentOffset.x;
-    let newIndex = Math.round(scrollX / cardWidth);
-    if (newIndex >= gym.images.length) {
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-      newIndex = 0;
-    }
-    currentIndexRef.current = newIndex;
-    setActiveIndex(newIndex);
-  };
-
-  const handleOpenDetail = () => {
-    router.push({
-      pathname: '/gym/gym-detail' as any,
-      params: { id: gym.id },
-    });
-  };
-
-  return (
-    <View className="mb-5 overflow-hidden rounded-3xl border border-[#F3F4F6] bg-white shadow-sm">
-      {/* Image Carousel & Badges */}
-      <View className="relative h-60 w-full bg-gray-200">
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          scrollEventThrottle={16}>
-          {slides.map((imgUrl, idx) => (
-            <TouchableOpacity
-              key={idx}
-              activeOpacity={0.95}
-              onPress={handleOpenDetail}>
-              <Image
-                source={{ uri: imgUrl }}
-                style={{ width: cardWidth, height: 240 }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Top Left: Heart Favorite Button */}
-        <TouchableOpacity
-          onPress={onToggleFavorite}
-          className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
-          <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isFav ? '#E23744' : '#FFF'}
-          />
-        </TouchableOpacity>
-
-        {/* Top Right: Verified Badge */}
-        {gym.isVerified && (
-          <View className="absolute right-3 top-3 z-10 h-7 w-7 items-center justify-center rounded-full bg-[#E23744] shadow-sm">
-            <Svg width={14} height={14} viewBox="0 0 13 13" fill="none">
-              <Path
-                d="M12.8333 6.10167L11.41 4.48L11.6083 2.33333L9.5025 1.855L8.4 0L6.41667 0.851667L4.43333 0L3.33083 1.855L1.225 2.3275L1.42333 4.47417L0 6.10167L1.42333 7.72333L1.225 9.87583L3.33083 10.3542L4.43333 12.2092L6.41667 11.3517L8.4 12.2033L9.5025 10.3483L11.6083 9.87L11.41 7.72333L12.8333 6.10167ZM5.25 9.01833L2.91667 6.685L3.73917 5.8625L5.25 7.3675L9.09417 3.52333L9.91667 4.35167L5.25 9.01833Z"
-                fill="#FFFFFF"
-              />
-            </Svg>
-          </View>
-        )}
-
-        {/* Bottom Left: Open Now Badge */}
-        {gym.isOpen && (
-          <View className="absolute bottom-3 left-3 z-10 rounded-full bg-white px-3 py-1 shadow-sm">
-            <Text className="font-semibold text-xs text-[#E23744]">Open now</Text>
-          </View>
-        )}
-
-        {/* Bottom Right: Dynamic Carousel Pagination Dots */}
-        <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
-          {gym.images.map((_, idx) => (
-            <View
-              key={idx}
-              style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-              className={`h-1.5 rounded-full ${
-                idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
-              }`}
-            />
-          ))}
-        </View>
-      </View>
-
-      {/* Card Details */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handleOpenDetail}
-        className="p-4">
-        {/* Title & Rating */}
-        <View className="flex-row items-center justify-between">
-          <Text numberOfLines={1} className="mr-2 flex-1 font-bold text-lg text-darkText">
-            {gym.title}
-          </Text>
-          <View className="flex-row items-center space-x-1">
-            <Ionicons name="star" size={14} color="#F59E0B" />
-            <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
-          </View>
-        </View>
-
-        {/* Amenities (Limited to 4 items on card) */}
-        <Text numberOfLines={1} className="font-regular mt-1.5 text-sm text-secondaryText">
-          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
-        </Text>
-
-        {/* Pricing */}
-        <Text className="mt-2 font-bold text-base text-darkText">{gym.price}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 export default function ViewAllScreen() {
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState('Gyms');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
-    id: 'Gyms',
+    id: 'All',
     time: 0,
   });
 
   const handleSelectCategory = (catId: string) => {
-    setSelectedCategory(catId);
-    setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    if (selectedCategory === catId) {
+      setSelectedCategory('All');
+      setCategoryAnimTrigger({ id: 'All', time: Date.now() });
+    } else {
+      setSelectedCategory(catId);
+      setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    }
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
@@ -524,12 +380,12 @@ export default function ViewAllScreen() {
     const rawList = Array.isArray(nearbyData)
       ? nearbyData
       : Array.isArray(nearbyData?.data)
-      ? nearbyData.data
-      : Array.isArray(nearbyData?.clubs)
-      ? nearbyData.clubs
-      : Array.isArray(nearbyData?.results)
-      ? nearbyData.results
-      : [];
+        ? nearbyData.data
+        : Array.isArray(nearbyData?.clubs)
+          ? nearbyData.clubs
+          : Array.isArray(nearbyData?.results)
+            ? nearbyData.results
+            : [];
 
     return rawList.map(mapClubOwnerToGym);
   }, [nearbyData]);
@@ -538,34 +394,46 @@ export default function ViewAllScreen() {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Filter and sort gyms
+  // Filter and sort gyms (matching category cards appear first!)
   const filteredGyms = useMemo(() => {
-    return rawGyms
-      .filter((gym) => {
-        const matchesCategory =
-          selectedCategory === 'Gyms' ||
-          gym.category?.toLowerCase() === selectedCategory.toLowerCase();
-        const matchesSearch =
-          gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesOpen = !onlyOpen || gym.isOpen;
-        return matchesCategory && matchesSearch && matchesOpen;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'rating') {
-          return parseFloat(b.rating) - parseFloat(a.rating);
-        }
-        if (sortBy === 'price') {
-          const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
-          const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
-          return priceA - priceB;
-        }
-        return 0;
-      });
+    const list = rawGyms.filter((gym) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        gym.title.toLowerCase().includes(q) ||
+        gym.category?.toLowerCase().includes(q) ||
+        gym.amenities.some((a) => a.toLowerCase().includes(q)) ||
+        gym.services?.some((s) => s.toLowerCase().includes(q));
+      const matchesOpen = !onlyOpen || gym.isOpen;
+      return matchesSearch && matchesOpen;
+    });
+
+    const sortFn = (a: GymItem, b: GymItem) => {
+      if (sortBy === 'rating') {
+        return parseFloat(b.rating) - parseFloat(a.rating);
+      }
+      if (sortBy === 'price') {
+        const priceA = parseInt(a.price.replace(/[^\d]/g, ''), 10) || 0;
+        const priceB = parseInt(b.price.replace(/[^\d]/g, ''), 10) || 0;
+        return priceA - priceB;
+      }
+      return 0;
+    };
+
+    if (!selectedCategory || selectedCategory === 'All') {
+      return [...list].sort(sortFn);
+    }
+
+    // Matching category cards appear FIRST!
+    const matching = list.filter((g) => gymMatchesCategory(g, selectedCategory)).sort(sortFn);
+    const others = list.filter((g) => !gymMatchesCategory(g, selectedCategory)).sort(sortFn);
+
+    return [...matching, ...others];
   }, [rawGyms, selectedCategory, searchQuery, onlyOpen, sortBy]);
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]" edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
       {/* 1. Header Bar with Back Button & Search */}
       <View className="flex-row items-center px-4 pb-2 pt-2">
         <TouchableOpacity
@@ -617,9 +485,8 @@ export default function ViewAllScreen() {
         <Text className="font-bold text-xl text-darkText">Nearby gyms</Text>
         <TouchableOpacity
           onPress={() => setIsFilterModalVisible(true)}
-          className={`flex-row items-center rounded-full border px-4 py-1.5 shadow-sm ${
-            sortBy !== 'all' || onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-[#E5E7EB] bg-white'
-          }`}>
+          className={`flex-row items-center rounded-full border px-4 py-1.5 shadow-sm ${sortBy !== 'all' || onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-[#E5E7EB] bg-white'
+            }`}>
           <Ionicons name="options-outline" size={16} color="#E23744" />
           <Text className="ml-1.5 font-semibold text-sm text-darkText">Filter</Text>
         </TouchableOpacity>
@@ -642,9 +509,9 @@ export default function ViewAllScreen() {
         }}>
         {(isLoading || (isPending && !nearbyData)) ? (
           <View>
-            <ViewAllCardSkeleton />
-            <ViewAllCardSkeleton />
-            <ViewAllCardSkeleton />
+            <GymCardSkeleton />
+            <GymCardSkeleton />
+            <GymCardSkeleton />
           </View>
         ) : filteredGyms.length === 0 ? (
           <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -672,14 +539,20 @@ export default function ViewAllScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          filteredGyms.map((gym) => (
-            <GymCard
-              key={gym.id}
-              gym={gym}
-              isFav={!!favorites[gym.id]}
-              onToggleFavorite={() => toggleFavorite(gym.id)}
-            />
-          ))
+          filteredGyms.map((gym) => {
+            const isTopMatch =
+              selectedCategory !== 'All' && gymMatchesCategory(gym, selectedCategory);
+            return (
+              <GymCard
+                key={gym.id}
+                gym={gym}
+                isTopMatch={isTopMatch}
+                selectedCategory={selectedCategory}
+                isFav={!!favorites[gym.id]}
+                onToggleFavorite={() => toggleFavorite(gym.id)}
+              />
+            );
+          })
         )}
       </ScrollView>
 
@@ -737,15 +610,13 @@ export default function ViewAllScreen() {
                 <TouchableOpacity
                   key={opt.value}
                   onPress={() => setSortBy(opt.value as any)}
-                  className={`mr-2 rounded-full border px-4 py-2 ${
-                    sortBy === opt.value
+                  className={`mr-2 rounded-full border px-4 py-2 ${sortBy === opt.value
                       ? 'border-[#E23744] bg-[#FFEAEF]'
                       : 'border-gray-200 bg-white'
-                  }`}>
-                  <Text
-                    className={`font-semibold text-xs ${
-                      sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'
                     }`}>
+                  <Text
+                    className={`font-semibold text-xs ${sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'
+                      }`}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -756,9 +627,8 @@ export default function ViewAllScreen() {
             <Text className="mb-2 font-semibold text-sm text-gray-500">STATUS</Text>
             <TouchableOpacity
               onPress={() => setOnlyOpen((prev) => !prev)}
-              className={`mb-6 flex-row items-center rounded-xl border p-3 ${
-                onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-gray-200 bg-white'
-              }`}>
+              className={`mb-6 flex-row items-center rounded-xl border p-3 ${onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-gray-200 bg-white'
+                }`}>
               <Ionicons
                 name={onlyOpen ? 'checkbox' : 'square-outline'}
                 size={20}

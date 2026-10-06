@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
+import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { registerDeviceTokenWithBackend } from '@/services/notificationService';
 
@@ -49,6 +50,7 @@ export default function Layout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }} />
       <Toast />
     </QueryClientProvider>
