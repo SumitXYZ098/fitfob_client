@@ -261,102 +261,38 @@ export const searchNearbyGyms = async (params: {
   query?: string;
 }) => {
   try {
-    const buildQueryString = (includeCity = true) => {
-      const queryParts: string[] = [];
-      if (includeCity && params.city) {
-        queryParts.push(`city=${encodeURIComponent(params.city.trim())}`);
-      }
-      if (params.latitude !== undefined && params.latitude !== null) {
+    const queryParts: string[] = [];
+    const hasCity = Boolean(params.city && params.city.trim());
+
+    if (hasCity) {
+      queryParts.push(`city=${encodeURIComponent(params.city!.trim())}`);
+    } else {
+      // Only include coordinates if city is not provided
+      if (params.latitude !== undefined && params.latitude !== null && params.latitude !== '') {
         queryParts.push(`latitude=${encodeURIComponent(params.latitude.toString())}`);
       }
-      if (params.longitude !== undefined && params.longitude !== null) {
+      if (params.longitude !== undefined && params.longitude !== null && params.longitude !== '') {
         queryParts.push(`longitude=${encodeURIComponent(params.longitude.toString())}`);
       }
-      if (params.query) {
-        queryParts.push(`search=${encodeURIComponent(params.query.trim())}`);
-      }
-      return queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
-    };
+    }
 
-    const url = `${ENDPOINTS.SEARCH_CLUBS}${buildQueryString(true)}`;
+    if (params.query && params.query.trim()) {
+      queryParts.push(`search=${encodeURIComponent(params.query.trim())}`);
+    }
+
+    const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    const url = `${ENDPOINTS.SEARCH_CLUBS}${queryString}`;
     console.log('📡 Fetching nearby gyms from:', url);
-    let response;
-    try {
-      response = await apiInstance.get(url);
-    } catch (err: any) {
-      if ((err?.response?.status === 404 || err?.response?.status === 400) && params.city) {
-        console.log('ℹ️ No clubs found for city. Trying fallback without city parameter...');
-        const fallbackUrl = `${ENDPOINTS.SEARCH_CLUBS}${buildQueryString(false)}`;
-        try {
-          response = await apiInstance.get(fallbackUrl);
-        } catch (fallbackErr: any) {
-          console.log('ℹ️ Fallback also returned no clubs, returning empty array');
-          return [];
-        }
-      } else if (err?.response?.status === 404 || err?.response?.status === 400) {
-        return [];
-      } else {
-        throw err;
-      }
-    }
 
-    const data = response?.data;
-    const list = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.clubs)
-      ? data.clubs
-      : Array.isArray(data?.results)
-      ? data.results
-      : [];
-
-    // If city was specified but returned 0 results, also try fallback without city so new clubs show up
-    if (list.length === 0 && params.city) {
-      const fallbackUrl = `${ENDPOINTS.SEARCH_CLUBS}${buildQueryString(false)}`;
-      console.log('📡 0 clubs for city, trying fallback without strict city param:', fallbackUrl);
-      try {
-        const fallbackResp = await apiInstance.get(fallbackUrl);
-        const fallbackList = Array.isArray(fallbackResp?.data)
-          ? fallbackResp.data
-          : Array.isArray(fallbackResp?.data?.data)
-          ? fallbackResp.data.data
-          : Array.isArray(fallbackResp?.data?.clubs)
-          ? fallbackResp.data.clubs
-          : [];
-        if (fallbackList.length > 0) {
-          console.log(`✅ Fallback found ${fallbackList.length} clubs!`);
-          return fallbackResp.data;
-        }
-      } catch (e) {
-        // Safe to ignore fallback error
-      }
-    }
-
-    // If still 0 clubs, also try clean SEARCH_CLUBS without any params so newly registered clubs appear
-    if (list.length === 0) {
-      try {
-        console.log('📡 Fetching all clubs without filters from:', ENDPOINTS.SEARCH_CLUBS);
-        const allResp = await apiInstance.get(ENDPOINTS.SEARCH_CLUBS);
-        const allList = Array.isArray(allResp?.data)
-          ? allResp.data
-          : Array.isArray(allResp?.data?.data)
-          ? allResp.data.data
-          : Array.isArray(allResp?.data?.clubs)
-          ? allResp.data.clubs
-          : [];
-        if (allList.length > 0) {
-          console.log(`✅ Loaded ${allList.length} clubs from all-clubs fallback!`);
-          return allResp.data;
-        }
-      } catch (allErr) {
-        // Safe to ignore
-      }
-    }
-
-    return data || [];
+    const response = await apiInstance.get(url);
+    console.log('✅ Nearby gyms fetched successfully from:', url);
+    return response?.data ?? [];
   } catch (error: any) {
-    console.error('Error fetching nearby gyms (returning safe empty list):', error);
+    if (error?.response?.status === 404 || error?.response?.status === 400) {
+      console.log('ℹ️ No clubs found for search criteria (404/400), returning empty list');
+      return [];
+    }
+    console.error('❌ Error fetching nearby gyms:', error?.response?.data || error.message);
     return [];
   }
 };

@@ -83,8 +83,8 @@ export const getHolidayInfo = (holidays?: HolidayItem[]): HolidayInfo | null => 
       isPartial,
       title,
       badgeLabel: isPartial
-        ? `⚠️ Partial Off${timing ? ` (${timing})` : ''}`
-        : `⛔ Closed Today`,
+        ? `Partial Off${timing ? ` (${timing})` : ''}`
+        : `Closed Today`,
       noticeLabel: isPartial
         ? `Partial Closure Today: ${title} (${timing})`
         : `Closed Today: ${title}`,
@@ -117,7 +117,7 @@ export const getHolidayInfo = (holidays?: HolidayItem[]): HolidayInfo | null => 
       isToday: false,
       isPartial,
       title,
-      badgeLabel: `📅 Off ${dateFmt}: ${title}`,
+      badgeLabel: `Off ${dateFmt}: ${title}`,
       noticeLabel: `Upcoming Holiday on ${dateFmt}: ${title}${timing ? ` (${timing})` : ''}`,
       timing,
       dateStr: nextHoliday.startDate,
@@ -545,18 +545,6 @@ export default function GymCard({
               <Text className="font-medium text-xs text-white">Closed</Text>
             </View>
           )}
-
-          {Boolean(gym.category) && (
-            <View className="rounded-full bg-black/65 px-2.5 py-1 shadow-sm">
-              <Text className="font-medium text-xs text-white">{gym.category}</Text>
-            </View>
-          )}
-
-          {isTopMatch && (
-            <View className="rounded-full bg-[#E23744] px-2.5 py-1 shadow-sm">
-              <Text className="font-bold text-xs text-white">★ Top Match</Text>
-            </View>
-          )}
         </View>
 
         {/* Bottom Right: Dynamic Carousel Pagination Dots */}
@@ -590,11 +578,11 @@ export default function GymCard({
         </View>
 
         {/* Location & Distance */}
-        {Boolean(gym.address || gym.city || gym.distance) && (
+        {Boolean(gym.distance) && (
           <View className="mt-1 flex-row items-center">
             <Ionicons name="location-outline" size={13} color="#9CA3AF" />
             <Text className="ml-1 flex-1 font-regular text-xs text-secondaryText" numberOfLines={1}>
-              {gym.address || gym.city} {gym.distance ? `• ${gym.distance}` : ''}
+             {gym.distance ? `${gym.distance} away` : ''}
             </Text>
           </View>
         )}

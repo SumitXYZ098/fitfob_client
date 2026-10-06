@@ -291,7 +291,7 @@ export const AllGymsMapView = forwardRef<AllGymsMapViewHandle, AllGymsMapViewPro
           <!-- Top-Right Floating Controls -->
           <div class="floating-controls">
             <div class="btn-ctrl" id="satBtn" onclick="toggleSatellite()" title="Satellite Toggle">🛰️</div>
-            <div class="btn-ctrl" onclick="fitAll()" title="Fit All Gyms">🗺️</div>
+           
             <div class="btn-ctrl" onclick="map.zoomIn()" title="Zoom In">+</div>
             <div class="btn-ctrl" onclick="map.zoomOut()" title="Zoom Out">−</div>
           </div>

@@ -193,7 +193,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     address: data.address || data.location?.address || data.clubAddress || '',
     distance: data.distance
       ? typeof data.distance === 'number'
-        ? `${data.distance.toFixed(1)} ${data.distanceUnit || 'km'}`
+        ? `${data.distance.toFixed(2)} ${data.distanceUnit || 'km'}`
         : `${data.distance} ${data.distanceUnit || 'km'}`
       : undefined,
     coordinate: {
@@ -227,15 +227,28 @@ export default function HomeScreen() {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
+
+  // Debounce search input so user typing doesn't spam requests on every keystroke
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedSearchQuery('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Default coordinates from endpoint provided by user
   const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
     latitude: 30.832111611338167,
     longitude: 76.6873704048281,
   });
-  const [city, setCity] = useState<string>('malikpur');
+  const [city, setCity] = useState<string>('Chandigarh');
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
 
@@ -245,6 +258,8 @@ export default function HomeScreen() {
       longitude: locData.longitude,
     });
     setCity(locData.city.toLowerCase());
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
   };
 
   // Auto-detect current device location
@@ -289,21 +304,43 @@ export default function HomeScreen() {
     detectLocation();
   }, [detectLocation]);
 
+  const searchCity = debouncedSearchQuery.trim();
+  const isCitySearch = Boolean(searchCity);
+
   // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
+  // When a city name is typed, run with city and disable latitude and longitude
   const {
     data: nearbyData,
     isLoading,
     isPending,
     refetch,
-  } = useNearbyGyms({
-    city,
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-  });
+  } = useNearbyGyms(
+    isCitySearch
+      ? {
+          city: searchCity,
+        }
+      : {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        }
+  );
+
+  const handleSearchSubmit = () => {
+    if (debouncedSearchQuery.trim() !== searchQuery.trim()) {
+      setDebouncedSearchQuery(searchQuery);
+    } else {
+      refetch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
+  };
 
   useEffect(() => {
     if (nearbyData) {
-      console.log('📋 [HomeScreen] Nearby Gyms API Response:', JSON.stringify(nearbyData, null, 2));
+      console.log('📋 [HomeScreen] Nearby Gyms API Response:', JSON.stringify(nearbyData.data[3], null, 2));
     }
   }, [nearbyData]);
 
@@ -325,12 +362,15 @@ export default function HomeScreen() {
 
   const filteredGyms = useMemo(() => {
     // 1. Search Query Filter
+    const activeSearch = debouncedSearchQuery.trim() || searchQuery.trim();
     const searchFiltered = gyms.filter((gym) => {
-      if (!searchQuery.trim()) return true;
+      if (!activeSearch) return true;
 
-      const q = searchQuery.toLowerCase().trim();
+      const q = activeSearch.toLowerCase();
       const inTitle = (gym.title || '').toLowerCase().includes(q);
-      const inCity = (gym.city || '').toLowerCase().includes(q);
+      const inCity =
+        (gym.city || '').toLowerCase().includes(q) ||
+        (gym.city && q.includes(gym.city.toLowerCase()));
       const inAddress = (gym.address || '').toLowerCase().includes(q);
       const inCategory = (gym.category || '').toLowerCase().includes(q);
       const inCategories = gym.categories?.some((c) => c.toLowerCase().includes(q));
@@ -367,7 +407,7 @@ export default function HomeScreen() {
     });
 
     return [...matching, ...others];
-  }, [gyms, selectedCategory, searchQuery]);
+  }, [gyms, selectedCategory, debouncedSearchQuery, searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -406,7 +446,7 @@ export default function HomeScreen() {
             <View className="ml-2">
               <View className="flex-row items-center">
                 <Text className="font-bold text-lg capitalize text-darkText" numberOfLines={1}>
-                  {city || 'Malikpur'}
+                  {city}
                 </Text>
                 <Ionicons name="chevron-down" size={15} color="#1E293B" style={{ marginLeft: 4 }} />
                 {isLocating && (
@@ -455,26 +495,26 @@ export default function HomeScreen() {
         {/* 2. Search Bar */}
         <View className="my-2 px-4">
           <View className="flex-row items-center rounded-full border border-[#F3F4F6] bg-white px-4 py-2 shadow-sm">
-            <Feather name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
+            {/* <Feather name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} /> */}
             <TextInput
-              placeholder="Search gyms, yoga, fitness..."
+              placeholder="Search city name"
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
-              onSubmitEditing={() => refetch()}
-              className="font-regular flex-1 py-1 pr-2 text-base text-darkText"
+              onSubmitEditing={handleSearchSubmit}
+              className="font-regular flex-1 py-1 pr-1 text-base text-darkText"
             />
             {searchQuery.trim().length > 0 && (
               <TouchableOpacity
-                onPress={() => setSearchQuery('')}
+                onPress={handleClearSearch}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 className="mr-2">
                 <Ionicons name="close-circle" size={18} color="#94A3B8" />
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              onPress={() => refetch()}
+              onPress={handleSearchSubmit}
               className="h-10 w-10 items-center justify-center rounded-full bg-[#E23744]">
               <Feather name="search" size={18} color="#FFF" />
             </TouchableOpacity>
@@ -558,12 +598,12 @@ export default function HomeScreen() {
                 No {selectedCategory !== 'All' ? selectedCategory : 'Results'} Found
               </Text>
               <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any {selectedCategory !== 'All' ? selectedCategory.toLowerCase() : ''} options matching your filter in &quot;{city}&quot;. Try exploring other categories or view all clubs.
+                We couldn&apos;t find any {selectedCategory !== 'All' ? selectedCategory.toLowerCase() : ''} options matching your filter in &quot;{searchCity || city}&quot;. Try exploring other categories or view all clubs.
               </Text>
               <TouchableOpacity
                 onPress={() => {
                   setSelectedCategory('All');
-                  setSearchQuery('');
+                  handleClearSearch();
                   setCategoryAnimTrigger({ id: 'All', time: Date.now() });
                 }}
                 activeOpacity={0.85}
@@ -580,10 +620,10 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text className="mt-3 text-center font-bold text-lg text-darkText">
-                {city ? `No Gyms Found in ${city.charAt(0).toUpperCase() + city.slice(1)}` : 'No Gyms Found Nearby'}
+                {(searchCity || city) ? `No Gyms Found in ${(searchCity || city).charAt(0).toUpperCase() + (searchCity || city).slice(1)}` : 'No Gyms Found Nearby'}
               </Text>
               <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any fitness clubs registered around &quot;{city || 'this area'}&quot; yet. You can explore all clubs across other areas or choose a different location.
+                We couldn&apos;t find any fitness clubs registered around &quot;{searchCity || city || 'this area'}&quot; yet. You can explore all clubs across other areas or choose a different location.
               </Text>
 
               {/* Action Buttons */}
@@ -592,7 +632,7 @@ export default function HomeScreen() {
                   onPress={() => {
                     setCity('');
                     setSelectedCategory('All');
-                    setSearchQuery('');
+                    handleClearSearch();
                     refetch();
                   }}
                   activeOpacity={0.85}
