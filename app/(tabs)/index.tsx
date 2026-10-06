@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,7 @@ import {
   Platform,
   RefreshControl,
   ActivityIndicator,
-  Animated,
-  useWindowDimensions,
-  Modal,
-  KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,22 +22,51 @@ import OpenStreetMapLocationModal, {
 } from '@/components/modules/OpenStreetMapLocationModal';
 import { useNearbyGyms } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
+import GymCard, {
+  GymCardSkeleton,
+  GymItem,
+  HolidayItem,
+  HolidayInfo,
+  gymMatchesCategory,
+  getDisplayFeatures,
+  getFeatureIcon,
+  getHolidayInfo,
+} from '@/components/GymCard';
 
-export interface GymItem {
-  id: string;
-  title: string;
-  rating: string;
-  amenities: string[];
-  price: string;
-  isOpen: boolean;
-  isVerified: boolean;
-  images: string[];
-  category?: string;
-  city?: string;
-  address?: string;
-  distance?: string;
-  coordinate?: { latitude: number; longitude: number };
-}
+export {
+  GymCard,
+  GymCardSkeleton,
+  GymItem,
+  HolidayItem,
+  HolidayInfo,
+  gymMatchesCategory,
+  getDisplayFeatures,
+  getFeatureIcon,
+  getHolidayInfo,
+};
+
+const extractStringList = (val: any): string[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          return String(item.name || item.title || item.category || item.service || item.value || '').trim();
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+  if (typeof val === 'string') {
+    return val.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof val === 'object') {
+    const text = val.name || val.title || val.category || val.service;
+    if (text) return [String(text).trim()];
+  }
+  return [];
+};
 
 const mapClubOwnerToGym = (item: any): GymItem => {
   const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
@@ -58,21 +84,44 @@ const mapClubOwnerToGym = (item: any): GymItem => {
   const rating =
     typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
 
-  let amenities: string[] = [];
-  if (Array.isArray(data.amenities)) {
-    amenities = data.amenities
-      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
-      .filter(Boolean);
-  } else if (typeof data.amenities === 'string') {
-    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
-  } else if (Array.isArray(data.facilities)) {
-    amenities = data.facilities
-      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
-      .filter(Boolean);
+  const rawServices = extractStringList(data.services || data.service);
+  const rawCategories = extractStringList(data.categories || data.category);
+  const rawActivities = extractStringList(data.activities || data.activity);
+  const rawFacilities = extractStringList(data.facilities || data.facility);
+  const rawAmenities = extractStringList(data.amenities);
+  const clubType = data.clubType || data.club_type || data.type || '';
+
+  // Determine display category
+  let category = 'Gyms';
+  const lowerTitle = title.toLowerCase();
+  if (rawCategories.length > 0) {
+    category = rawCategories[0];
+  } else if (rawServices.length > 0) {
+    category = rawServices[0];
+  } else if (clubType) {
+    category = clubType;
+  } else if (lowerTitle.includes('yoga')) {
+    category = 'Yoga';
+  } else if (lowerTitle.includes('box')) {
+    category = 'Boxing';
+  } else if (lowerTitle.includes('dance')) {
+    category = 'Dance';
+  } else if (lowerTitle.includes('crossfit')) {
+    category = 'CrossFit';
+  } else if (lowerTitle.includes('zumba')) {
+    category = 'Zumba';
+  } else if (lowerTitle.includes('pilates')) {
+    category = 'Pilates';
   }
+
+  let amenities: string[] = Array.from(new Set([...rawAmenities, ...rawFacilities]));
   if (!amenities.length) {
     amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
   }
+
+  const services: string[] = Array.from(
+    new Set([...rawServices, ...rawActivities, ...rawCategories, category])
+  );
 
   let price = '₹1200/Monthly';
   if (data.price) {
@@ -137,7 +186,9 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     isOpen,
     isVerified,
     images,
-    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
+    category,
+    categories: rawCategories,
+    services,
     city: data.city || data.location?.city || '',
     address: data.address || data.location?.address || data.clubAddress || '',
     distance: data.distance
@@ -149,255 +200,30 @@ const mapClubOwnerToGym = (item: any): GymItem => {
       latitude: Number(data.latitude || data.lat || 30.8321),
       longitude: Number(data.longitude || data.lng || 76.6873),
     },
+    description: data.description || data.about || data.bio || '',
+    holidays: Array.isArray(data.holidays) ? data.holidays : [],
   };
 };
 
-// ─── Skeleton Loader ───────────────────────────────────────────────────────
-function useShimmer() {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [anim]);
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.8] });
-  return opacity;
-}
+// ─── Main HomeScreen Component ───────────────────────────────────────────
 
-function SkeletonBox({ style }: { style?: object }) {
-  const opacity = useShimmer();
-  return (
-    <Animated.View
-      style={[{ backgroundColor: '#E5E7EB', borderRadius: 10, opacity }, style]}
-    />
-  );
-}
-
-function GymCardSkeleton() {
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-  return (
-    <View
-      style={{
-        marginBottom: 20,
-        borderRadius: 24,
-        overflow: 'hidden',
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-      }}>
-      {/* Image placeholder */}
-      <SkeletonBox style={{ width: cardWidth, height: 240, borderRadius: 0 }} />
-      {/* Content area */}
-      <View style={{ padding: 16 }}>
-        {/* Title row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <SkeletonBox style={{ height: 18, width: '60%' }} />
-          <SkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
-        </View>
-        {/* Location */}
-        <SkeletonBox style={{ height: 12, width: '45%', marginTop: 10 }} />
-        {/* Amenities */}
-        <SkeletonBox style={{ height: 12, width: '80%', marginTop: 8 }} />
-        {/* Price */}
-        <SkeletonBox style={{ height: 16, width: '35%', marginTop: 10 }} />
-      </View>
-    </View>
-  );
-}
-// ───────────────────────────────────────────────────────────────────────────
-
-function GymCard({
-  gym,
-  isFav,
-  onToggleFavorite,
-}: {
-  gym: GymItem;
-  isFav: boolean;
-  onToggleFavorite: () => void;
-}) {
-  const router = useRouter();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  const currentIndexRef = useRef(0);
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-
-  // Infinite forward loop: append first image at the end
-  const slides =
-    gym.images && gym.images.length > 1 ? [...gym.images, gym.images[0]] : gym.images || [];
-
-  useEffect(() => {
-    if (!cardWidth || !gym.images || gym.images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      const nextIndex = currentIndexRef.current + 1;
-
-      scrollRef.current?.scrollTo({
-        x: nextIndex * cardWidth,
-        animated: true,
-      });
-
-      if (nextIndex >= gym.images.length) {
-        // Forward scroll to clone completes, set dot to 0 and silently reset position
-        setActiveIndex(0);
-        currentIndexRef.current = 0;
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({
-            x: 0,
-            animated: false,
-          });
-        }, 450);
-      } else {
-        currentIndexRef.current = nextIndex;
-        setActiveIndex(nextIndex);
-      }
-    }, 3200);
-
-    return () => clearInterval(interval);
-  }, [cardWidth, gym.images?.length]);
-
-  const handleMomentScrollEnd = (e: any) => {
-    const scrollX = e.nativeEvent.contentOffset.x;
-    let newIndex = Math.round(scrollX / cardWidth);
-    if (gym.images && newIndex >= gym.images.length) {
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-      newIndex = 0;
-    }
-    currentIndexRef.current = newIndex;
-    setActiveIndex(newIndex);
-  };
-
-  const handleOpenDetail = () => {
-    router.push({
-      pathname: '/gym/gym-detail' as any,
-      params: { id: gym.id },
-    });
-  };
-
-  return (
-    <View className="mb-5 overflow-hidden rounded-3xl border border-[#F3F4F6] bg-white shadow-sm">
-      {/* Image Carousel & Badges */}
-      <View className="relative h-60 w-full bg-gray-200">
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleMomentScrollEnd}
-          scrollEventThrottle={16}>
-          {slides.map((imgUrl, idx) => (
-            <TouchableOpacity
-              key={idx}
-              activeOpacity={0.95}
-              onPress={handleOpenDetail}>
-              <Image
-                source={{ uri: imgUrl }}
-                style={{ width: cardWidth, height: 240 }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Top Left: Heart Favorite Button */}
-        <TouchableOpacity
-          onPress={onToggleFavorite}
-          className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
-          <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isFav ? '#E23744' : '#FFF'}
-          />
-        </TouchableOpacity>
-
-        {/* Top Right: Verified Badge */}
-        {gym.isVerified && (
-          <View className="absolute right-3 top-3 z-10 h-7 w-7 items-center justify-center rounded-full bg-[#E23744] shadow-sm">
-            <Svg width={14} height={14} viewBox="0 0 13 13" fill="none">
-              <Path
-                d="M12.8333 6.10167L11.41 4.48L11.6083 2.33333L9.5025 1.855L8.4 0L6.41667 0.851667L4.43333 0L3.33083 1.855L1.225 2.3275L1.42333 4.47417L0 6.10167L1.42333 7.72333L1.225 9.87583L3.33083 10.3542L4.43333 12.2092L6.41667 11.3517L8.4 12.2033L9.5025 10.3483L11.6083 9.87L11.41 7.72333L12.8333 6.10167ZM5.25 9.01833L2.91667 6.685L3.73917 5.8625L5.25 7.3675L9.09417 3.52333L9.91667 4.35167L5.25 9.01833Z"
-                fill="#FFFFFF"
-              />
-            </Svg>
-          </View>
-        )}
-
-        {/* Bottom Left: Open Now Badge */}
-        {gym.isOpen && (
-          <View className="absolute bottom-3 left-3 z-10 rounded-full bg-white px-3 py-1 shadow-sm">
-            <Text className="font-semibold text-xs text-[#E23744]">Open now</Text>
-          </View>
-        )}
-
-        {/* Bottom Right: Dynamic Carousel Pagination Dots */}
-        {gym.images && gym.images.length > 1 && (
-          <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
-            {gym.images.map((_, idx) => (
-              <View
-                key={idx}
-                style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-                className={`h-1.5 rounded-full ${
-                  idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
-                }`}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Card Details */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handleOpenDetail}
-        className="p-4">
-        {/* Title & Rating */}
-        <View className="flex-row items-center justify-between">
-          <Text className="mr-2 flex-1 font-bold text-lg text-darkText" numberOfLines={1}>
-            {gym.title}
-          </Text>
-          <View className="flex-row items-center space-x-1">
-            <Ionicons name="star" size={14} color="#F59E0B" />
-            <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
-          </View>
-        </View>
-
-        {/* Location & Distance */}
-        {Boolean(gym.address || gym.city || gym.distance) && (
-          <View className="mt-1 flex-row items-center">
-            <Ionicons name="location-outline" size={13} color="#9CA3AF" />
-            <Text className="ml-1 flex-1 font-regular text-xs text-secondaryText" numberOfLines={1}>
-              {gym.address || gym.city} {gym.distance ? `• ${gym.distance}` : ''}
-            </Text>
-          </View>
-        )}
-
-        {/* Amenities (Limited to 4 items on card) */}
-        <Text className="font-regular mt-1.5 text-sm text-secondaryText" numberOfLines={1}>
-          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
-        </Text>
-
-        {/* Pricing */}
-        <Text className="mt-2 font-bold text-base text-darkText">{gym.price}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState('Gyms');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
-    id: 'Gyms',
+    id: 'All',
     time: 0,
   });
 
   const handleSelectCategory = (catId: string) => {
-    setSelectedCategory(catId);
-    setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    if (selectedCategory === catId) {
+      setSelectedCategory('All');
+      setCategoryAnimTrigger({ id: 'All', time: Date.now() });
+    } else {
+      setSelectedCategory(catId);
+      setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    }
   };
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -473,7 +299,6 @@ export default function HomeScreen() {
     city,
     latitude: coords.latitude,
     longitude: coords.longitude,
-    query: searchQuery.trim() || undefined,
   });
 
   useEffect(() => {
@@ -488,24 +313,61 @@ export default function HomeScreen() {
     const rawList = Array.isArray(nearbyData)
       ? nearbyData
       : Array.isArray(nearbyData?.data)
-      ? nearbyData.data
-      : Array.isArray(nearbyData?.clubs)
-      ? nearbyData.clubs
-      : Array.isArray(nearbyData?.results)
-      ? nearbyData.results
-      : [];
+        ? nearbyData.data
+        : Array.isArray(nearbyData?.clubs)
+          ? nearbyData.clubs
+          : Array.isArray(nearbyData?.results)
+            ? nearbyData.results
+            : [];
 
     return rawList.map(mapClubOwnerToGym);
   }, [nearbyData]);
 
   const filteredGyms = useMemo(() => {
-    if (!selectedCategory || selectedCategory === 'Gyms') {
-      return gyms;
+    // 1. Search Query Filter
+    const searchFiltered = gyms.filter((gym) => {
+      if (!searchQuery.trim()) return true;
+
+      const q = searchQuery.toLowerCase().trim();
+      const inTitle = (gym.title || '').toLowerCase().includes(q);
+      const inCity = (gym.city || '').toLowerCase().includes(q);
+      const inAddress = (gym.address || '').toLowerCase().includes(q);
+      const inCategory = (gym.category || '').toLowerCase().includes(q);
+      const inCategories = gym.categories?.some((c) => c.toLowerCase().includes(q));
+      const inAmenities = gym.amenities?.some((a) => a.toLowerCase().includes(q));
+      const inServices = gym.services?.some((s) => s.toLowerCase().includes(q));
+      const inDesc = (gym.description || '').toLowerCase().includes(q);
+
+      return (
+        inTitle ||
+        inCity ||
+        inAddress ||
+        inCategory ||
+        inCategories ||
+        inAmenities ||
+        inServices ||
+        inDesc
+      );
+    });
+
+    if (!selectedCategory || selectedCategory === 'All') {
+      return searchFiltered;
     }
-    return gyms.filter(
-      (g) => g.category?.toLowerCase() === selectedCategory.toLowerCase()
-    );
-  }, [gyms, selectedCategory]);
+
+    // 2. Prioritize: cards matching selectedCategory appear FIRST!
+    const matching: GymItem[] = [];
+    const others: GymItem[] = [];
+
+    searchFiltered.forEach((g) => {
+      if (gymMatchesCategory(g, selectedCategory)) {
+        matching.push(g);
+      } else {
+        others.push(g);
+      }
+    });
+
+    return [...matching, ...others];
+  }, [gyms, selectedCategory, searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -524,6 +386,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]">
+      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -592,13 +455,24 @@ export default function HomeScreen() {
         {/* 2. Search Bar */}
         <View className="my-2 px-4">
           <View className="flex-row items-center rounded-full border border-[#F3F4F6] bg-white px-4 py-2 shadow-sm">
+            <Feather name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
             <TextInput
-              placeholder="Search gyms, yoga...."
+              placeholder="Search gyms, yoga, fitness..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
+              returnKeyType="search"
+              onSubmitEditing={() => refetch()}
               className="font-regular flex-1 py-1 pr-2 text-base text-darkText"
             />
+            {searchQuery.trim().length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                className="mr-2">
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => refetch()}
               className="h-10 w-10 items-center justify-center rounded-full bg-[#E23744]">
@@ -661,14 +535,43 @@ export default function HomeScreen() {
               <GymCardSkeleton />
             </View>
           ) : filteredGyms.length > 0 ? (
-            filteredGyms.map((gym) => (
-              <GymCard
-                key={gym.id}
-                gym={gym}
-                isFav={!!favorites[gym.id]}
-                onToggleFavorite={() => toggleFavorite(gym.id)}
-              />
-            ))
+            filteredGyms.map((gym) => {
+              const isTopMatch =
+                selectedCategory !== 'All' && gymMatchesCategory(gym, selectedCategory);
+              return (
+                <GymCard
+                  key={gym.id}
+                  gym={gym}
+                  isTopMatch={isTopMatch}
+                  selectedCategory={selectedCategory}
+                  isFav={!!favorites[gym.id]}
+                  onToggleFavorite={() => toggleFavorite(gym.id)}
+                />
+              );
+            })
+          ) : (selectedCategory !== 'All' || searchQuery.trim()) ? (
+            <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <View className="mb-3 h-16 w-16 items-center justify-center rounded-full bg-[#FFEAEF]">
+                <Ionicons name="filter-outline" size={30} color="#E23744" />
+              </View>
+              <Text className="mt-1 text-center font-bold text-lg text-darkText">
+                No {selectedCategory !== 'All' ? selectedCategory : 'Results'} Found
+              </Text>
+              <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
+                We couldn&apos;t find any {selectedCategory !== 'All' ? selectedCategory.toLowerCase() : ''} options matching your filter in &quot;{city}&quot;. Try exploring other categories or view all clubs.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCategory('All');
+                  setSearchQuery('');
+                  setCategoryAnimTrigger({ id: 'All', time: Date.now() });
+                }}
+                activeOpacity={0.85}
+                className="mt-4 flex-row items-center rounded-full bg-[#E23744] px-5 py-2.5 shadow-sm">
+                <Ionicons name="refresh" size={15} color="#FFF" />
+                <Text className="ml-1.5 font-semibold text-xs text-white">Show All Gyms</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <Image
@@ -677,26 +580,43 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text className="mt-3 text-center font-bold text-lg text-darkText">
-                No Gyms Found Nearby
+                {city ? `No Gyms Found in ${city.charAt(0).toUpperCase() + city.slice(1)}` : 'No Gyms Found Nearby'}
               </Text>
               <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any fitness clubs or gyms around &quot;{city}&quot;. Try exploring a different area on the map or adjusting your search.
+                We couldn&apos;t find any fitness clubs registered around &quot;{city || 'this area'}&quot; yet. You can explore all clubs across other areas or choose a different location.
               </Text>
-              <View className="mt-5 flex-row items-center gap-3">
+
+              {/* Action Buttons */}
+              <View className="mt-5 w-full items-center gap-2.5">
                 <TouchableOpacity
-                  onPress={() => setIsLocationModalVisible(true)}
+                  onPress={() => {
+                    setCity('');
+                    setSelectedCategory('All');
+                    setSearchQuery('');
+                    refetch();
+                  }}
                   activeOpacity={0.85}
-                  className="flex-row items-center rounded-full bg-[#E23744] px-5 py-2.5 shadow-sm">
-                  <Ionicons name="location-outline" size={16} color="#FFF" />
-                  <Text className="ml-1.5 font-semibold text-xs text-white">Change Location</Text>
+                  className="w-full flex-row items-center justify-center rounded-full bg-[#E23744] py-3 shadow-sm">
+                  <Ionicons name="globe-outline" size={17} color="#FFF" />
+                  <Text className="ml-2 font-semibold text-sm text-white">Explore All Registered Clubs</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => refetch()}
-                  activeOpacity={0.8}
-                  className="flex-row items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
-                  <Ionicons name="refresh-outline" size={15} color="#475569" />
-                  <Text className="ml-1.5 font-semibold text-xs text-slate-600">Refresh</Text>
-                </TouchableOpacity>
+
+                <View className="flex-row items-center justify-center gap-2.5 w-full">
+                  <TouchableOpacity
+                    onPress={() => setIsLocationModalVisible(true)}
+                    activeOpacity={0.85}
+                    className="flex-1 flex-row items-center justify-center rounded-full border border-[#E23744]/20 bg-[#FFEAEF] py-2.5">
+                    <Ionicons name="location-outline" size={15} color="#E23744" />
+                    <Text className="ml-1.5 font-semibold text-xs text-[#E23744]">Change City</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => refetch()}
+                    activeOpacity={0.8}
+                    className="flex-1 flex-row items-center justify-center rounded-full border border-slate-200 bg-slate-50 py-2.5">
+                    <Ionicons name="refresh-outline" size={15} color="#475569" />
+                    <Text className="ml-1.5 font-semibold text-xs text-slate-600">Retry</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}

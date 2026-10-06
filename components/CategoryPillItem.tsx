@@ -10,6 +10,7 @@ export interface CategoryOption {
 }
 
 export const CATEGORIES: CategoryOption[] = [
+  { id: 'All', name: 'All', iconActive: 'apps', iconInactive: 'apps-outline' },
   { id: 'Gyms', name: 'Gyms', iconActive: 'barbell', iconInactive: 'barbell-outline' },
   { id: 'Yoga', name: 'Yoga', iconActive: 'body', iconInactive: 'body-outline' },
   { id: 'Boxing', name: 'Boxing', iconActive: 'flame', iconInactive: 'flame-outline' },

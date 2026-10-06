@@ -411,9 +411,8 @@ function GymCardItem({
             <View
               key={idx}
               style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-              className={`h-1.5 rounded-full ${
-                idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
-              }`}
+              className={`h-1.5 rounded-full ${idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
+                }`}
             />
           ))}
         </View>
@@ -548,12 +547,12 @@ export default function Mapviewscreen() {
     const rawList = Array.isArray(nearbyData)
       ? nearbyData
       : Array.isArray(nearbyData?.data)
-      ? nearbyData.data
-      : Array.isArray(nearbyData?.clubs)
-      ? nearbyData.clubs
-      : Array.isArray(nearbyData?.results)
-      ? nearbyData.results
-      : [];
+        ? nearbyData.data
+        : Array.isArray(nearbyData?.clubs)
+          ? nearbyData.clubs
+          : Array.isArray(nearbyData?.results)
+            ? nearbyData.results
+            : [];
 
     return rawList.map(mapClubOwnerToGym);
   }, [nearbyData]);
@@ -741,9 +740,8 @@ export default function Mapviewscreen() {
         {/* Filter Button */}
         <TouchableOpacity
           onPress={() => setIsFilterModalVisible(true)}
-          className={`ml-2 h-11 w-11 items-center justify-center rounded-full shadow-sm ${
-            sortBy !== 'all' || onlyOpen ? 'border border-[#E23744] bg-[#FFEAEF]' : 'bg-[#FFEAEF]'
-          }`}
+          className={`ml-2 h-11 w-11 items-center justify-center rounded-full shadow-sm ${sortBy !== 'all' || onlyOpen ? 'border border-[#E23744] bg-[#FFEAEF]' : 'bg-[#FFEAEF]'
+            }`}
           activeOpacity={0.8}>
           <Ionicons name="options-outline" size={20} color="#E23744" />
         </TouchableOpacity>
@@ -917,15 +915,13 @@ export default function Mapviewscreen() {
                 <TouchableOpacity
                   key={opt.value}
                   onPress={() => setSortBy(opt.value as any)}
-                  className={`mr-2 rounded-full border px-4 py-2 ${
-                    sortBy === opt.value
+                  className={`mr-2 rounded-full border px-4 py-2 ${sortBy === opt.value
                       ? 'border-[#E23744] bg-[#FFEAEF]'
                       : 'border-gray-200 bg-white'
-                  }`}>
-                  <Text
-                    className={`font-semibold text-xs ${
-                      sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'
                     }`}>
+                  <Text
+                    className={`font-semibold text-xs ${sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'
+                      }`}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -936,9 +932,8 @@ export default function Mapviewscreen() {
             <Text className="mb-2 font-semibold text-sm text-gray-500">STATUS</Text>
             <TouchableOpacity
               onPress={() => setOnlyOpen((prev) => !prev)}
-              className={`mb-6 flex-row items-center rounded-xl border p-3 ${
-                onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-gray-200 bg-white'
-              }`}>
+              className={`mb-6 flex-row items-center rounded-xl border p-3 ${onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-gray-200 bg-white'
+                }`}>
               <Ionicons
                 name={onlyOpen ? 'checkbox' : 'square-outline'}
                 size={20}

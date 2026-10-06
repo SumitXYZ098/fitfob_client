@@ -707,16 +707,64 @@ export default function GymDetailScreen() {
         : [];
       if (!images.length) images = fallbackImages;
 
-      // amenities
-      let amenities: { name: string; icon: string; library: string }[] = [];
-      const rawAmen = d.amenities || d.facilities || [];
-      if (Array.isArray(rawAmen) && rawAmen.length) {
-        amenities = rawAmen.map((a: any) => ({
-          name: typeof a === 'string' ? a : (a?.name || a?.title || String(a)),
-          icon: 'checkmark-circle-outline',
+      const extractList = (val: any): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val)) {
+          return val
+            .map((v) => (typeof v === 'string' ? v.trim() : String(v?.name || v?.title || '').trim()))
+            .filter(Boolean);
+        }
+        if (typeof val === 'string') return val.split(',').map((s) => s.trim()).filter(Boolean);
+        return [];
+      };
+
+      const getAmenityIcon = (name: string): string => {
+        const n = name.toLowerCase();
+        if (n.includes('ac') || n.includes('air')) return 'snow-outline';
+        if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
+        if (n.includes('park')) return 'car-outline';
+        if (n.includes('train')) return 'barbell-outline';
+        if (n.includes('shower') || n.includes('bath')) return 'water-outline';
+        if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
+        if (n.includes('box')) return 'flame-outline';
+        if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
+        if (n.includes('pool') || n.includes('swim')) return 'water-outline';
+        if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
+        if (n.includes('lock')) return 'lock-closed-outline';
+        return 'checkmark-circle-outline';
+      };
+
+      const rawServices = extractList(d.services || d.service);
+      const rawCategories = extractList(d.categories || d.category);
+      const rawFacilities = extractList(d.facilities || d.facility);
+      const rawAmenitiesList = extractList(d.amenities);
+
+      const title = d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club';
+      const lowerT = title.toLowerCase();
+
+      let category = 'Gyms';
+      if (rawCategories.length > 0) category = rawCategories[0];
+      else if (rawServices.length > 0) category = rawServices[0];
+      else if (d.clubType || d.club_type) category = d.clubType || d.club_type;
+      else if (lowerT.includes('yoga')) category = 'Yoga';
+      else if (lowerT.includes('box')) category = 'Boxing';
+      else if (lowerT.includes('dance')) category = 'Dance';
+      else if (lowerT.includes('crossfit')) category = 'CrossFit';
+      else if (lowerT.includes('zumba')) category = 'Zumba';
+      else if (lowerT.includes('pilates')) category = 'Pilates';
+
+      const combinedAmenityNames = Array.from(
+        new Set([...rawAmenitiesList, ...rawFacilities, ...rawServices])
+      );
+
+      let amenities: { name: string; icon: string; library: string }[] = combinedAmenityNames.map(
+        (name) => ({
+          name,
+          icon: getAmenityIcon(name),
           library: 'ionicons',
-        }));
-      }
+        })
+      );
+
       if (!amenities.length) {
         amenities = [
           { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
@@ -738,7 +786,9 @@ export default function GymDetailScreen() {
       const ratingVal = d.rating || d.avgRating || 4.5;
       return {
         id: String(d.documentId || d._id || d.id || gymId),
-        title: d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club',
+        title,
+        category,
+        services: Array.from(new Set([...rawServices, ...rawCategories, category])),
         address: d.address || d.clubAddress || d.location?.address || '',
         coordinate: {
           latitude: Number(d.latitude || d.lat || d.coordinate?.latitude || 30.8321),
@@ -1262,6 +1312,13 @@ export default function GymDetailScreen() {
           {/* Gym Title, Location & Chat Button */}
           <View className="flex-row items-start justify-between">
             <View className="mr-3 flex-1">
+              {Boolean((gym as any).category) && (
+                <View className="mb-1.5 self-start rounded-full bg-[#FFEAEF] px-2.5 py-0.5">
+                  <Text className="text-[11px] font-bold text-[#E23744]">
+                    {(gym as any).category}
+                  </Text>
+                </View>
+              )}
               <Text className="font-bold text-2xl text-slate-900">{gym.title}</Text>
               <Text className="mt-1 font-medium text-xs text-slate-500">{gym.address}</Text>
 
