@@ -20,7 +20,7 @@ import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
 import OpenStreetMapLocationModal, {
   SelectedLocationData,
 } from '@/components/modules/OpenStreetMapLocationModal';
-import { useNearbyGyms } from '@/hook/useClient';
+import { useNearbyGyms, useGetFavorites, extractFavoriteIds } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import GymCard, {
   GymCardSkeleton,
@@ -179,6 +179,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
 
   return {
     id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    documentId: data.documentId ? String(data.documentId) : (typeof data.id === 'string' ? data.id : undefined),
     title,
     rating,
     amenities,
@@ -230,6 +231,9 @@ export default function HomeScreen() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
+
+  const { data: favoritesData } = useGetFavorites();
+  const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
 
   // Debounce search input so user typing doesn't spam requests on every keystroke
   useEffect(() => {
@@ -578,13 +582,17 @@ export default function HomeScreen() {
             filteredGyms.map((gym) => {
               const isTopMatch =
                 selectedCategory !== 'All' && gymMatchesCategory(gym, selectedCategory);
+              const isGymFav =
+                favorites[gym.id] !== undefined
+                  ? favorites[gym.id]
+                  : favoriteIds.has(String(gym.documentId || gym.id));
               return (
                 <GymCard
                   key={gym.id}
                   gym={gym}
                   isTopMatch={isTopMatch}
                   selectedCategory={selectedCategory}
-                  isFav={!!favorites[gym.id]}
+                  isFav={isGymFav}
                   onToggleFavorite={() => toggleFavorite(gym.id)}
                 />
               );

@@ -2,6 +2,7 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const ENDPOINTS = {
   REGISTER: `${BASE_URL}/api/register-with-role`,
+
   RESENDOTP: `${BASE_URL}/api/resend-register-otp`,
   VERIFY_OTP: `${BASE_URL}/api/verify-register-otp`,
   LOGIN: `${BASE_URL}/api/login`,
@@ -11,6 +12,7 @@ export const ENDPOINTS = {
   FORGOT_SET_PASSWORD: `${BASE_URL}/api/auth/reset-password`,
   GOOGLE_SIGNUP: `${BASE_URL}/api/client/google`,
   FACEBOOK_SIGNUP: `${BASE_URL}/api/client/facebook`,
+  CLIENT_SEND_OTP: `${BASE_URL}/api/pending-client/send-otp`,
 
   // Basic Details
   BASIC_DETAILS: `${BASE_URL}/api/pending-client/basic-info`,
@@ -34,4 +36,8 @@ export const ENDPOINTS = {
   // Notifications
   REGISTER_DEVICE_TOKEN: `${BASE_URL}/api/device-tokens/register`,
   UNREGISTER_DEVICE_TOKEN: `${BASE_URL}/api/device-tokens/unregister`,
+
+  // Favorites
+  FAVORITES: `${BASE_URL}/api/client-detail/favorites`,
+  FAVORITES_REMOVE: `${BASE_URL}/api/client-detail/favorites/remove`,
 };

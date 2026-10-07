@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserStep } from '@/api/clientApi';
+import { useGetFavorites } from '@/hook/useClient';
 
 interface MenuItem {
   id: string;
@@ -18,6 +19,16 @@ interface MenuItem {
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, setUser, logOut } = useAuthStore();
+  const { data: favData } = useGetFavorites();
+
+  const favList = Array.isArray(favData)
+    ? favData
+    : Array.isArray(favData?.data)
+      ? favData.data
+      : Array.isArray(favData?.favorites)
+        ? favData.favorites
+        : [];
+  const favCount = favList.length;
 
   useEffect(() => {
     const fetchLatestProfile = async () => {
@@ -120,6 +131,12 @@ export default function ProfileScreen() {
       id: 'favorites',
       title: 'Favorites',
       iconName: 'heart-outline',
+      badge: favCount > 0 ? (
+        <View className="mr-2 h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-[#E23744]">
+          <Text className="font-bold text-[11px] text-white">{favCount}</Text>
+        </View>
+      ) : undefined,
+      route: '/account/favorites',
     },
     {
       id: 'saved-cards',

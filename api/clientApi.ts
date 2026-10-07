@@ -129,6 +129,17 @@ export const getQr = async () => {
   }
 };
 
+// Send Otp for onboarding
+export const clientSendOtp = async (identifier?: string) => {
+  const url = ENDPOINTS.CLIENT_SEND_OTP;
+  try {
+    const response = await apiInstance.post(url, { identifier });
+    console.log('✅ Send OTP Success:', response.data);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
 // Verify OTP for onboarding
 export const clientVerifyOtp = async (otp: string, identifier?: string) => {
   const otpStr = otp.toString().trim();
@@ -309,5 +320,73 @@ export const getGymDetail = async (id: string) => {
   } catch (error) {
     console.error('❌ Error fetching gym detail:', error);
     throw error;
+  }
+};
+
+// ─── Favorites API ───────────────────────────────────────────────────────────
+
+// 1. Get all client favorites: GET /api/client-detail/favorites
+export const getFavorites = async () => {
+  try {
+    console.log('📡 Fetching favorites from:', ENDPOINTS.FAVORITES);
+    const response = await apiInstance.get(ENDPOINTS.FAVORITES);
+    console.log('✅ Favorites fetched successfully:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching favorites:', error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 2. Add gym to favorites: POST /api/client-detail/favorites/{club documentId}
+export const addFavorite = async (clubDocumentId: string) => {
+  if (!clubDocumentId) {
+    throw new Error('Club document ID is required to add favorite');
+  }
+  const url = `${ENDPOINTS.FAVORITES}/${clubDocumentId}`;
+  console.log('📡 Adding favorite at:', url);
+  try {
+    const response = await apiInstance.post(url);
+    console.log('✅ Added to favorites successfully:', response.data);
+    return response.data;
+  } catch (postErr: any) {
+    // If backend only allows PUT, fallback gracefully
+    if (postErr?.response?.status === 405) {
+      console.log('⚠️ POST returned 405, retrying add favorite with PUT...');
+      const putResp = await apiInstance.put(url);
+      return putResp.data;
+    }
+    console.error('❌ Error adding favorite:', postErr?.response?.data || postErr.message);
+    throw postErr;
+  }
+};
+
+// 3. Remove gym from favorites: POST/DELETE /api/client-detail/favorites/remove/{club documentId}
+export const removeFavorite = async (clubDocumentId: string) => {
+  if (!clubDocumentId) {
+    throw new Error('Club document ID is required to remove favorite');
+  }
+  const url = `${ENDPOINTS.FAVORITES_REMOVE}/${clubDocumentId}`;
+  console.log('📡 Removing favorite at:', url);
+  try {
+    // Try POST first as /remove/:id URL pattern is typical for POST endpoints
+    const response = await apiInstance.post(url);
+    console.log('✅ Removed from favorites successfully (POST):', response.data);
+    return response.data;
+  } catch (postErr: any) {
+    // If 405 Method Not Allowed or 404, fallback to DELETE
+    if (postErr?.response?.status === 405 || postErr?.response?.status === 404) {
+      console.log('⚠️ POST returned 405/404, retrying remove favorite with DELETE...');
+      try {
+        const delResp = await apiInstance.delete(url);
+        console.log('✅ Removed from favorites successfully (DELETE):', delResp.data);
+        return delResp.data;
+      } catch (delErr: any) {
+        console.error('❌ Error removing favorite (DELETE):', delErr?.response?.data || delErr.message);
+        throw delErr;
+      }
+    }
+    console.error('❌ Error removing favorite:', postErr?.response?.data || postErr.message);
+    throw postErr;
   }
 };

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { GYM_DETAILS } from './gym-detail';
+import { useGymDetail } from '@/hook/useClient';
 import GradientDivider from '@/components/GradientDivider';
 
 interface ReviewItem {
@@ -190,8 +190,26 @@ const FILTER_TABS = [
 export default function ReviewsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const gymId = (params.id as string) || (params.gymId as string) || '1';
-  const gym = GYM_DETAILS[gymId as keyof typeof GYM_DETAILS] || GYM_DETAILS['1'];
+  const gymId = (params.id as string) || (params.gymId as string) || '';
+  const { data: apiData } = useGymDetail(gymId || undefined);
+
+  const gym = useMemo(() => {
+    const raw = apiData?.data ?? apiData;
+    const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
+    const title = d?.clubName || d?.businessName || d?.gymName || d?.name || d?.title || 'Fitness Club';
+    const rating = String(d?.rating || d?.avgRating || '5.0');
+    const totalReviews = d?.totalReviews || d?.reviewCount || 0;
+    const ratingBreakdown: { star: number; pct: string }[] = Array.isArray(d?.ratingBreakdown)
+      ? d.ratingBreakdown
+      : [
+          { star: 5, pct: '100%' },
+          { star: 4, pct: '0%' },
+          { star: 3, pct: '0%' },
+          { star: 2, pct: '0%' },
+          { star: 1, pct: '0%' },
+        ];
+    return { title, rating, totalReviews, ratingBreakdown };
+  }, [apiData]);
 
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>(INITIAL_ALL_REVIEWS);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -312,7 +330,7 @@ export default function ReviewsScreen() {
 
             {/* Star Distribution Progress Bars */}
             <View className="flex-1 border-l border-slate-100 pl-4 space-y-1.5">
-              {gym.ratingBreakdown.map((r) => (
+              {gym.ratingBreakdown.map((r: { star: number; pct: string }) => (
                 <View key={r.star} className="flex-row items-center">
                   <Text className="w-3 text-right font-bold text-[11px] text-slate-600">
                     {r.star}

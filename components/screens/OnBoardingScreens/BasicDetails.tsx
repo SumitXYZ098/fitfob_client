@@ -11,13 +11,13 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import CountryPicker, { CountryCode, Country } from 'react-native-country-picker-modal';
 import {
   useClientBasicDetails,
   useClientResendOtp,
+  useClientSendOtp,
   useClientVerifyOtp,
 } from '@/hook/useClient';
 import { Button } from '@/components/modules/Button';
@@ -57,6 +57,7 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
   ({ prefill, onVerificationChange, onSaveData }, ref) => {
     const { user, setUser } = useAuthStore();
     const { mutateAsync } = useClientBasicDetails();
+    const sendOtpMutation = useClientSendOtp();
     const resendOtpMutation = useClientResendOtp();
     const verifyOtpMutation = useClientVerifyOtp();
 
@@ -110,9 +111,9 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
     // Extract signup phone number if phone signup
     const signupPhoneRaw = isPhoneSignUp
       ? user?.phoneNumber ||
-        (user?.email && user.email.includes('@phone.user') ? user.email.split('@')[0] : null) ||
-        (user?.username && /^\+?[0-9]{10,15}$/.test(user.username) ? user.username : null) ||
-        ''
+      (user?.email && user.email.includes('@phone.user') ? user.email.split('@')[0] : null) ||
+      (user?.username && /^\+?[0-9]{10,15}$/.test(user.username) ? user.username : null) ||
+      ''
       : '';
 
     const signupPhone = signupPhoneRaw ? parsePhone(signupPhoneRaw) : null;
@@ -135,10 +136,10 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
     // If Gmail/Email signup -> Email is ALREADY verified! Only phone needs OTP verification.
     // If Phone signup -> Phone is ALREADY verified! Only email needs OTP verification.
     const [isEmailVerified, setIsEmailVerified] = useState<boolean>(
-      isEmailSignUp || (isRealEmail(prefill?.email) && Boolean(prefill?.isEmailVerified))
+      Boolean(prefill?.isEmailVerified) || Boolean(prefill?.user?.email) || Boolean(user?.email)
     );
     const [isPhoneVerified, setIsPhoneVerified] = useState<boolean>(
-      isPhoneSignUp || Boolean(prefill?.isPhoneVerified) || Boolean(prefill?.phoneNumber)
+      Boolean(prefill?.isPhoneVerified) || Boolean(prefill?.user?.phoneNumber) || Boolean(user?.phoneNumber)
     );
 
     // BottomSheet Modal states
@@ -231,27 +232,9 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
 
         setIsSendingOtp('phone');
         setVerifyingType('phone');
-        const fullPhone = `+${callingCode}${cleanPhoneDigits}`;
+        const fullPhone = `${cleanPhoneDigits}`;
         try {
-          // If name is filled, update basic details first so backend has user's phone number stored
-          if (name.trim()) {
-            try {
-              console.log('📡 Updating basic details before sending phone OTP...');
-              await mutateAsync({
-                name: name.trim(),
-                email: email.trim(),
-                phoneNumber: fullPhone,
-                gender: selectedGender,
-              });
-            } catch (saveErr) {
-              console.log('Note: basic details save returned:', saveErr);
-            }
-          }
-
-          await resendOtpMutation.mutateAsync({
-            identifier: fullPhone,
-            phoneNumber: fullPhone,
-          });
+          await sendOtpMutation.mutateAsync(fullPhone);
           setOtp(['', '', '', '', '', '']);
           setTimer(60);
           setIsOtpModalOpen(true);
@@ -285,10 +268,9 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
         setVerifyingType('email');
         try {
           const cleanEmail = email.trim().toLowerCase();
-          await resendOtpMutation.mutateAsync({
-            identifier: cleanEmail,
-            email: cleanEmail,
-          });
+          await sendOtpMutation.mutateAsync(
+            cleanEmail
+          );
           setOtp(['', '', '', '', '', '']);
           setTimer(60);
           setIsOtpModalOpen(true);
@@ -539,11 +521,10 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
             )}
           </View>
           <View
-            className={`h-16 flex-row items-center justify-between rounded-2xl border px-5 ${
-              isEmailVerified
-                ? 'border-slate-200 bg-slate-100/80'
-                : 'border-slate-200 bg-white focus:border-[#F6163C]'
-            }`}>
+            className={`h-16 flex-row items-center justify-between rounded-2xl border px-5 ${isEmailVerified
+              ? 'border-slate-200 bg-slate-100/80'
+              : 'border-slate-200 bg-white focus:border-[#F6163C]'
+              }`}>
             <TextInput
               placeholder="Enter Email"
               placeholderTextColor="#94a3b8"
@@ -562,18 +543,16 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
                 onPress={() => handleSendOtp('email')}
                 disabled={!isEmailValid || isEmailSending || isPhoneSending}
                 activeOpacity={0.8}
-                className={`ml-2 rounded-xl px-3 py-2 ${
-                  isEmailSending || (isEmailValid && !isPhoneSending)
-                    ? 'bg-[#F6163C]'
-                    : 'bg-slate-100'
-                }`}>
+                className={`ml-2 rounded-xl px-3 py-2 ${isEmailSending || (isEmailValid && !isPhoneSending)
+                  ? 'bg-[#F6163C]'
+                  : 'bg-slate-100'
+                  }`}>
                 {isEmailSending ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <Text
-                    className={`font-bold text-xs ${
-                      isEmailValid && !isPhoneSending ? 'text-white' : 'text-slate-400'
-                    }`}>
+                    className={`font-bold text-xs ${isEmailValid && !isPhoneSending ? 'text-white' : 'text-slate-400'
+                      }`}>
                     Send OTP
                   </Text>
                 )}
@@ -599,9 +578,8 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
             )}
           </View>
           <View
-            className={`h-16 flex-row items-center rounded-2xl border px-4 ${
-              isPhoneVerified ? 'border-slate-200 bg-slate-100/80' : 'border-slate-200 bg-white'
-            }`}>
+            className={`h-16 flex-row items-center rounded-2xl border px-4 ${isPhoneVerified ? 'border-slate-200 bg-slate-100/80' : 'border-slate-200 bg-white'
+              }`}>
             {/* Country Selector with Flag and Arrow */}
             <View
               pointerEvents={isPhoneVerified ? 'none' : 'auto'}
@@ -652,18 +630,16 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
                 onPress={() => handleSendOtp('phone')}
                 disabled={!isPhoneLengthValid || isPhoneSending || isEmailSending}
                 activeOpacity={0.8}
-                className={`ml-2 rounded-xl px-3 py-2 ${
-                  isPhoneSending || (isPhoneLengthValid && !isEmailSending)
-                    ? 'bg-[#F6163C]'
-                    : 'bg-slate-100'
-                }`}>
+                className={`ml-2 rounded-xl px-3 py-2 ${isPhoneSending || (isPhoneLengthValid && !isEmailSending)
+                  ? 'bg-[#F6163C]'
+                  : 'bg-slate-100'
+                  }`}>
                 {isPhoneSending ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <Text
-                    className={`font-bold text-xs ${
-                      isPhoneLengthValid && !isEmailSending ? 'text-white' : 'text-slate-400'
-                    }`}>
+                    className={`font-bold text-xs ${isPhoneLengthValid && !isEmailSending ? 'text-white' : 'text-slate-400'
+                      }`}>
                     Send OTP
                   </Text>
                 )}
@@ -685,9 +661,8 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
                   activeOpacity={0.8}
                   className="items-center">
                   <View
-                    className={`h-20 w-20 items-center justify-center rounded-full border-2 bg-white ${
-                      isSelected ? 'border-[#F6163C]' : 'border-slate-100'
-                    }`}
+                    className={`h-20 w-20 items-center justify-center rounded-full border-2 bg-white ${isSelected ? 'border-[#F6163C]' : 'border-slate-100'
+                      }`}
                     style={{
                       elevation: 4,
                       shadowColor: '#000',
@@ -710,9 +685,8 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
                     )}
                   </View>
                   <Text
-                    className={`mt-2 font-medium ${
-                      isSelected ? 'text-slate-900' : 'text-slate-400'
-                    }`}>
+                    className={`mt-2 font-medium ${isSelected ? 'text-slate-900' : 'text-slate-400'
+                      }`}>
                     {item.label}
                   </Text>
                 </TouchableOpacity>
@@ -775,11 +749,10 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
                     onKeyPress={(e) => handleOtpKeyPress(e, idx)}
                     keyboardType="number-pad"
                     maxLength={idx === 0 ? 6 : 1}
-                    className={`h-14 w-12 rounded-2xl border text-center font-bold text-xl ${
-                      digit
-                        ? 'border-[#F6163C] bg-red-50/20 text-slate-900'
-                        : 'border-slate-200 bg-slate-50 text-slate-900'
-                    }`}
+                    className={`h-14 w-12 rounded-2xl border text-center font-bold text-xl ${digit
+                      ? 'border-[#F6163C] bg-red-50/20 text-slate-900'
+                      : 'border-slate-200 bg-slate-50 text-slate-900'
+                      }`}
                     selectTextOnFocus
                   />
                 ))}

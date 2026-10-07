@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
+import { useToggleFavorite } from '@/hook/useClient';
 
 export interface HolidayItem {
   id?: number | string;
@@ -26,6 +27,7 @@ export interface HolidayItem {
 
 export interface GymItem {
   id: string;
+  documentId?: string;
   title: string;
   rating: string;
   amenities: string[];
@@ -331,6 +333,186 @@ export const gymMatchesCategory = (gym: GymItem, categoryId: string): boolean =>
   }
 };
 
+// ─── Data Extraction & Gym Mapping Helper ────────────────────────────────────
+export const extractStringList = (val: any): string[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          return String(item.name || item.title || item.category || item.service || item.value || '').trim();
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+  if (typeof val === 'string') {
+    return val.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof val === 'object') {
+    const text = val.name || val.title || val.category || val.service;
+    if (text) return [String(text).trim()];
+  }
+  return [];
+};
+
+export const mapClubOwnerToGym = (item: any): GymItem => {
+  if (!item) {
+    return {
+      id: Math.random().toString(),
+      title: 'Fitness Club',
+      rating: '4.5/5',
+      amenities: [],
+      price: '₹1200/Monthly',
+      isOpen: true,
+      isVerified: false,
+      images: [],
+    };
+  }
+
+  // Handle nested club relations (e.g. { club: ... } or { clubOwner: ... })
+  const clubData = item.club || item.clubOwner || item.gym || item;
+  const data = clubData?.attributes ? { id: clubData.id, ...clubData.attributes } : clubData;
+
+  const title =
+    data.clubName ||
+    data.businessName ||
+    data.gymName ||
+    data.name ||
+    data.title ||
+    data.club_name ||
+    'Fitness Club';
+
+  const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
+  const rating =
+    typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
+
+  const rawServices = extractStringList(data.services || data.service);
+  const rawCategories = extractStringList(data.categories || data.category);
+  const rawActivities = extractStringList(data.activities || data.activity);
+  const rawFacilities = extractStringList(data.facilities || data.facility);
+  const rawAmenities = extractStringList(data.amenities);
+  const clubType = data.clubType || data.club_type || data.type || '';
+
+  let category = 'Gyms';
+  const lowerTitle = title.toLowerCase();
+  if (rawCategories.length > 0) {
+    category = rawCategories[0];
+  } else if (rawServices.length > 0) {
+    category = rawServices[0];
+  } else if (clubType) {
+    category = clubType;
+  } else if (lowerTitle.includes('yoga')) {
+    category = 'Yoga';
+  } else if (lowerTitle.includes('box')) {
+    category = 'Boxing';
+  } else if (lowerTitle.includes('dance')) {
+    category = 'Dance';
+  } else if (lowerTitle.includes('crossfit')) {
+    category = 'CrossFit';
+  } else if (lowerTitle.includes('zumba')) {
+    category = 'Zumba';
+  } else if (lowerTitle.includes('pilates')) {
+    category = 'Pilates';
+  }
+
+  let amenities: string[] = Array.from(new Set([...rawAmenities, ...rawFacilities]));
+  if (!amenities.length) {
+    amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
+  }
+
+  const services: string[] = Array.from(
+    new Set([...rawServices, ...rawActivities, ...rawCategories, category])
+  );
+
+  let price = '₹1200/Monthly';
+  if (data.price) {
+    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
+  } else if (data.monthlyPrice) {
+    price = `₹${data.monthlyPrice}/Monthly`;
+  } else if (data.startingPrice) {
+    price = `₹${data.startingPrice}/Monthly`;
+  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
+    price = `₹${data.membershipPlans[0].price}/Monthly`;
+  }
+
+  const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
+  const isVerified =
+    data.isVerified !== undefined
+      ? Boolean(data.isVerified)
+      : data.verification_status === 'approved' || true;
+
+  const fallbackImages = [
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
+  ];
+
+  let images: string[] = [];
+  const rawImages =
+    data.club_photos ||
+    data.clubPhotos ||
+    data.photos ||
+    data.images ||
+    data.gallery ||
+    [];
+
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages
+      .map((img: any) => {
+        const url =
+          img?.url ||
+          img?.formats?.large?.url ||
+          img?.formats?.medium?.url ||
+          img?.formats?.small?.url ||
+          (typeof img === 'string' ? img : null);
+        if (!url) return null;
+        return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+      })
+      .filter(Boolean) as string[];
+  } else if (data.coverImage?.url || data.logo?.url) {
+    const single = data.coverImage?.url || data.logo?.url;
+    images = [single.startsWith('http') ? single : `${process.env.EXPO_PUBLIC_API_URL}${single}`];
+  } else if (typeof data.logo === 'string' && data.logo.startsWith('http')) {
+    images = [data.logo];
+  }
+
+  if (!images.length) {
+    images = fallbackImages;
+  }
+
+  const docId = data.documentId || (typeof data.id === 'string' ? data.id : undefined);
+
+  return {
+    id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    documentId: docId ? String(docId) : undefined,
+    title,
+    rating,
+    amenities,
+    price,
+    isOpen,
+    isVerified,
+    images,
+    category,
+    categories: rawCategories,
+    services,
+    city: data.city || data.location?.city || '',
+    address: data.address || data.location?.address || data.clubAddress || '',
+    distance: data.distance
+      ? typeof data.distance === 'number'
+        ? `${data.distance.toFixed(2)} ${data.distanceUnit || 'km'}`
+        : `${data.distance} ${data.distanceUnit || 'km'}`
+      : undefined,
+    coordinate: {
+      latitude: Number(data.latitude || data.lat || 30.8321),
+      longitude: Number(data.longitude || data.lng || 76.6873),
+    },
+    description: data.description || data.about || data.bio || '',
+    holidays: Array.isArray(data.holidays) ? data.holidays : [],
+  };
+};
+
 // ─── Shimmer & Skeleton ─────────────────────────────────────────────────────
 function useShimmer() {
   const anim = useRef(new Animated.Value(0)).current;
@@ -384,15 +566,15 @@ export function GymCardSkeleton() {
 // ─── Main GymCard Component ─────────────────────────────────────────────────
 export interface GymCardProps {
   gym: GymItem;
-  isFav: boolean;
+  isFav?: boolean;
   isTopMatch?: boolean;
   selectedCategory?: string;
-  onToggleFavorite: () => void;
+  onToggleFavorite?: () => void;
 }
 
 export default function GymCard({
   gym,
-  isFav,
+  isFav = false,
   isTopMatch,
   selectedCategory,
   onToggleFavorite,
@@ -403,6 +585,32 @@ export default function GymCard({
   const currentIndexRef = useRef(0);
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 32;
+
+  const { toggleFavorite, isPending: isTogglingFav } = useToggleFavorite();
+  const [localFav, setLocalFav] = useState<boolean>(Boolean(isFav));
+
+  useEffect(() => {
+    setLocalFav(Boolean(isFav));
+  }, [isFav]);
+
+  const handleToggleFavorite = async () => {
+    const clubDocumentId = gym.documentId || gym.id;
+    const nextState = !localFav;
+    setLocalFav(nextState);
+
+    if (onToggleFavorite) {
+      onToggleFavorite();
+    }
+
+    if (clubDocumentId) {
+      try {
+        await toggleFavorite(clubDocumentId, localFav);
+      } catch (e) {
+        // Revert on error
+        setLocalFav(localFav);
+      }
+    }
+  };
 
   const displayFeatures = useMemo(() => {
     return getDisplayFeatures(gym, selectedCategory);
@@ -495,12 +703,14 @@ export default function GymCard({
 
         {/* Top Left: Heart Favorite Button */}
         <TouchableOpacity
-          onPress={onToggleFavorite}
+          onPress={handleToggleFavorite}
+          activeOpacity={0.7}
+          disabled={isTogglingFav}
           className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
           <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
+            name={localFav ? 'heart' : 'heart-outline'}
             size={18}
-            color={isFav ? '#E23744' : '#FFF'}
+            color={localFav ? '#E23744' : '#FFF'}
           />
         </TouchableOpacity>
 

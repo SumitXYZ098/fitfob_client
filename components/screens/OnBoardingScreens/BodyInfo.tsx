@@ -7,12 +7,11 @@ import {
   TouchableOpacity,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Platform,
   Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { CustomCalendarModal, formatDateDisplay } from '@/components/modules/CustomCalendar';
 import { useClientBodyInfo } from '@/hook/useClient';
 
 const { width } = Dimensions.get('window');
@@ -162,27 +161,10 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
   const heights = heightUnit === 'cm' ? heightsCm : heightsFt;
 
   // --- Date Picker Logic ---
-  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (event.type === 'dismissed') {
-      setShowDatePicker(false);
-      return;
-    }
-
-    if (selectedDate) {
-      setDate(selectedDate);
-
-      // Formatting: DD/MM/YYYY
-      let d = selectedDate.getDate().toString().padStart(2, '0');
-      let m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
-      let y = selectedDate.getFullYear();
-      setDobText(`${d}/${m}/${y}`);
-
-      // Android pe select karte hi picker close kar do
-      if (Platform.OS === 'android') {
-        setShowDatePicker(false);
-      }
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleDateSelect = (selectedDate: Date) => {
+    setDate(selectedDate);
+    setDobText(formatDateDisplay(selectedDate));
+    setShowDatePicker(false);
   };
 
   // --- Weight/Height Logic (Remains Same) ---
@@ -238,22 +220,14 @@ const BodyInfo = forwardRef<BodyInfoRef, BodyInfoProps>(({ prefill }, ref) => {
           <Ionicons name="calendar-outline" size={24} color="#94a3b8" />
         </TouchableOpacity>
 
-        {showDatePicker && (
-          <View>
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity onPress={() => setShowDatePicker(false)} className="items-end p-2">
-                <Text className="font-bold text-lg text-[#F6163C]">Done</Text>
-              </TouchableOpacity>
-            )}
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          </View>
-        )}
+        <CustomCalendarModal
+          visible={showDatePicker}
+          value={date}
+          title="Select Date of Birth"
+          maxDate={new Date()}
+          onClose={() => setShowDatePicker(false)}
+          onConfirm={handleDateSelect}
+        />
       </View>
 
       {/* --- WEIGHT SELECTOR --- */}

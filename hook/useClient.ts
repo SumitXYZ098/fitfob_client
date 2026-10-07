@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   clientBasicDetails,
   clientBodyInfo,
@@ -12,6 +12,10 @@ import {
   clientResendOtp,
   searchNearbyGyms,
   getGymDetail,
+  clientSendOtp,
+  getFavorites,
+  addFavorite,
+  removeFavorite,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -135,6 +139,34 @@ export const useGetQr = () => {
   });
 };
 
+export const useClientSendOtp = () => {
+  return useMutation({
+    mutationFn: (identifier?: string) => clientSendOtp(identifier),
+    onSuccess: (data: any) => {
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Sent! 📩',
+        text2: data?.message || 'Verification code sent successfully.',
+      });
+    },
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Failed to send OTP';
+      if (msg.toLowerCase().includes('30 seconds') || msg.toLowerCase().includes('wait')) {
+        Toast.show({
+          type: 'info',
+          text1: 'OTP Already Sent 📩',
+          text2: 'Please check your SMS. The code is valid for 2 minutes.',
+        });
+        return;
+      }
+      Toast.show({ type: 'error', text1: 'Request Failed', text2: msg });
+    },
+  });
+};
+
 export const useClientVerifyOtp = () => {
   return useMutation({
     mutationFn: (param: string | { otp: string; identifier?: string }) => {
@@ -203,4 +235,110 @@ export const useGymDetail = (id: string | undefined) => {
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1,
   });
+};
+
+// ─── Favorites Hooks ─────────────────────────────────────────────────────────
+
+// Helper to extract a set of favorite IDs/documentIds from response
+export const extractFavoriteIds = (favData: any): Set<string> => {
+  const ids = new Set<string>();
+  if (!favData) return ids;
+
+  const list = Array.isArray(favData)
+    ? favData
+    : Array.isArray(favData?.data)
+      ? favData.data
+      : Array.isArray(favData?.favorites)
+        ? favData.favorites
+        : [];
+
+  list.forEach((item: any) => {
+    const docId =
+      item?.documentId ||
+      item?.club?.documentId ||
+      item?.clubDocumentId ||
+      (typeof item === 'string' ? item : null);
+    const rawId = item?.id || item?.club?.id || item?.clubId;
+
+    if (docId) ids.add(String(docId));
+    if (rawId) ids.add(String(rawId));
+  });
+
+  return ids;
+};
+
+// 1. Get all client favorites
+export const useGetFavorites = () => {
+  return useQuery({
+    queryKey: ['client-favorites'],
+    queryFn: getFavorites,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+};
+
+// 2. Add to favorites
+export const useAddFavorite = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (clubDocumentId: string) => addFavorite(clubDocumentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+    },
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Failed to add to favorites';
+      Toast.show({ type: 'error', text1: 'Favorites', text2: msg });
+    },
+  });
+};
+
+// 3. Remove from favorites
+export const useRemoveFavorite = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (clubDocumentId: string) => removeFavorite(clubDocumentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+    },
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Failed to remove from favorites';
+      Toast.show({ type: 'error', text1: 'Favorites', text2: msg });
+    },
+  });
+};
+
+// 4. Combined toggle hook for easy usage across cards and screens
+export const useToggleFavorite = () => {
+  const addMutation = useAddFavorite();
+  const removeMutation = useRemoveFavorite();
+
+  const toggleFavorite = async (clubDocumentId: string, isCurrentlyFav: boolean) => {
+    if (!clubDocumentId) return;
+
+    if (isCurrentlyFav) {
+      await removeMutation.mutateAsync(clubDocumentId);
+      Toast.show({
+        type: 'info',
+        text1: 'Removed from Favorites',
+        text2: 'Gym removed from your favorites list',
+      });
+    } else {
+      await addMutation.mutateAsync(clubDocumentId);
+      Toast.show({
+        type: 'success',
+        text1: 'Added to Favorites ❤️',
+        text2: 'Gym added to your favorites list',
+      });
+    }
+  };
+
+  return {
+    toggleFavorite,
+    isPending: addMutation.isPending || removeMutation.isPending,
+  };
 };

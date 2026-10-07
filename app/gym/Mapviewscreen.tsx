@@ -19,10 +19,11 @@ import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import AllGymsMapView, { AllGymsMapViewHandle, MapGymItem } from '@/components/modules/AllGymsMapView';
-import { useNearbyGyms } from '@/hook/useClient';
+import { useNearbyGyms, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
 
 export interface GymItem {
   id: string;
+  documentId?: string;
   title: string;
   rating: string;
   amenities: string[];
@@ -226,6 +227,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
 
   return {
     id: String(data.documentId || data._id || data.id || Math.random().toString()),
+    documentId: data.documentId ? String(data.documentId) : (typeof data.id === 'string' ? data.id : undefined),
     title,
     rating,
     amenities,
@@ -300,6 +302,31 @@ function GymCardItem({
   const currentIndexRef = useRef(0);
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 32;
+
+  const { toggleFavorite, isPending: isTogglingFav } = useToggleFavorite();
+  const [localFav, setLocalFav] = useState<boolean>(Boolean(isFav));
+
+  useEffect(() => {
+    setLocalFav(Boolean(isFav));
+  }, [isFav]);
+
+  const handleToggleFavorite = async () => {
+    const clubDocumentId = gym.documentId || gym.id;
+    const nextState = !localFav;
+    setLocalFav(nextState);
+
+    if (onToggleFavorite) {
+      onToggleFavorite();
+    }
+
+    if (clubDocumentId) {
+      try {
+        await toggleFavorite(clubDocumentId, localFav);
+      } catch (e) {
+        setLocalFav(localFav);
+      }
+    }
+  };
 
   const slides = [...gym.images, gym.images[0]];
 
@@ -377,12 +404,14 @@ function GymCardItem({
 
         {/* Top Left: Heart Favorite Button */}
         <TouchableOpacity
-          onPress={onToggleFavorite}
+          onPress={handleToggleFavorite}
+          activeOpacity={0.7}
+          disabled={isTogglingFav}
           className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
           <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
+            name={localFav ? 'heart' : 'heart-outline'}
             size={18}
-            color={isFav ? '#E23744' : '#FFF'}
+            color={localFav ? '#E23744' : '#FFF'}
           />
         </TouchableOpacity>
 
@@ -489,6 +518,8 @@ export default function Mapviewscreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [city, setCity] = useState<string>('');
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
+  const { data: favoritesData } = useGetFavorites();
+  const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'all'>('all');
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -857,16 +888,22 @@ export default function Mapviewscreen() {
               <Text className="mt-2 font-medium text-sm text-gray-400">No gyms found</Text>
             </View>
           ) : (
-            displayGyms.map((gym) => (
-              <GymCardItem
-                key={gym.id}
-                gym={gym}
-                isFav={!!favorites[gym.id]}
-                isSelected={selectedGymId === gym.id}
-                onToggleFavorite={() => toggleFavorite(gym.id)}
-                onFocusOnMap={() => focusGymOnMap(gym)}
-              />
-            ))
+            displayGyms.map((gym) => {
+              const isGymFav =
+                favorites[gym.id] !== undefined
+                  ? favorites[gym.id]
+                  : favoriteIds.has(String(gym.documentId || gym.id));
+              return (
+                <GymCardItem
+                  key={gym.id}
+                  gym={gym}
+                  isFav={isGymFav}
+                  isSelected={selectedGymId === gym.id}
+                  onToggleFavorite={() => toggleFavorite(gym.id)}
+                  onFocusOnMap={() => focusGymOnMap(gym)}
+                />
+              );
+            })
           )}
         </ScrollView>
       </Animated.View>

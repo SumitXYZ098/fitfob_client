@@ -10,16 +10,20 @@ import {
   Linking,
   Share,
   Animated,
-  ActivityIndicator,
   StatusBar,
 } from 'react-native';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import GymDetailMapView from '@/components/modules/GymDetailMapView';
 import { useGymDetail } from '@/hook/useClient';
+
+export interface GymPhotoItem {
+  url: string;
+  imageInfo?: string;
+}
 
 export interface GymBranchItem {
   id: string;
@@ -39,445 +43,88 @@ export interface ExerciseZoneItem {
   image: string;
 }
 
-export const GYM_DETAILS = {
-  '1': {
-    id: '1',
-    title: 'Anytime Fitness Gym',
-    address: 'Sector 71, Mohali, Punjab',
-    coordinate: { latitude: 30.7046, longitude: 76.7179 },
-    branches: [
-      {
-        id: 'b1-1',
-        name: 'Anytime Fitness - Sector 71 (Selected)',
-        address: 'Sector 71, Mohali, Punjab',
-        coordinate: { latitude: 30.7046, longitude: 76.7179 },
-        isMain: true,
-      },
-      {
-        id: 'b1-2',
-        name: 'Anytime Fitness - Phase 5 Branch',
-        address: 'SCF 32, Phase 5, Mohali, Punjab',
-        coordinate: { latitude: 30.7188, longitude: 76.7145 },
-      },
-      {
-        id: 'b1-3',
-        name: 'Anytime Fitness - Phase 8B Industrial Branch',
-        address: 'Plot 42, Phase 8B, Industrial Area, Mohali',
-        coordinate: { latitude: 30.7090, longitude: 76.6960 },
-      },
-      {
-        id: 'b1-4',
-        name: 'Anytime Fitness - Sector 68 Branch',
-        address: 'SCO 55, Sector 68, Mohali, Punjab',
-        coordinate: { latitude: 30.6970, longitude: 76.7260 },
-      },
-      {
-        id: 'b1-5',
-        name: 'Anytime Fitness - Sector 82 JLPL Branch',
-        address: 'Commercial Hub, Sector 82, Mohali, Punjab',
-        coordinate: { latitude: 30.6720, longitude: 76.7350 },
-      },
-    ],
-    rating: '4.5',
-    totalReviews: 52,
-    openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
-    // description:
-    //   'Experience elite fitness training with state-of-the-art strength machinery, certified personal trainers, dedicated cardio arenas, and a rejuvenating steam/sauna experience tailored to help you crush your daily fitness goals.',
-    amenities: [
-      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
-      { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
-      { name: 'Trainers', icon: 'barbell-outline', library: 'ionicons' },
-      { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'Cardio & Machines Zone',
-        image:
-          'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        title: 'Free Weights & Strength Arena',
-        image:
-          'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        title: 'CrossFit & Functional Floor',
-        image:
-          'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '75%' },
-      { star: 4, pct: '55%' },
-      { star: 3, pct: '30%' },
-      { star: 2, pct: '12%' },
-      { star: 1, pct: '5%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Courtney Henry',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '2 mins ago',
-        comment:
-          'Superb gym with brand new equipment, very clean locker rooms, and extremely friendly certified trainers.',
-      },
-      {
-        id: 'r2',
-        name: 'Alex Mercer',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '1 day ago',
-        comment:
-          'Spacious crossfit floor and top-notch ventilation. Easily the best fitness club in Sector 71!',
-      },
-      {
-        id: 'r3',
-        name: 'Priya Sharma',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '3 days ago',
-        comment:
-          'The trainers are super supportive and push you towards real transformation. Great community energy!',
-      },
-      {
-        id: 'r4',
-        name: 'David Miller',
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '1 week ago',
-        comment:
-          'Cleanest shower facilities and the steam bath is amazing after heavy lifting. 10/10 recommend!',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  '2': {
-    id: '2',
-    title: 'Gold’s Fitness Club',
-    address: 'Phase 5, Mohali, Punjab',
-    coordinate: { latitude: 30.7188, longitude: 76.7145 },
-    branches: [
-      {
-        id: 'b2-1',
-        name: 'Gold’s Fitness Club - Phase 5 (Selected)',
-        address: 'Phase 5, Mohali, Punjab',
-        coordinate: { latitude: 30.7188, longitude: 76.7145 },
-        isMain: true,
-      },
-      {
-        id: 'b2-2',
-        name: 'Gold’s Fitness Club - Sector 70 Branch',
-        address: 'SCO 21, Sector 70, Mohali, Punjab',
-        coordinate: { latitude: 30.6980, longitude: 76.7120 },
-      },
-      {
-        id: 'b2-3',
-        name: 'Gold’s Fitness Club - Phase 3B2 Branch',
-        address: 'Market Complex, Phase 3B2, Mohali, Punjab',
-        coordinate: { latitude: 30.7135, longitude: 76.7235 },
-      },
-      {
-        id: 'b2-4',
-        name: 'Gold’s Fitness Club - Sector 80 Branch',
-        address: 'Near IT City Road, Sector 80, Mohali, Punjab',
-        coordinate: { latitude: 30.6860, longitude: 76.7240 },
-      },
-    ],
-    rating: '4.8',
-    totalReviews: 68,
-    openHours: 'Mon - Sun: 05:30 AM - 10:30 PM',
-    description:
-      'Premier bodybuilding and lifestyle fitness hub featuring heavy Olympic powerlifting platforms, dedicated spin studio, licensed nutrition counselors, and luxurious sauna suites.',
-    amenities: [
-      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
-      { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
-      { name: 'Personal Trainer', icon: 'barbell-outline', library: 'ionicons' },
-      { name: 'Sauna', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Locker', icon: 'lock-closed-outline', library: 'ionicons' },
-      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'Olympic Weightlifting Arena',
-        image:
-          'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        title: 'HIIT & Functional Floor',
-        image:
-          'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        title: 'Sauna & Recovery Lounge',
-        image:
-          'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '82%' },
-      { star: 4, pct: '48%' },
-      { star: 3, pct: '20%' },
-      { star: 2, pct: '8%' },
-      { star: 1, pct: '3%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Sarah Jenkins',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '1 hour ago',
-        comment:
-          'Amazing atmosphere and supportive community. Trainers push you to reach your real potential!',
-      },
-      {
-        id: 'r2',
-        name: 'Rohan Sharma',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '3 days ago',
-        comment: 'Top-tier equipment and peaceful sauna to relax post-workout.',
-      },
-      {
-        id: 'r3',
-        name: 'Simran Kaur',
-        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '5 days ago',
-        comment:
-          'Incredible spin studio with electrifying playlists. Best workout of my week every week!',
-      },
-      {
-        id: 'r4',
-        name: 'Karan Mehra',
-        avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '1 week ago',
-        comment:
-          'Heavy dumbbells up to 60kg and competition squat racks. A real lifter’s paradise.',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  '3': {
-    id: '3',
-    title: 'Cult.Fit Elite Center',
-    address: 'Phase 7, Mohali, Punjab',
-    coordinate: { latitude: 30.7095, longitude: 76.7095 },
-    branches: [
-      {
-        id: 'b3-1',
-        name: 'Cult.Fit - Phase 7 Center (Selected)',
-        address: 'Phase 7, Mohali, Punjab',
-        coordinate: { latitude: 30.7095, longitude: 76.7095 },
-        isMain: true,
-      },
-      {
-        id: 'b3-2',
-        name: 'Cult.Fit - Sector 67 Center',
-        address: 'SCO 18, Sector 67, Mohali, Punjab',
-        coordinate: { latitude: 30.6880, longitude: 76.7340 },
-      },
-      {
-        id: 'b3-3',
-        name: 'Cult.Fit - Phase 3B2 Center',
-        address: 'Phase 3B2, Mohali, Punjab',
-        coordinate: { latitude: 30.7140, longitude: 76.7220 },
-      },
-    ],
-    rating: '4.7',
-    totalReviews: 44,
-    openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
-    description:
-      'State-of-the-art functional fitness, high-intensity boxing arenas, CrossFit rigs, and recovery steam amenities coached by certified elite masters.',
-    amenities: [
-      { name: 'Boxing', icon: 'fitness-outline', library: 'ionicons' },
-      { name: 'CrossFit', icon: 'barbell-outline', library: 'ionicons' },
-      { name: 'Steam', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'CrossFit Rig & Turf',
-        image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        title: 'Combat & Boxing Ring',
-        image: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '78%' },
-      { star: 4, pct: '50%' },
-      { star: 3, pct: '25%' },
-      { star: 2, pct: '10%' },
-      { star: 1, pct: '4%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Amanpreet Singh',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '2 hours ago',
-        comment: 'Best CrossFit facility in Phase 7 Mohali. Coaches are world class!',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  '4': {
-    id: '4',
-    title: 'Prana Yoga & Wellness',
-    address: 'Phase 3B2, Mohali, Punjab',
-    coordinate: { latitude: 30.7135, longitude: 76.7235 },
-    rating: '4.9',
-    totalReviews: 89,
-    openHours: 'Mon - Sat: 06:00 AM - 08:30 PM',
-    description:
-      'Holistic mind and body wellness sanctuary offering traditional Ashtanga, Hatha Yoga, calming sound baths, and natural detox tea lounge.',
-    amenities: [
-      { name: 'Meditation', icon: 'flower-outline', library: 'ionicons' },
-      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
-      { name: 'Locker', icon: 'lock-closed-outline', library: 'ionicons' },
-      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'Zen Meditation Studio',
-        image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '90%' },
-      { star: 4, pct: '40%' },
-      { star: 3, pct: '15%' },
-      { star: 2, pct: '5%' },
-      { star: 1, pct: '2%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Neha Verma',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '1 day ago',
-        comment: 'Peaceful ambience and authentic yoga masters. Recharges your soul!',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  '5': {
-    id: '5',
-    title: 'Powerhouse Gym & Spa',
-    address: 'Sector 70, Mohali, Punjab',
-    coordinate: { latitude: 30.6980, longitude: 76.7120 },
-    rating: '4.6',
-    totalReviews: 61,
-    openHours: 'Mon - Sun: 05:30 AM - 10:30 PM',
-    description:
-      'Heavy duty weight training, Olympic lifting platforms, luxury pool, and Scandinavian sauna facilities.',
-    amenities: [
-      { name: 'Pool', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Sauna', icon: 'flame-outline', library: 'ionicons' },
-      { name: 'Trainers', icon: 'barbell-outline', library: 'ionicons' },
-      { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'Olympic Free Weights',
-        image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '70%' },
-      { star: 4, pct: '50%' },
-      { star: 3, pct: '28%' },
-      { star: 2, pct: '12%' },
-      { star: 1, pct: '5%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Jasmeet Dhillon',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '3 days ago',
-        comment: 'Fantastic gym with great pool and sauna. Highly recommended!',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  '6': {
-    id: '6',
-    title: 'Ozone Fitness Club',
-    address: 'Phase 9, Mohali, Punjab',
-    coordinate: { latitude: 30.6890, longitude: 76.7310 },
-    rating: '4.6',
-    totalReviews: 38,
-    openHours: 'Mon - Sun: 06:00 AM - 10:00 PM',
-    description:
-      'Premier fitness club offering high-performance functional fitness, spinning studios, and expert nutritional guidance.',
-    amenities: [
-      { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
-      { name: 'Spinning', icon: 'bicycle-outline', library: 'ionicons' },
-      { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
-      { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-    ],
-    exerciseZones: [
-      {
-        title: 'Cardio & Strength',
-        image: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop',
-      },
-    ],
-    ratingBreakdown: [
-      { star: 5, pct: '75%' },
-      { star: 4, pct: '45%' },
-      { star: 3, pct: '20%' },
-      { star: 2, pct: '8%' },
-      { star: 1, pct: '3%' },
-    ],
-    reviews: [
-      {
-        id: 'r1',
-        name: 'Ritu Sen',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop',
-        rating: 5,
-        time: '5 days ago',
-        comment: 'Super clean and great community vibe in Phase 9!',
-      },
-    ],
-    images: [
-      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-};
+export interface AmenityItem {
+  name: string;
+  icon: string;
+  library: string;
+}
+
+export interface ReviewItem {
+  id: string;
+  name: string;
+  avatar: string;
+  rating: number;
+  time: string;
+  comment: string;
+}
+
+// Kept for backward compatibility with external imports (empty record - no dummy data)
+export const GYM_DETAILS: Record<string, any> = {};
+
+// Format weekly scheduling into readable string (e.g., "Mon - Sun: 06:00 AM - 10:00 PM")
+function formatWeekdayScheduling(scheduling: any): string {
+  if (!scheduling || typeof scheduling !== 'object') return '';
+
+  const formatTime = (t?: string) => {
+    if (!t) return '';
+    const parts = t.split(':');
+    if (parts.length < 2) return t;
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    if (isNaN(h)) return t;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const hStr = h < 10 ? `0${h}` : `${h}`;
+    return `${hStr}:${m} ${ampm}`;
+  };
+
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels: Record<string, string> = {
+    monday: 'Mon',
+    tuesday: 'Tue',
+    wednesday: 'Wed',
+    thursday: 'Thu',
+    friday: 'Fri',
+    saturday: 'Sat',
+    sunday: 'Sun',
+  };
+
+  const daySchedules = days
+    .map((day) => {
+      const s = scheduling[day];
+      if (!s || (!s.openingTime && !s.closingTime)) return null;
+      return {
+        day,
+        label: dayLabels[day],
+        time: `${formatTime(s.openingTime)} - ${formatTime(s.closingTime)}`,
+      };
+    })
+    .filter(Boolean) as { day: string; label: string; time: string }[];
+
+  if (daySchedules.length === 0) return '';
+
+  // Check if all 7 days have identical timing
+  const firstTime = daySchedules[0].time;
+  const allSame = daySchedules.length === 7 && daySchedules.every((d) => d.time === firstTime);
+  if (allSame) {
+    return `Mon - Sun: ${firstTime}`;
+  }
+
+  // Check if weekdays and weekends differ
+  const weekdays = daySchedules.filter((d) =>
+    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(d.day)
+  );
+  const weekends = daySchedules.filter((d) => ['saturday', 'sunday'].includes(d.day));
+
+  const weekdaysSame = weekdays.length > 0 && weekdays.every((d) => d.time === weekdays[0].time);
+  const weekendsSame = weekends.length > 0 && weekends.every((d) => d.time === weekends[0].time);
+
+  if (weekdaysSame && weekendsSame && weekdays[0].time !== weekends[0].time) {
+    return `Mon - Fri: ${weekdays[0].time} | Sat - Sun: ${weekends[0].time}`;
+  }
+
+  return `${daySchedules[0].label} - ${daySchedules[daySchedules.length - 1].label}: ${daySchedules[0].time}`;
+}
 
 // ─── Skeleton for gym detail ─────────────────────────────────────────────────
 function GymDetailSkeletonBox({ style }: { style?: object }) {
@@ -654,16 +301,13 @@ function GymDetailSkeletonScreen({ onBack }: { onBack: () => void }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function GymDetailScreen() {
-
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const gymId = params.id || '1';
+  const gymId = params.id || '';
 
   // ── Live API data ──────────────────────────────────────────────────────────
-  // Only fetch from API for real string IDs (not static mock IDs 1-6)
-  const isStaticId = ['1','2','3','4','5','6'].includes(gymId);
-  const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(isStaticId ? undefined : gymId);
-  const isGymLoading = !isStaticId && (isDetailLoading || isPending) && !apiData;
+  const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(gymId || undefined);
+  const isGymLoading = (isDetailLoading || isPending) && !apiData;
 
   useEffect(() => {
     if (apiData) {
@@ -672,149 +316,205 @@ export default function GymDetailScreen() {
     }
   }, [apiData, gymId]);
 
-  // Map backend response to the shape this screen expects
+  // Map backend response to the shape this screen expects (NO DUMMY DATA)
   const gym = useMemo(() => {
     const raw = apiData?.data ?? apiData;
-    if (raw && typeof raw === 'object') {
-      const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
-
-      // images
-      const fallbackImages = [
-        'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      ];
-      const rawImgs =
-        d.club_photos ||
-        d.clubPhotos ||
-        d.photos ||
-        d.images ||
-        d.gallery ||
-        [];
-      let images: string[] = Array.isArray(rawImgs)
-        ? (rawImgs
-            .map((img: any) => {
-              const url =
-                img?.url ||
-                img?.formats?.large?.url ||
-                img?.formats?.medium?.url ||
-                img?.formats?.small?.url ||
-                (typeof img === 'string' ? img : null);
-              if (!url) return null;
-              return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
-            })
-            .filter(Boolean) as string[])
-        : [];
-      if (!images.length) images = fallbackImages;
-
-      const extractList = (val: any): string[] => {
-        if (!val) return [];
-        if (Array.isArray(val)) {
-          return val
-            .map((v) => (typeof v === 'string' ? v.trim() : String(v?.name || v?.title || '').trim()))
-            .filter(Boolean);
-        }
-        if (typeof val === 'string') return val.split(',').map((s) => s.trim()).filter(Boolean);
-        return [];
-      };
-
-      const getAmenityIcon = (name: string): string => {
-        const n = name.toLowerCase();
-        if (n.includes('ac') || n.includes('air')) return 'snow-outline';
-        if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
-        if (n.includes('park')) return 'car-outline';
-        if (n.includes('train')) return 'barbell-outline';
-        if (n.includes('shower') || n.includes('bath')) return 'water-outline';
-        if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
-        if (n.includes('box')) return 'flame-outline';
-        if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
-        if (n.includes('pool') || n.includes('swim')) return 'water-outline';
-        if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
-        if (n.includes('lock')) return 'lock-closed-outline';
-        return 'checkmark-circle-outline';
-      };
-
-      const rawServices = extractList(d.services || d.service);
-      const rawCategories = extractList(d.categories || d.category);
-      const rawFacilities = extractList(d.facilities || d.facility);
-      const rawAmenitiesList = extractList(d.amenities);
-
-      const title = d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club';
-      const lowerT = title.toLowerCase();
-
-      let category = 'Gyms';
-      if (rawCategories.length > 0) category = rawCategories[0];
-      else if (rawServices.length > 0) category = rawServices[0];
-      else if (d.clubType || d.club_type) category = d.clubType || d.club_type;
-      else if (lowerT.includes('yoga')) category = 'Yoga';
-      else if (lowerT.includes('box')) category = 'Boxing';
-      else if (lowerT.includes('dance')) category = 'Dance';
-      else if (lowerT.includes('crossfit')) category = 'CrossFit';
-      else if (lowerT.includes('zumba')) category = 'Zumba';
-      else if (lowerT.includes('pilates')) category = 'Pilates';
-
-      const combinedAmenityNames = Array.from(
-        new Set([...rawAmenitiesList, ...rawFacilities, ...rawServices])
-      );
-
-      let amenities: { name: string; icon: string; library: string }[] = combinedAmenityNames.map(
-        (name) => ({
-          name,
-          icon: getAmenityIcon(name),
-          library: 'ionicons',
-        })
-      );
-
-      if (!amenities.length) {
-        amenities = [
-          { name: 'AC', icon: 'snow-outline', library: 'ionicons' },
-          { name: 'Wi-Fi', icon: 'wifi-outline', library: 'ionicons' },
-          { name: 'Trainers', icon: 'barbell-outline', library: 'ionicons' },
-          { name: 'Shower', icon: 'water-outline', library: 'ionicons' },
-          { name: 'Parking', icon: 'car-outline', library: 'ionicons' },
-        ];
-      }
-
-      // membership plans → reviews mock if no real reviews
-      const reviews = Array.isArray(d.reviews) && d.reviews.length ? d.reviews : [
-        {
-          id: 'r1', name: 'FitFob Member', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150',
-          rating: 5, time: 'recently', comment: 'Great gym with professional trainers and excellent equipment!',
-        },
-      ];
-
-      const ratingVal = d.rating || d.avgRating || 4.5;
-      return {
-        id: String(d.documentId || d._id || d.id || gymId),
-        title,
-        category,
-        services: Array.from(new Set([...rawServices, ...rawCategories, category])),
-        address: d.address || d.clubAddress || d.location?.address || '',
-        coordinate: {
-          latitude: Number(d.latitude || d.lat || d.coordinate?.latitude || 30.8321),
-          longitude: Number(d.longitude || d.lng || d.coordinate?.longitude || 76.6873),
-        },
-        branches: Array.isArray(d.branches) ? d.branches : [],
-        rating: typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal.split('/')[0] : String(ratingVal),
-        totalReviews: d.totalReviews || d.reviewCount || reviews.length,
-        openHours: d.openHours || d.workingHours || d.timings || 'Mon - Sun: 06:00 AM - 10:00 PM',
-        description: d.description || d.about || d.bio || 'A premium fitness club with state-of-the-art equipment and certified trainers.',
-        amenities,
-        exerciseZones: ((Array.isArray(d.exerciseZones) && d.exerciseZones.length
-          ? d.exerciseZones
-          : [{ title: 'Main Training Floor', image: images[0] || fallbackImages[0] }]) as ExerciseZoneItem[]),
-        ratingBreakdown: ((Array.isArray(d.ratingBreakdown) && d.ratingBreakdown.length
-          ? d.ratingBreakdown
-          : [
-              { star: 5, pct: '75%' }, { star: 4, pct: '55%' }, { star: 3, pct: '30%' },
-              { star: 2, pct: '12%' }, { star: 1, pct: '5%' },
-            ]) as RatingBreakdownItem[]),
-        reviews,
-        images,
-      };
+    if (!raw || typeof raw !== 'object') {
+      return null;
     }
-    // Fallback to static data (for old numeric IDs or when API fails)
-    return GYM_DETAILS[gymId as keyof typeof GYM_DETAILS] || GYM_DETAILS['1'];
+
+    const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
+
+    // Real photos extracted from backend response
+    const rawPhotos =
+      d.club_photos ||
+      d.clubPhotos ||
+      d.photos ||
+      d.images ||
+      d.gallery ||
+      [];
+    const photos: GymPhotoItem[] = Array.isArray(rawPhotos)
+      ? (rawPhotos
+          .map((p: any) => {
+            const url =
+              p?.url ||
+              p?.formats?.large?.url ||
+              p?.formats?.medium?.url ||
+              p?.formats?.small?.url ||
+              (typeof p === 'string' ? p : null);
+            if (!url) return null;
+            const fullUrl = url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+            return {
+              url: fullUrl,
+              imageInfo: p?.imageInfo || p?.title || p?.caption || undefined,
+            };
+          })
+          .filter(Boolean) as GymPhotoItem[])
+      : [];
+
+    const images: string[] = photos.map((p) => p.url);
+
+    // Real gym logo
+    const rawLogo = d.logo || d.clubLogo || d.thumbnail || d.thumbnail_photo || '';
+    const logo: string =
+      typeof rawLogo === 'string'
+        ? rawLogo.startsWith('http') || !rawLogo
+          ? rawLogo
+          : `${process.env.EXPO_PUBLIC_API_URL}${rawLogo}`
+        : rawLogo?.url
+        ? (rawLogo.url.startsWith('http') ? rawLogo.url : `${process.env.EXPO_PUBLIC_API_URL}${rawLogo.url}`)
+        : '';
+
+    const clubId: string = String(d.clubId || d.club_id || '');
+    const ownerName: string = String(d.ownerName || d.owner || d.manager || '');
+    const clubCategory: string = String(d.clubCategory || d.club_category || '');
+
+    const extractList = (val: any): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val)) {
+        return val
+          .map((v) => (typeof v === 'string' ? v.trim() : String(v?.name || v?.title || '').trim()))
+          .filter(Boolean);
+      }
+      if (typeof val === 'string') return val.split(',').map((s) => s.trim()).filter(Boolean);
+      return [];
+    };
+
+    const getAmenityIcon = (name: string): string => {
+      const n = name.toLowerCase();
+      if (n.includes('ac') || n.includes('air')) return 'snow-outline';
+      if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
+      if (n.includes('park')) return 'car-outline';
+      if (n.includes('train')) return 'barbell-outline';
+      if (n.includes('shower') || n.includes('bath')) return 'water-outline';
+      if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
+      if (n.includes('box')) return 'flame-outline';
+      if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
+      if (n.includes('pool') || n.includes('swim')) return 'water-outline';
+      if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
+      if (n.includes('lock')) return 'lock-closed-outline';
+      return 'checkmark-circle-outline';
+    };
+
+    const rawServices = extractList(d.services || d.service);
+    const rawCategories = extractList(d.categories || d.category);
+    const rawFacilities = extractList(d.facilities || d.facility);
+    const rawAmenitiesList = extractList(d.amenities);
+
+    const title = d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club';
+    const lowerT = title.toLowerCase();
+
+    let category = '';
+    if (rawCategories.length > 0) category = rawCategories[0];
+    else if (rawServices.length > 0) category = rawServices[0];
+    else if (d.clubType || d.club_type) category = d.clubType || d.club_type;
+    else if (lowerT.includes('yoga')) category = 'Yoga';
+    else if (lowerT.includes('box')) category = 'Boxing';
+    else if (lowerT.includes('dance')) category = 'Dance';
+    else if (lowerT.includes('crossfit')) category = 'CrossFit';
+    else if (lowerT.includes('zumba')) category = 'Zumba';
+    else if (lowerT.includes('pilates')) category = 'Pilates';
+    else category = 'Gym';
+
+    const combinedAmenityNames = Array.from(
+      new Set([...rawAmenitiesList, ...rawFacilities, ...rawServices])
+    );
+
+    const amenities: AmenityItem[] = combinedAmenityNames.map((name) => ({
+      name,
+      icon: getAmenityIcon(name),
+      library: 'ionicons',
+    }));
+
+    // Real reviews from backend only
+    const rawReviews = Array.isArray(d.reviews) ? d.reviews : [];
+    const reviews: ReviewItem[] = rawReviews.map((r: any, idx: number) => ({
+      id: String(r?.id || r?._id || `r-${idx}`),
+      name: r?.name || r?.userName || r?.user?.name || 'Member',
+      avatar: r?.avatar || r?.user?.avatar || r?.user?.photo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150',
+      rating: Number(r?.rating || 5),
+      time: r?.time || (r?.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently'),
+      comment: r?.comment || r?.text || r?.review || '',
+    }));
+
+    // Rating value
+    let ratingVal = d.rating ?? d.avgRating;
+    if (ratingVal === undefined || ratingVal === null) {
+      if (reviews.length > 0) {
+        const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+        ratingVal = (sum / reviews.length).toFixed(1);
+      } else {
+        ratingVal = 0;
+      }
+    }
+
+    const totalReviews = d.totalReviews || d.reviewCount || reviews.length;
+
+    // Real rating breakdown (only if provided or derived from real reviews)
+    let ratingBreakdown: RatingBreakdownItem[] = [];
+    if (Array.isArray(d.ratingBreakdown) && d.ratingBreakdown.length > 0) {
+      ratingBreakdown = d.ratingBreakdown;
+    } else if (reviews.length > 0) {
+      const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+      reviews.forEach((r) => {
+        const star = Math.min(5, Math.max(1, Math.round(r.rating || 5)));
+        counts[star] = (counts[star] || 0) + 1;
+      });
+      ratingBreakdown = [5, 4, 3, 2, 1].map((star) => ({
+        star,
+        pct: `${Math.round(((counts[star] || 0) / reviews.length) * 100)}%`,
+      }));
+    }
+
+    // Exercise zones from explicit zones or photos with imageInfo
+    const exerciseZones: ExerciseZoneItem[] =
+      Array.isArray(d.exerciseZones) && d.exerciseZones.length > 0
+        ? d.exerciseZones
+        : photos
+            .filter((p) => Boolean(p.imageInfo))
+            .map((p) => ({
+              title: p.imageInfo!,
+              image: p.url,
+            }));
+
+    const coordinate = {
+      latitude: Number(d.latitude || d.lat || d.location?.latitude || d.coordinate?.latitude || 30.7046),
+      longitude: Number(d.longitude || d.lng || d.location?.longitude || d.coordinate?.longitude || 76.7179),
+    };
+
+    const openHours =
+      d.openHours ||
+      d.workingHours ||
+      d.timings ||
+      formatWeekdayScheduling(d.weekdayScheduling) ||
+      '';
+
+    const holidays = Array.isArray(d.holidays) ? d.holidays : [];
+
+    return {
+      id: String(d.documentId || d._id || d.id || gymId),
+      clubId,
+      ownerName,
+      logo,
+      clubCategory,
+      title,
+      category,
+      services: Array.from(new Set([...rawServices, ...rawCategories, category].filter(Boolean))),
+      address: d.address || d.clubAddress || d.location?.address || '',
+      coordinate,
+      branches: Array.isArray(d.branches) ? d.branches : [],
+      rating: typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal.split('/')[0] : String(ratingVal),
+      totalReviews,
+      openHours,
+      holidays,
+      description: d.description || d.about || d.bio || '',
+      amenities,
+      exerciseZones,
+      ratingBreakdown,
+      reviews,
+      images,
+      photos,
+    };
   }, [apiData, gymId]);
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -886,7 +586,7 @@ export default function GymDetailScreen() {
   };
 
   const handleSelectGym = (selectedId: string) => {
-    if (selectedId && selectedId !== gym.id) {
+    if (selectedId && selectedId !== gym?.id) {
       router.push({
         pathname: '/gym/gym-detail' as any,
         params: { id: selectedId },
@@ -894,9 +594,10 @@ export default function GymDetailScreen() {
     }
   };
 
-  // 5 slides + 1 cloned slide for continuous forward loop
-  const slides = [...gym.images, gym.images[0]];
-
+  const slides: GymPhotoItem[] =
+    gym?.photos && gym.photos.length > 1
+      ? [...gym.photos, gym.photos[0]]
+      : gym?.photos || [];
 
   // Pull-down elastic zoom effect
   const heroScale = scrollY.interpolate({
@@ -921,7 +622,7 @@ export default function GymDetailScreen() {
 
   // Auto-scroll hero carousel
   useEffect(() => {
-    if (!screenWidth || gym.images.length <= 1) return;
+    if (!screenWidth || !gym?.photos || gym.photos.length <= 1) return;
 
     const interval = setInterval(() => {
       const nextIndex = currentIndexRef.current + 1;
@@ -930,7 +631,7 @@ export default function GymDetailScreen() {
         animated: true,
       });
 
-      if (nextIndex >= gym.images.length) {
+      if (nextIndex >= gym.photos.length) {
         setActiveImageIndex(0);
         currentIndexRef.current = 0;
         setTimeout(() => {
@@ -943,9 +644,9 @@ export default function GymDetailScreen() {
     }, 3500);
 
     return () => clearInterval(interval);
-  }, [screenWidth, gym.images.length]);
+  }, [screenWidth, gym?.photos]);
 
-  // Review Carousel State & Infinite Circular Auto-Scroll (Centered Coverflow)
+  // Review Carousel State & Infinite Circular Auto-Scroll
   const reviewScrollRef = useRef<ScrollView>(null);
   const reviewIndexRef = useRef(0);
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
@@ -956,12 +657,15 @@ export default function GymDetailScreen() {
   const reviewCardStep = reviewCardWidth + reviewCardGap;
   const sideInset = (screenWidth - reviewCardWidth) / 2;
 
-  // Infinite repeating sets for seamless circular scroll (never bounces back)
-  const REPEAT_SETS = 10;
-  const reviewSlides = Array.from({ length: REPEAT_SETS }, () => gym.reviews).flat();
+  const reviewCount = gym?.reviews?.length || 0;
+  const reviewSlides = useMemo(() => {
+    if (!gym?.reviews || gym.reviews.length === 0) return [];
+    const repeatCount = gym.reviews.length > 1 ? 5 : 1;
+    return Array.from({ length: repeatCount }, () => gym.reviews).flat();
+  }, [gym?.reviews]);
 
   useEffect(() => {
-    if (!reviewCardWidth || gym.reviews.length <= 1) return;
+    if (!reviewCardWidth || reviewCount <= 1) return;
 
     const interval = setInterval(() => {
       reviewIndexRef.current += 1;
@@ -972,13 +676,11 @@ export default function GymDetailScreen() {
         animated: true,
       });
 
-      setActiveReviewIndex(currentPos % gym.reviews.length);
+      setActiveReviewIndex(currentPos % reviewCount);
 
-      // Silently reset offset back by 2 full sets without any animation
-      // when we reach set 5, so the user NEVER reaches the end and it never jerks backwards!
-      if (currentPos >= gym.reviews.length * 5) {
+      if (currentPos >= reviewCount * 4) {
         setTimeout(() => {
-          const resetPos = currentPos - gym.reviews.length * 2;
+          const resetPos = currentPos - reviewCount * 2;
           reviewIndexRef.current = resetPos;
           reviewScrollRef.current?.scrollTo({
             x: resetPos * reviewCardStep,
@@ -989,9 +691,10 @@ export default function GymDetailScreen() {
     }, 3600);
 
     return () => clearInterval(interval);
-  }, [gym.reviews.length, reviewCardStep, reviewCardWidth]);
+  }, [reviewCount, reviewCardStep, reviewCardWidth]);
 
   const handleShare = async () => {
+    if (!gym) return;
     try {
       await Share.share({
         message: `Check out ${gym.title} on FitFob! Located at ${gym.address}. Join today!`,
@@ -1002,13 +705,13 @@ export default function GymDetailScreen() {
   };
 
   const handleGetDirections = (targetBranch?: GymBranchItem) => {
+    if (!gym) return;
     const branchToUse = targetBranch || selectedBranch;
-    const lat = branchToUse ? branchToUse.coordinate.latitude : (gym as any).coordinate?.latitude || 30.7046;
-    const lng = branchToUse ? branchToUse.coordinate.longitude : (gym as any).coordinate?.longitude || 76.7179;
+    const lat = branchToUse ? branchToUse.coordinate.latitude : gym.coordinate?.latitude || 30.7046;
+    const lng = branchToUse ? branchToUse.coordinate.longitude : gym.coordinate?.longitude || 76.7179;
     const branchName = branchToUse ? branchToUse.name : gym.title;
     const encodedName = encodeURIComponent(branchName);
 
-    // Direct Google Maps navigation URLs (opens Google Maps App directly in turn-by-turn navigation mode)
     const googleMapsAppUrl = Platform.select({
       ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
       android: `google.navigation:q=${lat},${lng}&mode=d`,
@@ -1036,7 +739,6 @@ export default function GymDetailScreen() {
         }
       } catch {}
 
-      // Reliable universal fallback
       Linking.openURL(webGoogleMapsUrl).catch(() => {
         Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
       });
@@ -1047,12 +749,27 @@ export default function GymDetailScreen() {
     return <GymDetailSkeletonScreen onBack={() => router.back()} />;
   }
 
+  if (!gym) {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center px-6">
+        <Ionicons name="barbell-outline" size={64} color="#94A3B8" />
+        <Text className="mt-4 font-bold text-xl text-slate-800">Gym Not Found</Text>
+        <Text className="mt-1 text-center font-medium text-sm text-slate-400">
+          The fitness club details could not be loaded or this gym does not exist.
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="mt-6 rounded-2xl bg-[#E23744] px-6 py-3.5">
+          <Text className="font-bold text-sm text-white">Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <View className="flex-1 bg-white">
       {/* 1. Sticky Floating Top Navigation Header */}
-
       <View className="absolute left-0 right-0 top-0 z-50">
-        {/* Solid white background layer that fades in when bottom sheet reaches top */}
         <Animated.View
           style={{ opacity: headerBackgroundOpacity }}
           className="absolute inset-0 border-b border-slate-100 bg-white shadow-xs"
@@ -1066,7 +783,6 @@ export default function GymDetailScreen() {
             onPress={() => router.back()}
             activeOpacity={0.8}
             className="h-10 w-10 items-center justify-center overflow-hidden rounded-full">
-            {/* Dark glass background (on photo) */}
             <Animated.View
               style={{
                 opacity: headerBackgroundOpacity.interpolate({
@@ -1078,15 +794,11 @@ export default function GymDetailScreen() {
               }}
               className="absolute inset-0"
             />
-            {/* Light gray background (on white header) */}
             <Animated.View
-              style={{
-                opacity: headerBackgroundOpacity,
-              }}
+              style={{ opacity: headerBackgroundOpacity }}
               className="absolute inset-0 rounded-full border border-slate-200 bg-slate-100"
             />
 
-            {/* Chevron Icons */}
             <Animated.View
               style={{
                 opacity: headerBackgroundOpacity.interpolate({
@@ -1098,18 +810,23 @@ export default function GymDetailScreen() {
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </Animated.View>
             <Animated.View
-              style={{
-                opacity: headerBackgroundOpacity,
-              }}
+              style={{ opacity: headerBackgroundOpacity }}
               className="absolute items-center justify-center">
               <Ionicons name="chevron-back" size={22} color="#1E293B" />
             </Animated.View>
           </TouchableOpacity>
 
-          {/* Center Gym Title (fades in as sheet scrolls up) */}
+          {/* Center Gym Title & Mini Logo */}
           <Animated.View
             style={{ opacity: headerTitleOpacity }}
-            className="mx-3 flex-1 items-center">
+            className="mx-3 flex-1 flex-row items-center justify-center gap-2">
+            {Boolean(gym.logo) && (
+              <Image
+                source={{ uri: gym.logo }}
+                className="h-6 w-6 rounded-full border border-slate-200 bg-white"
+                resizeMode="cover"
+              />
+            )}
             <Text numberOfLines={1} className="font-bold text-base text-slate-900">
               {gym.title}
             </Text>
@@ -1117,12 +834,10 @@ export default function GymDetailScreen() {
 
           {/* Right Action Icons (Favorite & Verified Badge) */}
           <View className="flex-row items-center space-x-2.5">
-            {/* Favorite Heart Button */}
             <TouchableOpacity
               onPress={() => setIsFavorite(!isFavorite)}
               activeOpacity={0.8}
               className="h-10 w-10 items-center justify-center overflow-hidden rounded-full">
-              {/* Dark glass background (on photo) */}
               <Animated.View
                 style={{
                   opacity: headerBackgroundOpacity.interpolate({
@@ -1134,15 +849,11 @@ export default function GymDetailScreen() {
                 }}
                 className="absolute inset-0"
               />
-              {/* Light gray background (on white header) */}
               <Animated.View
-                style={{
-                  opacity: headerBackgroundOpacity,
-                }}
+                style={{ opacity: headerBackgroundOpacity }}
                 className="absolute inset-0 rounded-full border border-slate-200 bg-slate-100"
               />
 
-              {/* White heart icon (on dark photo) */}
               <Animated.View
                 style={{
                   opacity: headerBackgroundOpacity.interpolate({
@@ -1158,11 +869,8 @@ export default function GymDetailScreen() {
                 />
               </Animated.View>
 
-              {/* Red heart icon (on white header) */}
               <Animated.View
-                style={{
-                  opacity: headerBackgroundOpacity,
-                }}
+                style={{ opacity: headerBackgroundOpacity }}
                 className="absolute items-center justify-center">
                 <Ionicons
                   name={isFavorite ? 'heart' : 'heart-outline'}
@@ -1172,9 +880,7 @@ export default function GymDetailScreen() {
               </Animated.View>
             </TouchableOpacity>
 
-            {/* Verified Badge */}
             <View className="ml-2.5 h-10 w-10 items-center justify-center overflow-hidden rounded-full">
-              {/* Dark glass background (on photo) */}
               <Animated.View
                 style={{
                   opacity: headerBackgroundOpacity.interpolate({
@@ -1186,15 +892,11 @@ export default function GymDetailScreen() {
                 }}
                 className="absolute inset-0"
               />
-              {/* Light gray background (on white header) */}
               <Animated.View
-                style={{
-                  opacity: headerBackgroundOpacity,
-                }}
+                style={{ opacity: headerBackgroundOpacity }}
                 className="absolute inset-0 rounded-full border border-slate-200 bg-slate-100"
               />
 
-              {/* White SVG icon (on dark photo) */}
               <Animated.View
                 style={{
                   opacity: headerBackgroundOpacity.interpolate({
@@ -1211,11 +913,8 @@ export default function GymDetailScreen() {
                 </Svg>
               </Animated.View>
 
-              {/* Red SVG icon (on white header) */}
               <Animated.View
-                style={{
-                  opacity: headerBackgroundOpacity,
-                }}
+                style={{ opacity: headerBackgroundOpacity }}
                 className="absolute items-center justify-center">
                 <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
                   <Path
@@ -1240,56 +939,121 @@ export default function GymDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
         className="flex-1">
-        {/* 1. Hero Image Carousel (with Zoom) */}
+        {/* 1. Hero Image Carousel */}
         <Animated.View
           style={{
             height: HERO_HEIGHT,
-            transform: [
-              { scale: heroScale },
-            ],
+            transform: [{ scale: heroScale }],
           }}
           className="relative w-full bg-slate-900">
-          <ScrollView
-            ref={scrollRef}
-            horizontal
-            pagingEnabled
-            nestedScrollEnabled={true}
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              let idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-              if (idx >= gym.images.length) {
-                scrollRef.current?.scrollTo({ x: 0, animated: false });
-                idx = 0;
-              }
-              currentIndexRef.current = idx;
-              setActiveImageIndex(idx);
-            }}
-            scrollEventThrottle={16}>
-            {slides.map((imgUrl, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: imgUrl }}
-                style={{ width: screenWidth, height: HERO_HEIGHT }}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
+          {gym.photos.length > 0 ? (
+            <>
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                pagingEnabled
+                nestedScrollEnabled={true}
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  let idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                  if (idx >= gym.photos.length) {
+                    scrollRef.current?.scrollTo({ x: 0, animated: false });
+                    idx = 0;
+                  }
+                  currentIndexRef.current = idx;
+                  setActiveImageIndex(idx);
+                }}
+                scrollEventThrottle={16}>
+                {slides.map((photo, idx) => (
+                  <View
+                    key={idx}
+                    style={{ width: screenWidth, height: HERO_HEIGHT }}
+                    className="relative">
+                    <Image
+                      source={{ uri: photo.url }}
+                      style={{ width: screenWidth, height: HERO_HEIGHT }}
+                      resizeMode="cover"
+                    />
+                    {/* Dark gradient overlay at bottom for badge legibility */}
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 90,
+                        backgroundColor: 'rgba(0,0,0,0.28)',
+                      }}
+                    />
 
-          {/* Bottom Left: Carousel Pagination Dots */}
-          <View className="absolute bottom-12 left-5 flex-row items-center">
-            {gym.images.map((_, idx) => (
-              <View
-                key={idx}
-                style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-                className={`h-1.5 rounded-full ${
-                  idx === activeImageIndex ? 'w-6 bg-[#E23744]' : 'w-1.5 bg-white/80'
-                }`}
-              />
-            ))}
-          </View>
+                    {/* Image Info Tag / Badge on the active photo */}
+                    {Boolean(photo.imageInfo) && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          bottom: 48,
+                          right: 16,
+                          backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                          borderRadius: 20,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 255, 255, 0.25)',
+                          maxWidth: screenWidth * 0.65,
+                        }}>
+                        <Ionicons name="camera-outline" size={13} color="#FFFFFF" />
+                        <Text
+                          numberOfLines={1}
+                          style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
+                          {photo.imageInfo}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Slide Indicators on the bottom left */}
+              {gym.photos.length > 1 && (
+                <View className="absolute bottom-12 left-5 flex-row items-center">
+                  {gym.photos.length <= 6 ? (
+                    gym.photos.map((_, idx) => (
+                      <View
+                        key={idx}
+                        style={{ marginRight: idx === gym.photos.length - 1 ? 0 : 6 }}
+                        className={`h-1.5 rounded-full ${
+                          idx === activeImageIndex ? 'w-6 bg-[#E23744]' : 'w-1.5 bg-white/80'
+                        }`}
+                      />
+                    ))
+                  ) : (
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        borderColor: 'rgba(255, 255, 255, 0.25)',
+                      }}
+                      className="flex-row items-center gap-1.5 rounded-full border px-2.5 py-1">
+                      <Ionicons name="images-outline" size={12} color="#FFFFFF" />
+                      <Text className="text-[11px] font-bold text-white">
+                        {activeImageIndex + 1}/{gym.photos.length}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          ) : (
+            <View className="h-full w-full items-center justify-center bg-slate-800">
+              <Ionicons name="barbell-outline" size={56} color="#64748B" />
+              <Text className="mt-2 text-xs font-semibold text-slate-400">FitFob Partner Gym</Text>
+            </View>
+          )}
         </Animated.View>
 
-        {/* 2. Curved Bottom Sheet Card (Overlapping Hero & Sliding Up) */}
+        {/* 2. Curved Bottom Sheet Card */}
         <View
           style={Platform.select({
             ios: {
@@ -1309,37 +1073,92 @@ export default function GymDetailScreen() {
             <View className="h-1.5 w-12 rounded-full bg-slate-300" />
           </View>
 
-          {/* Gym Title, Location & Chat Button */}
+          {/* Gym Header: Logo, Badges, Title, Owner, Address & Chat Button */}
           <View className="flex-row items-start justify-between">
             <View className="mr-3 flex-1">
-              {Boolean((gym as any).category) && (
-                <View className="mb-1.5 self-start rounded-full bg-[#FFEAEF] px-2.5 py-0.5">
-                  <Text className="text-[11px] font-bold text-[#E23744]">
-                    {(gym as any).category}
+              {/* Badges: Category, Club Category, Club ID */}
+              <View className="mb-2 flex-row flex-wrap items-center gap-1.5">
+                {Boolean(gym.clubCategory) && (
+                  <View className="flex-row items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 border border-amber-500/20">
+                    <Ionicons name="sparkles" size={11} color="#D97706" />
+                    <Text className="text-[11px] font-bold text-amber-700">
+                      {gym.clubCategory}
+                    </Text>
+                  </View>
+                )}
+                {Boolean(gym.category) && gym.category !== gym.clubCategory && (
+                  <View className="rounded-full bg-[#FFEAEF] px-2.5 py-0.5">
+                    <Text className="text-[11px] font-bold text-[#E23744]">
+                      {gym.category}
+                    </Text>
+                  </View>
+                )}
+                {Boolean(gym.clubId) && (
+                  <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 border border-slate-200">
+                    <Ionicons name="qr-code-outline" size={11} color="#64748B" />
+                    <Text className="text-[11px] font-semibold text-slate-600">
+                      ID: {gym.clubId}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Title with Logo */}
+              <View className="flex-row items-center gap-3">
+                {Boolean(gym.logo) && (
+                  <Image
+                    source={{ uri: gym.logo }}
+                    className="h-14 w-14 rounded-2xl border border-slate-200 bg-white"
+                    resizeMode="cover"
+                  />
+                )}
+                <View className="flex-1">
+                  <Text className="font-bold text-2xl text-slate-900 leading-tight">
+                    {gym.title}
+                  </Text>
+                  {Boolean(gym.ownerName) && (
+                    <View className="mt-1 flex-row items-center gap-1">
+                      <Ionicons name="person-outline" size={12} color="#64748B" />
+                      <Text className="text-xs font-medium text-slate-500">
+                        Owner: <Text className="font-semibold text-slate-700">{gym.ownerName}</Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Address */}
+              {Boolean(gym.address) && (
+                <View className="mt-2.5 flex-row items-center gap-1.5">
+                  <Ionicons name="location-outline" size={14} color="#64748B" />
+                  <Text className="flex-1 font-medium text-xs text-slate-500 leading-4">
+                    {gym.address}
                   </Text>
                 </View>
               )}
-              <Text className="font-bold text-2xl text-slate-900">{gym.title}</Text>
-              <Text className="mt-1 font-medium text-xs text-slate-500">{gym.address}</Text>
 
-              {/* Star Rating Badge (Clickable to open all reviews) */}
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: '/gym/reviews' as any,
-                    params: { id: gym.id },
-                  })
-                }
-                activeOpacity={0.7}
-                className="mt-2 flex-row items-center space-x-1.5">
-                <Ionicons name="star" size={15} color="#F59E0B" />
-                <Text className="ml-1 font-bold text-xs text-slate-800">
-                  {gym.rating}/5
-                  <Text className="font-normal text-slate-400">
-                    {'  '}({gym.totalReviews} Reviews)
+              {/* Star Rating Badge (Only if ratings exist) */}
+              {Number(gym.rating) > 0 ? (
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/gym/reviews' as any,
+                      params: { id: gym.id },
+                    })
+                  }
+                  activeOpacity={0.7}
+                  className="mt-2.5 flex-row items-center space-x-1.5">
+                  <Ionicons name="star" size={15} color="#F59E0B" />
+                  <Text className="ml-1 font-bold text-xs text-slate-800">
+                    {gym.rating}/5
+                    {gym.totalReviews > 0 && (
+                      <Text className="font-normal text-slate-400">
+                        {'  '}({gym.totalReviews} Reviews)
+                      </Text>
+                    )}
                   </Text>
-                </Text>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {/* Red Circular Chat Button */}
@@ -1360,71 +1179,100 @@ export default function GymDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Description Paragraph */}
-          {/* <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
-            {gym.description}
-          </Text> */}
+          {/* Description Paragraph (Only if real description provided) */}
+          {Boolean(gym.description) && (
+            <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
+              {gym.description}
+            </Text>
+          )}
 
-          {/* 3. Where you'll exercise */}
-          <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Where you'll exercise</Text>
+          {/* 3. Where you'll exercise (Only if zones exist) */}
+          {gym.exerciseZones.length > 0 && (
+            <View className="mt-6">
+              <Text className="font-bold text-base text-slate-900">Where you'll exercise</Text>
 
-            <ScrollView
-              horizontal
-              nestedScrollEnabled={true}
-              showsHorizontalScrollIndicator={false}
-              className="mt-3 -mx-5 px-5">
-              {gym.exerciseZones.map((zone: ExerciseZoneItem, idx: number) => (
-                <View key={idx} className="mr-3 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                  <Image
-                    source={{ uri: zone.image }}
-                    className="h-28 w-full"
-                    resizeMode="cover"
-                  />
-                  <View className="p-2.5">
-                    <Text className="font-bold text-xs text-slate-800" numberOfLines={1}>
-                      {zone.title}
-                    </Text>
+              <ScrollView
+                horizontal
+                nestedScrollEnabled={true}
+                showsHorizontalScrollIndicator={false}
+                className="mt-3 -mx-5 px-5">
+                {gym.exerciseZones.map((zone: ExerciseZoneItem, idx: number) => (
+                  <View key={idx} className="mr-3 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+                    {Boolean(zone.image) && (
+                      <Image
+                        source={{ uri: zone.image }}
+                        className="h-28 w-full"
+                        resizeMode="cover"
+                      />
+                    )}
+                    <View className="p-2.5">
+                      <Text className="font-bold text-xs text-slate-800" numberOfLines={1}>
+                        {zone.title}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* 4. Key Features / Amenities */}
-          <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Key Features</Text>
-
-            <View className="mt-3 flex-row flex-wrap gap-2.5">
-              {gym.amenities.map((item, idx) => (
-                <View
-                  key={idx}
-                  className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
-                  <Ionicons name={item.icon as any} size={18} color="#E23744" />
-                  <Text className="font-semibold text-xs text-slate-800">{item.name}</Text>
-                </View>
-              ))}
+                ))}
+              </ScrollView>
             </View>
-          </View>
+          )}
 
-          {/* 5. Open Hours */}
-          <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Open Hours</Text>
+          {/* 4. Key Features / Amenities (Only if amenities exist) */}
+          {gym.amenities.length > 0 && (
+            <View className="mt-6">
+              <Text className="font-bold text-base text-slate-900">Key Features</Text>
 
-            <View className="mt-2.5 flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3.5">
-              <Ionicons name="time-outline" size={19} color="#64748B" />
-              <Text className="font-semibold text-xs text-slate-700">{gym.openHours}</Text>
+              <View className="mt-3 flex-row flex-wrap gap-2.5">
+                {gym.amenities.map((item, idx) => (
+                  <View
+                    key={idx}
+                    className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
+                    <Ionicons name={item.icon as any} size={18} color="#E23744" />
+                    <Text className="font-semibold text-xs text-slate-800">{item.name}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
+
+          {/* 5. Open Hours (Only if timings provided) */}
+          {Boolean(gym.openHours) && (
+            <View className="mt-6">
+              <Text className="font-bold text-base text-slate-900">Open Hours</Text>
+
+              <View className="mt-2.5 flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3.5">
+                <Ionicons name="time-outline" size={19} color="#64748B" />
+                <Text className="font-semibold text-xs text-slate-700">{gym.openHours}</Text>
+              </View>
+
+              {/* Holidays list if any */}
+              {gym.holidays.length > 0 && (
+                <View className="mt-2.5 space-y-2">
+                  {gym.holidays.map((h: any, i: number) => (
+                    <View
+                      key={i}
+                      className="flex-row items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                      <Ionicons name="calendar-outline" size={14} color="#D97706" />
+                      <Text className="text-xs font-semibold text-amber-800">
+                        Holiday: {h.title} ({h.startDate}) -{' '}
+                        {h.closureType === 'full_day' ? 'Closed All Day' : 'Special Hours'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* 6. Where you'll be (Location & Map) */}
           <View className="mt-6">
             <View className="flex-row items-center justify-between">
               <View className="flex-1 mr-3">
                 <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
-                <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
-                  {gym.address}
-                </Text>
+                {Boolean(gym.address) && (
+                  <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
+                    {gym.address}
+                  </Text>
+                )}
               </View>
 
               {/* Right Side Directions Button */}
@@ -1451,167 +1299,197 @@ export default function GymDetailScreen() {
             </View>
           </View>
 
-          {/* 7. Reviews and Ratings */}
-          <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Reviews and Ratings</Text>
+          {/* 7. Reviews and Ratings (Only if ratings or reviews exist) */}
+          {gym.totalReviews > 0 || gym.reviews.length > 0 ? (
+            <View className="mt-6">
+              <Text className="font-bold text-base text-slate-900">Reviews and Ratings</Text>
 
-            {/* Ratings Breakdown Card */}
-            <View className="mt-3 flex-row items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              {/* Left: Star percentage bars */}
-              <View className="flex-1 pr-6 space-y-1.5">
-                {gym.ratingBreakdown.map((r: RatingBreakdownItem) => (
-                  <View key={r.star} className="flex-row items-center">
-                    <Text className="w-3 font-semibold text-[11px] text-slate-500">{r.star}</Text>
-                    <Ionicons name="star" size={10} color="#F59E0B" className="mx-1" />
-                    <View className="h-1.5 flex-1 rounded-full bg-slate-200 ml-1">
-                      <View
-                        style={{ width: r.pct as any }}
-                        className="h-full rounded-full bg-[#E23744]"
-                      />
-                    </View>
-                  </View>
-                ))}
-              </View>
-
-              {/* Right: Big 4.5 and total reviews */}
-              <View className="items-center border-l border-slate-200 pl-6">
-                <Text className="font-extrabold text-3xl text-slate-900">{gym.rating}</Text>
-                <View className="my-1 flex-row">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Ionicons key={s} name="star" size={12} color="#F59E0B" />
-                  ))}
-                </View>
-                <Text className="font-medium text-[11px] text-slate-500">
-                  {gym.totalReviews} Reviews
-                </Text>
-              </View>
-            </View>
-
-            {/* Centered Coverflow Reviews Carousel */}
-            <View className="mt-4 -mx-5">
-              <Animated.ScrollView
-                ref={reviewScrollRef as any}
-                horizontal
-                nestedScrollEnabled={true}
-                pagingEnabled={false}
-                decelerationRate="fast"
-                snapToInterval={reviewCardStep}
-                snapToAlignment="center"
-                showsHorizontalScrollIndicator={false}
-                onScroll={Animated.event(
-                  [{ nativeEvent: { contentOffset: { x: reviewScrollX } } }],
-                  { useNativeDriver: true }
-                )}
-                onMomentumScrollEnd={(e) => {
-                  let idx = Math.round(e.nativeEvent.contentOffset.x / reviewCardStep);
-                  reviewIndexRef.current = idx;
-                  setActiveReviewIndex(idx % gym.reviews.length);
-                }}
-                scrollEventThrottle={16}
-                contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 12 }}>
-                {reviewSlides.map((rev, idx) => {
-                  const inputRange = [
-                    (idx - 1) * reviewCardStep,
-                    idx * reviewCardStep,
-                    (idx + 1) * reviewCardStep,
-                  ];
-
-                  const scale = reviewScrollX.interpolate({
-                    inputRange,
-                    outputRange: [0.91, 1, 0.91],
-                    extrapolate: 'clamp',
-                  });
-
-                  const opacity = reviewScrollX.interpolate({
-                    inputRange,
-                    outputRange: [0.62, 1, 0.62],
-                    extrapolate: 'clamp',
-                  });
-
-                  return (
-                    <Animated.View
-                      key={idx}
-                      style={{
-                        width: reviewCardWidth,
-                        minHeight: 145,
-                        marginRight: reviewCardGap,
-                        padding: 18,
-                        transform: [{ scale }],
-                        opacity,
-                      }}
-                      className="rounded-3xl border border-slate-100 bg-white shadow-sm">
-                      {/* Header: Avatar, Name, Rating & Time */}
-                      <View className="flex-row items-center gap-3">
-                        <Image
-                          source={{ uri: rev.avatar }}
-                          className="h-12 w-12 rounded-full border border-slate-200 bg-slate-200"
-                        />
-                        <View className="flex-1">
-                          <Text className="font-bold text-sm text-slate-900" numberOfLines={1}>
-                            {rev.name}
-                          </Text>
-                          <View className="mt-1 flex-row items-center">
-                            <View className="flex-row items-center">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Ionicons
-                                  key={star}
-                                  name="star"
-                                  size={12}
-                                  color={star <= rev.rating ? '#F59E0B' : '#CBD5E1'}
-                                />
-                              ))}
-                            </View>
-                            <Text className="ml-2 text-xs text-slate-400">
-                              {rev.time}
-                            </Text>
-                          </View>
+              {/* Ratings Breakdown Card */}
+              {gym.ratingBreakdown.length > 0 && (
+                <View className="mt-3 flex-row items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  {/* Left: Star percentage bars */}
+                  <View className="flex-1 pr-6 space-y-1.5">
+                    {gym.ratingBreakdown.map((r: RatingBreakdownItem) => (
+                      <View key={r.star} className="flex-row items-center">
+                        <Text className="w-3 font-semibold text-[11px] text-slate-500">{r.star}</Text>
+                        <Ionicons name="star" size={10} color="#F59E0B" className="mx-1" />
+                        <View className="h-1.5 flex-1 rounded-full bg-slate-200 ml-1">
+                          <View
+                            style={{ width: r.pct as any }}
+                            className="h-full rounded-full bg-[#E23744]"
+                          />
                         </View>
                       </View>
+                    ))}
+                  </View>
 
-                      {/* Review Comment */}
-                      <Text className="mt-3 text-xs leading-5 text-slate-600">
-                        {rev.comment}
-                      </Text>
-                    </Animated.View>
-                  );
-                })}
-              </Animated.ScrollView>
+                  {/* Right: Big rating and total reviews */}
+                  <View className="items-center border-l border-slate-200 pl-6">
+                    <Text className="font-extrabold text-3xl text-slate-900">{gym.rating}</Text>
+                    <View className="my-1 flex-row">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Ionicons
+                          key={s}
+                          name="star"
+                          size={12}
+                          color={s <= Math.round(Number(gym.rating)) ? '#F59E0B' : '#CBD5E1'}
+                        />
+                      ))}
+                    </View>
+                    <Text className="font-medium text-[11px] text-slate-500">
+                      {gym.totalReviews} Reviews
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Centered Coverflow Reviews Carousel */}
+              {gym.reviews.length > 0 && (
+                <View className="mt-4 -mx-5">
+                  <Animated.ScrollView
+                    ref={reviewScrollRef as any}
+                    horizontal
+                    nestedScrollEnabled={true}
+                    pagingEnabled={false}
+                    decelerationRate="fast"
+                    snapToInterval={reviewCardStep}
+                    snapToAlignment="center"
+                    showsHorizontalScrollIndicator={false}
+                    onScroll={Animated.event(
+                      [{ nativeEvent: { contentOffset: { y: reviewScrollX } } }],
+                      { useNativeDriver: true }
+                    )}
+                    onMomentumScrollEnd={(e) => {
+                      let idx = Math.round(e.nativeEvent.contentOffset.x / reviewCardStep);
+                      reviewIndexRef.current = idx;
+                      setActiveReviewIndex(idx % gym.reviews.length);
+                    }}
+                    scrollEventThrottle={16}
+                    contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 12 }}>
+                    {reviewSlides.map((rev, idx) => {
+                      const inputRange = [
+                        (idx - 1) * reviewCardStep,
+                        idx * reviewCardStep,
+                        (idx + 1) * reviewCardStep,
+                      ];
+
+                      const scale = reviewScrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.91, 1, 0.91],
+                        extrapolate: 'clamp',
+                      });
+
+                      const opacity = reviewScrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.62, 1, 0.62],
+                        extrapolate: 'clamp',
+                      });
+
+                      return (
+                        <Animated.View
+                          key={idx}
+                          style={{
+                            width: reviewCardWidth,
+                            minHeight: 145,
+                            marginRight: reviewCardGap,
+                            padding: 18,
+                            transform: [{ scale }],
+                            opacity,
+                          }}
+                          className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+                          {/* Header: Avatar, Name, Rating & Time */}
+                          <View className="flex-row items-center gap-3">
+                            <Image
+                              source={{ uri: rev.avatar }}
+                              className="h-12 w-12 rounded-full border border-slate-200 bg-slate-200"
+                            />
+                            <View className="flex-1">
+                              <Text className="font-bold text-sm text-slate-900" numberOfLines={1}>
+                                {rev.name}
+                              </Text>
+                              <View className="mt-1 flex-row items-center">
+                                <View className="flex-row items-center">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Ionicons
+                                      key={star}
+                                      name="star"
+                                      size={12}
+                                      color={star <= rev.rating ? '#F59E0B' : '#CBD5E1'}
+                                    />
+                                  ))}
+                                </View>
+                                <Text className="ml-2 text-xs text-slate-400">
+                                  {rev.time}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Review Comment */}
+                          <Text className="mt-3 text-xs leading-5 text-slate-600">
+                            {rev.comment}
+                          </Text>
+                        </Animated.View>
+                      );
+                    })}
+                  </Animated.ScrollView>
+                </View>
+              )}
+
+              {/* Show All Reviews Button */}
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/gym/reviews' as any,
+                    params: { id: gym.id },
+                  })
+                }
+                activeOpacity={0.8}
+                className="mt-3 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-3.5">
+                <Text className="font-bold text-xs text-slate-700">
+                  Show {gym.totalReviews} Reviews
+                </Text>
+              </TouchableOpacity>
             </View>
+          ) : null}
 
-            {/* Show All Reviews Button */}
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/gym/reviews' as any,
-                  params: { id: gym.id },
-                })
-              }
-              activeOpacity={0.8}
-              className="mt-3 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-3.5">
-              <Text className="font-bold text-xs text-slate-700">
-                Show {gym.totalReviews} Reviews
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 8. Upgrade to Unlock (Contact Lock) */}
+          {/* 8. Club Details & Contact Info */}
           <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Upgrade to unlock</Text>
+            <Text className="font-bold text-base text-slate-900">Club Details</Text>
 
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/membership/buy-membership' as any,
-                  params: { gymName: gym.title, gymId: gym.id },
-                })
-              }
-              activeOpacity={0.85}
-              className="mt-2.5 flex-row items-center justify-center gap-2 rounded-2xl border border-[#E23744]/25 bg-[#FFEAEF] py-3.5">
-              <Ionicons name="lock-closed" size={16} color="#E23744" />
-              <Text className="font-bold text-xs text-[#E23744]">
-                Unlock to View Contact
-              </Text>
-            </TouchableOpacity>
+            <View className="mt-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 p-4">
+              <View className="flex-row items-center justify-between pb-3 border-b border-slate-200/60">
+                <Text className="text-xs font-medium text-slate-500">Club ID</Text>
+                <Text className="text-xs font-bold text-slate-800">{gym.clubId || gym.id}</Text>
+              </View>
+              {Boolean(gym.ownerName) && (
+                <View className="flex-row items-center justify-between py-3 border-b border-slate-200/60">
+                  <Text className="text-xs font-medium text-slate-500">Owner / Manager</Text>
+                  <Text className="text-xs font-bold text-slate-800">{gym.ownerName}</Text>
+                </View>
+              )}
+              {Boolean(gym.clubCategory) && (
+                <View className="flex-row items-center justify-between py-3 border-b border-slate-200/60">
+                  <Text className="text-xs font-medium text-slate-500">Category</Text>
+                  <Text className="text-xs font-bold text-amber-700">{gym.clubCategory}</Text>
+                </View>
+              )}
+              <View className="flex-row items-center justify-between pt-3">
+                <Text className="text-xs font-medium text-slate-500">Direct Contact</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/membership/buy-membership' as any,
+                      params: { gymName: gym.title, gymId: gym.id },
+                    })
+                  }
+                  activeOpacity={0.8}
+                  className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3 py-1.5">
+                  <Ionicons name="lock-closed" size={13} color="#E23744" />
+                  <Text className="text-xs font-bold text-[#E23744]">Unlock to View Contact</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Animated.ScrollView>
