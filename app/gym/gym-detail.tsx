@@ -18,7 +18,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import GymDetailMapView from '@/components/modules/GymDetailMapView';
-import { useGymDetail } from '@/hook/useClient';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useGymDetail,
+  useToggleFavorite,
+  useGetFavorites,
+  extractFavoriteIds,
+} from '@/hook/useClient';
 
 export interface GymPhotoItem {
   url: string;
@@ -305,6 +311,11 @@ export default function GymDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const gymId = params.id || '';
 
+  const queryClient = useQueryClient();
+  const { toggleFavorite, isPending: isTogglingFav } = useToggleFavorite();
+  const { data: favoritesData } = useGetFavorites();
+  const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
+
   // ── Live API data ──────────────────────────────────────────────────────────
   const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(gymId || undefined);
   const isGymLoading = (isDetailLoading || isPending) && !apiData;
@@ -491,8 +502,25 @@ export default function GymDetailScreen() {
 
     const holidays = Array.isArray(d.holidays) ? d.holidays : [];
 
+    const clubDocumentId = String(d.documentId || d._id || d.id || gymId);
+
+    // Prefer explicit isFav from details response ("isFav": false / true),
+    // fallback to favorites query list if isFav not directly present
+    const isFavFromResponse =
+      d.isFav !== undefined
+        ? Boolean(d.isFav)
+        : d.isFavorite !== undefined
+          ? Boolean(d.isFavorite)
+          : undefined;
+
+    const isFav =
+      isFavFromResponse !== undefined
+        ? isFavFromResponse
+        : favoriteIds.has(clubDocumentId) || favoriteIds.has(String(d.id));
+
     return {
-      id: String(d.documentId || d._id || d.id || gymId),
+      id: clubDocumentId,
+      documentId: clubDocumentId,
       clubId,
       ownerName,
       logo,
@@ -514,8 +542,9 @@ export default function GymDetailScreen() {
       reviews,
       images,
       photos,
+      isFav,
     };
-  }, [apiData, gymId]);
+  }, [apiData, gymId, favoriteIds]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
@@ -529,6 +558,70 @@ export default function GymDetailScreen() {
   const currentIndexRef = useRef(0);
   const scrollY = useRef(new Animated.Value(0)).current;
   const HERO_HEIGHT = 330;
+
+  // Sync isFavorite state whenever gym.isFav changes
+  useEffect(() => {
+    if (gym?.isFav !== undefined) {
+      setIsFavorite(Boolean(gym.isFav));
+    }
+  }, [gym?.isFav]);
+
+  // Handle Add/Remove Favorite action and update details query cache
+  const handleToggleFavorite = async () => {
+    if (!gym || isTogglingFav) return;
+    const clubDocumentId = gym.documentId || gym.id || gymId;
+    if (!clubDocumentId) return;
+
+    const currentFav = isFavorite;
+    const nextFav = !currentFav;
+
+    // 1. Optimistic UI state update
+    setIsFavorite(nextFav);
+
+    // 2. Optimistic update of gym-detail query cache ("isFav": false / true)
+    const updateCache = (favVal: boolean) => {
+      const updater = (oldData: any) => {
+        if (!oldData) return oldData;
+        if (oldData.data && typeof oldData.data === 'object' && !Array.isArray(oldData.data)) {
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data,
+              isFav: favVal,
+              isFavorite: favVal,
+            },
+          };
+        }
+        return {
+          ...oldData,
+          isFav: favVal,
+          isFavorite: favVal,
+        };
+      };
+
+      if (gymId) queryClient.setQueryData(['gym-detail', gymId], updater);
+      if (gym.documentId && gym.documentId !== gymId) {
+        queryClient.setQueryData(['gym-detail', gym.documentId], updater);
+      }
+    };
+
+    updateCache(nextFav);
+
+    // 3. Call backend API to add or remove favorite
+    try {
+      await toggleFavorite(clubDocumentId, currentFav);
+      // Invalidate queries so server state is synchronized
+      if (gymId) queryClient.invalidateQueries({ queryKey: ['gym-detail', gymId] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+      queryClient.invalidateQueries({ queryKey: ['nearby-gyms'] });
+    } catch (err) {
+      console.error('Failed to toggle favorite on gym-detail:', err);
+      // Revert local state and query cache on error
+      setIsFavorite(currentFav);
+      updateCache(currentFav);
+    }
+  };
 
   useEffect(() => {
     setSelectedBranch(null);
@@ -767,7 +860,8 @@ export default function GymDetailScreen() {
   }
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white">
+
       {/* 1. Sticky Floating Top Navigation Header */}
       <View className="absolute left-0 right-0 top-0 z-50">
         <Animated.View
@@ -835,7 +929,8 @@ export default function GymDetailScreen() {
           {/* Right Action Icons (Favorite & Verified Badge) */}
           <View className="flex-row items-center space-x-2.5">
             <TouchableOpacity
-              onPress={() => setIsFavorite(!isFavorite)}
+              onPress={handleToggleFavorite}
+              disabled={isTogglingFav}
               activeOpacity={0.8}
               className="h-10 w-10 items-center justify-center overflow-hidden rounded-full">
               <Animated.View
@@ -1093,14 +1188,14 @@ export default function GymDetailScreen() {
                     </Text>
                   </View>
                 )}
-                {Boolean(gym.clubId) && (
+                {/* {Boolean(gym.clubId) && (
                   <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 border border-slate-200">
                     <Ionicons name="qr-code-outline" size={11} color="#64748B" />
                     <Text className="text-[11px] font-semibold text-slate-600">
                       ID: {gym.clubId}
                     </Text>
                   </View>
-                )}
+                )} */}
               </View>
 
               {/* Title with Logo */}
@@ -1532,6 +1627,6 @@ export default function GymDetailScreen() {
           <Text className="font-bold text-sm text-[#E23744]">Use Outdoor Pass</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

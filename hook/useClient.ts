@@ -283,6 +283,8 @@ export const useAddFavorite = () => {
     mutationFn: (clubDocumentId: string) => addFavorite(clubDocumentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['nearby-gyms'] });
     },
     onError: (error: any) => {
       const msg =
@@ -301,6 +303,8 @@ export const useRemoveFavorite = () => {
     mutationFn: (clubDocumentId: string) => removeFavorite(clubDocumentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['nearby-gyms'] });
     },
     onError: (error: any) => {
       const msg =
@@ -322,18 +326,18 @@ export const useToggleFavorite = () => {
 
     if (isCurrentlyFav) {
       await removeMutation.mutateAsync(clubDocumentId);
-      Toast.show({
-        type: 'info',
-        text1: 'Removed from Favorites',
-        text2: 'Gym removed from your favorites list',
-      });
+      // Toast.show({
+      //   type: 'info',
+      //   text1: 'Removed from Favorites',
+      //   text2: 'Gym removed from your favorites list',
+      // });
     } else {
       await addMutation.mutateAsync(clubDocumentId);
-      Toast.show({
-        type: 'success',
-        text1: 'Added to Favorites ❤️',
-        text2: 'Gym added to your favorites list',
-      });
+      // Toast.show({
+      //   type: 'success',
+      //   text1: 'Added to Favorites ❤️',
+      //   text2: 'Gym added to your favorites list',
+      // });
     }
   };
 
