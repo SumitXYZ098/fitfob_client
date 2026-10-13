@@ -618,8 +618,8 @@ export default function ViewAllScreen() {
                   key={opt.value}
                   onPress={() => setSortBy(opt.value as any)}
                   className={`mr-2 rounded-full border px-4 py-2 ${sortBy === opt.value
-                      ? 'border-[#E23744] bg-[#FFEAEF]'
-                      : 'border-gray-200 bg-white'
+                    ? 'border-[#E23744] bg-[#FFEAEF]'
+                    : 'border-gray-200 bg-white'
                     }`}>
                   <Text
                     className={`font-semibold text-xs ${sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'

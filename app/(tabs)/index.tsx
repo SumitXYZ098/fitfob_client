@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   StatusBar,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -228,31 +229,18 @@ export default function HomeScreen() {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: favoritesData } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
 
-  // Debounce search input so user typing doesn't spam requests on every keystroke
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setDebouncedSearchQuery('');
-      return;
-    }
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   // Default coordinates from endpoint provided by user
   const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
     latitude: 30.832111611338167,
     longitude: 76.6873704048281,
   });
-  const [city, setCity] = useState<string>('Chandigarh');
+  const [city, setCity] = useState<string>('');
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
 
@@ -261,9 +249,15 @@ export default function HomeScreen() {
       latitude: locData.latitude,
       longitude: locData.longitude,
     });
-    setCity(locData.city.toLowerCase());
+    let selectedCity = locData.city;
+    if (
+      selectedCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
+      selectedCity.toLowerCase().includes('sas nagar')
+    ) {
+      selectedCity = 'Mohali';
+    }
+    setCity(selectedCity.toLowerCase());
     setSearchQuery('');
-    setDebouncedSearchQuery('');
   };
 
   // Auto-detect current device location
@@ -288,8 +282,14 @@ export default function HomeScreen() {
             });
             if (addresses && addresses.length > 0) {
               const addr = addresses[0];
-              const detectedCity =
+              let detectedCity =
                 addr.city || addr.subregion || addr.district || addr.region || 'malikpur';
+              if (
+                detectedCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
+                detectedCity.toLowerCase().includes('sas nagar')
+              ) {
+                detectedCity = 'Mohali';
+              }
               setCity(detectedCity.toLowerCase());
             }
           } catch (geoErr) {
@@ -308,38 +308,23 @@ export default function HomeScreen() {
     detectLocation();
   }, [detectLocation]);
 
-  const searchCity = debouncedSearchQuery.trim();
-  const isCitySearch = Boolean(searchCity);
-
   // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
-  // When a city name is typed, run with city and disable latitude and longitude
   const {
     data: nearbyData,
     isLoading,
     isPending,
     refetch,
-  } = useNearbyGyms(
-    isCitySearch
-      ? {
-          city: searchCity,
-        }
-      : {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        }
-  );
+  } = useNearbyGyms({
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+  });
 
   const handleSearchSubmit = () => {
-    if (debouncedSearchQuery.trim() !== searchQuery.trim()) {
-      setDebouncedSearchQuery(searchQuery);
-    } else {
-      refetch();
-    }
-  };
+    Keyboard.dismiss();
+};
 
   const handleClearSearch = () => {
     setSearchQuery('');
-    setDebouncedSearchQuery('');
   };
 
   useEffect(() => {
@@ -365,34 +350,51 @@ export default function HomeScreen() {
   }, [nearbyData]);
 
   const filteredGyms = useMemo(() => {
-    // 1. Search Query Filter
-    const activeSearch = debouncedSearchQuery.trim() || searchQuery.trim();
-    const searchFiltered = gyms.filter((gym) => {
-      if (!activeSearch) return true;
+    // 1. Instant Search Query Filter by clubName and title
+    const activeSearch = searchQuery.trim().toLowerCase();
+    let searchFiltered = gyms;
 
-      const q = activeSearch.toLowerCase();
-      const inTitle = (gym.title || '').toLowerCase().includes(q);
-      const inCity =
-        (gym.city || '').toLowerCase().includes(q) ||
-        (gym.city && q.includes(gym.city.toLowerCase()));
-      const inAddress = (gym.address || '').toLowerCase().includes(q);
-      const inCategory = (gym.category || '').toLowerCase().includes(q);
-      const inCategories = gym.categories?.some((c) => c.toLowerCase().includes(q));
-      const inAmenities = gym.amenities?.some((a) => a.toLowerCase().includes(q));
-      const inServices = gym.services?.some((s) => s.toLowerCase().includes(q));
-      const inDesc = (gym.description || '').toLowerCase().includes(q);
+    if (activeSearch) {
+      searchFiltered = gyms.filter((gym) => {
+        const inTitle = (gym.title || '').toLowerCase().includes(activeSearch);
+        const inCity =
+          (gym.city || '').toLowerCase().includes(activeSearch) ||
+          (gym.city && activeSearch.includes(gym.city.toLowerCase()));
+        const inAddress = (gym.address || '').toLowerCase().includes(activeSearch);
+        const inCategory = (gym.category || '').toLowerCase().includes(activeSearch);
+        const inCategories = gym.categories?.some((c) => c.toLowerCase().includes(activeSearch));
+        const inAmenities = gym.amenities?.some((a) => a.toLowerCase().includes(activeSearch));
+        const inServices = gym.services?.some((s) => s.toLowerCase().includes(activeSearch));
+        const inDesc = (gym.description || '').toLowerCase().includes(activeSearch);
 
-      return (
-        inTitle ||
-        inCity ||
-        inAddress ||
-        inCategory ||
-        inCategories ||
-        inAmenities ||
-        inServices ||
-        inDesc
-      );
-    });
+        return (
+          inTitle ||
+          inCity ||
+          inAddress ||
+          inCategory ||
+          inCategories ||
+          inAmenities ||
+          inServices ||
+          inDesc
+        );
+      });
+
+      // Prioritize gyms whose clubName / title directly matches the query
+      searchFiltered.sort((a, b) => {
+        const aName = (a.title || '').toLowerCase();
+        const bName = (b.title || '').toLowerCase();
+        const aStarts = aName.startsWith(activeSearch);
+        const bStarts = bName.startsWith(activeSearch);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        const aIncludes = aName.includes(activeSearch);
+        const bIncludes = bName.includes(activeSearch);
+        if (aIncludes && !bIncludes) return -1;
+        if (!aIncludes && bIncludes) return 1;
+        return 0;
+      });
+    }
 
     if (!selectedCategory || selectedCategory === 'All') {
       return searchFiltered;
@@ -411,7 +413,7 @@ export default function HomeScreen() {
     });
 
     return [...matching, ...others];
-  }, [gyms, selectedCategory, debouncedSearchQuery, searchQuery]);
+  }, [gyms, selectedCategory, searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -443,26 +445,40 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => setIsLocationModalVisible(true)}
             activeOpacity={0.7}
-            className="flex-row items-center space-x-2">
-            <View className="h-9 w-9 items-center justify-center rounded-full bg-[#FFEAEF]">
+            className="mr-3 flex-1 flex-row items-center">
+            <View className="h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFEAEF]">
               <Ionicons name="location" size={20} color="#E23744" />
             </View>
-            <View className="ml-2">
+            <View className="ml-2 flex-1">
               <View className="flex-row items-center">
-                <Text className="font-bold text-lg capitalize text-darkText" numberOfLines={1}>
+                <Text
+                  className="font-bold text-base capitalize text-darkText shrink"
+                  numberOfLines={1}
+                  ellipsizeMode="tail">
                   {city}
                 </Text>
-                <Ionicons name="chevron-down" size={15} color="#1E293B" style={{ marginLeft: 4 }} />
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color="#1E293B"
+                  style={{ marginLeft: 4, flexShrink: 0 }}
+                />
                 {isLocating && (
-                  <ActivityIndicator size="small" color="#E23744" style={{ marginLeft: 6 }} />
+                  <ActivityIndicator
+                    size="small"
+                    color="#E23744"
+                    style={{ marginLeft: 6, flexShrink: 0 }}
+                  />
                 )}
               </View>
-              <Text className="font-regular text-[11px] text-slate-400">Tap to change location</Text>
+              <Text className="font-regular text-[11px] text-slate-400" numberOfLines={1}>
+                Tap to change location
+              </Text>
             </View>
           </TouchableOpacity>
 
           {/* Action Icons */}
-          <View className="flex-row items-center space-x-3">
+          <View className="flex-row items-center gap-2.5 shrink-0">
             <TouchableOpacity
               onPress={() => router.push('/account/notifications' as any)}
               className="h-10 w-10 items-center justify-center rounded-full bg-[#FFEAEF]">
@@ -485,7 +501,7 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               onPress={() => router.push('/account/profile' as any)}
-              className="ml-2 h-10 w-10 items-center justify-center rounded-full bg-[#FFEAEF]">
+              className="h-10 w-10 items-center justify-center rounded-full bg-[#FFEAEF]">
               <Svg width={18} height={18} viewBox="0 0 20 20" fill="none">
                 <Path
                   d="M16.45 11.6667C17.1263 11.6667 17.7749 11.9301 18.2531 12.3989C18.7313 12.8677 19 13.5036 19 14.1667V14.7625C19 17.7433 15.4215 20 10.5 20C5.5785 20 2 17.8608 2 14.7625V14.1667C2 13.5036 2.26866 12.8677 2.74688 12.3989C3.2251 11.9301 3.8737 11.6667 4.55 11.6667H16.45ZM10.5 0C11.1697 -9.78424e-09 11.8329 0.129329 12.4517 0.380602C13.0704 0.631876 13.6327 1.00017 14.1062 1.46447C14.5798 1.92876 14.9555 2.47995 15.2118 3.08658C15.4681 3.69321 15.6 4.34339 15.6 5C15.6 5.65661 15.4681 6.30679 15.2118 6.91342C14.9555 7.52004 14.5798 8.07124 14.1062 8.53553C13.6327 8.99983 13.0704 9.36812 12.4517 9.6194C11.8329 9.87067 11.1697 10 10.5 10C9.1474 10 7.85019 9.47322 6.89376 8.53553C5.93732 7.59785 5.4 6.32608 5.4 5C5.4 3.67392 5.93732 2.40215 6.89376 1.46447C7.85019 0.526784 9.1474 1.97602e-08 10.5 0Z"
@@ -501,7 +517,7 @@ export default function HomeScreen() {
           <View className="flex-row items-center rounded-full border border-[#F3F4F6] bg-white px-4 py-2 shadow-sm">
             {/* <Feather name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} /> */}
             <TextInput
-              placeholder="Search city name"
+              placeholder="Search club name..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -603,10 +619,14 @@ export default function HomeScreen() {
                 <Ionicons name="filter-outline" size={30} color="#E23744" />
               </View>
               <Text className="mt-1 text-center font-bold text-lg text-darkText">
-                No {selectedCategory !== 'All' ? selectedCategory : 'Results'} Found
+                {searchQuery.trim()
+                  ? `No Clubs Matching "${searchQuery.trim()}"`
+                  : `No ${selectedCategory !== 'All' ? selectedCategory : 'Results'} Found`}
               </Text>
               <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any {selectedCategory !== 'All' ? selectedCategory.toLowerCase() : ''} options matching your filter in &quot;{searchCity || city}&quot;. Try exploring other categories or view all clubs.
+                {searchQuery.trim()
+                  ? `We couldn't find any club matching "${searchQuery.trim()}". Try searching with another club name.`
+                  : `We couldn't find any ${selectedCategory !== 'All' ? selectedCategory.toLowerCase() : ''} options. Try exploring other categories or view all clubs.`}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -628,10 +648,10 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text className="mt-3 text-center font-bold text-lg text-darkText">
-                {(searchCity || city) ? `No Gyms Found in ${(searchCity || city).charAt(0).toUpperCase() + (searchCity || city).slice(1)}` : 'No Gyms Found Nearby'}
+                No Gyms Found Nearby
               </Text>
               <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any fitness clubs registered around &quot;{searchCity || city || 'this area'}&quot; yet. You can explore all clubs across other areas or choose a different location.
+                We couldn&apos;t find any fitness clubs registered around this area yet. You can explore all clubs across other areas or choose a different location.
               </Text>
 
               {/* Action Buttons */}

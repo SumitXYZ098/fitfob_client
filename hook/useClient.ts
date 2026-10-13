@@ -16,6 +16,9 @@ import {
   getFavorites,
   addFavorite,
   removeFavorite,
+  getMyCheckins,
+  CheckinItem,
+  MyCheckinsResponse,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -342,3 +345,15 @@ export const useToggleFavorite = () => {
     isPending: addMutation.isPending || removeMutation.isPending,
   };
 };
+
+// ─── Visits / Check-ins Hooks ──────────────────────────────────────────────
+export const useMyCheckins = () => {
+  return useQuery({
+    queryKey: ['client-my-checkins'],
+    queryFn: getMyCheckins,
+    staleTime: 1000 * 60, // 1 minute
+  });
+};
+
+export type { CheckinItem, MyCheckinsResponse };
+

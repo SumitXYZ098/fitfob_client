@@ -40,4 +40,7 @@ export const ENDPOINTS = {
   // Favorites
   FAVORITES: `${BASE_URL}/api/client-detail/favorites`,
   FAVORITES_REMOVE: `${BASE_URL}/api/client-detail/favorites/remove`,
+
+  // Visits & Check-ins
+  MY_CHECKINS: `${BASE_URL}/api/client/my-checkins`,
 };

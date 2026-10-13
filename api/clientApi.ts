@@ -390,3 +390,47 @@ export const removeFavorite = async (clubDocumentId: string) => {
     throw postErr;
   }
 };
+
+// ─── Visits / Check-ins API ────────────────────────────────────────────────
+
+export interface CheckinItem {
+  id: number | string;
+  documentId: string;
+  subscriptionType?: string;
+  checkinTime: string;
+  checkoutTime?: string | null;
+  status: 'checked-out' | 'checked-in' | 'active' | 'open' | 'completed' | string;
+  club_name: string;
+  club_logo?: string | null;
+}
+
+export interface MyCheckinsResponse {
+  data: CheckinItem[];
+}
+
+// Get user visits / check-ins history: GET /api/client/my-checkins
+export const getMyCheckins = async (): Promise<MyCheckinsResponse> => {
+  const url = ENDPOINTS.MY_CHECKINS;
+  console.log('📡 Fetching my checkins from:', url);
+  try {
+    const response = await apiInstance.get(url);
+    console.log('✅ Checkins fetched successfully:', response.data);
+    return response.data;
+  } catch (error: any) {
+    // If /api/client/my-checkins returns 404, fallback to /client/my-checkins
+    if (error?.response?.status === 404) {
+      const fallbackUrl = `${process.env.EXPO_PUBLIC_API_URL}/client/my-checkins`;
+      console.log('⚠️ Retrying checkins with fallback URL:', fallbackUrl);
+      try {
+        const res = await apiInstance.get(fallbackUrl);
+        return res.data;
+      } catch (fallbackErr: any) {
+        console.error('❌ Fallback checkins request failed:', fallbackErr?.response?.data || fallbackErr.message);
+        throw fallbackErr;
+      }
+    }
+    console.error('❌ Error fetching checkins:', error?.response?.data || error.message);
+    throw error;
+  }
+};
+

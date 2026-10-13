@@ -373,7 +373,16 @@ function GymCardItem({
   const handleOpenDetail = () => {
     router.push({
       pathname: '/gym/gym-detail' as any,
-      params: { id: gym.id },
+      params: {
+        id: gym.id,
+        initialImages: gym.images && gym.images.length > 0 ? JSON.stringify(gym.images) : undefined,
+        initialTitle: gym.title || '',
+        initialCategory: gym.category || '',
+        initialRating: gym.rating || '',
+        initialLat: gym.coordinate?.latitude,
+        initialLng: gym.coordinate?.longitude,
+        initialIsFav: String(localFav),
+      },
     });
   };
 
@@ -566,10 +575,8 @@ export default function Mapviewscreen() {
     isLoading,
     isPending,
   } = useNearbyGyms({
-    city: city || undefined,
     latitude: userLocation?.latitude,
     longitude: userLocation?.longitude,
-    query: searchQuery.trim() || undefined,
   });
 
   const rawGyms: GymItem[] = useMemo(() => {
@@ -672,18 +679,28 @@ export default function Mapviewscreen() {
 
   // Filter and sort gyms
   const filteredGyms = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return rawGyms
       .filter((gym) => {
         const matchesCategory =
           selectedCategory === 'Gyms' ||
           gym.category?.toLowerCase() === selectedCategory.toLowerCase();
         const matchesSearch =
-          gym.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          gym.amenities.some((a) => a.toLowerCase().includes(searchQuery.toLowerCase()));
+          !q ||
+          gym.title.toLowerCase().includes(q) ||
+          gym.amenities.some((a) => a.toLowerCase().includes(q));
         const matchesOpen = !onlyOpen || gym.isOpen;
         return matchesCategory && matchesSearch && matchesOpen;
       })
       .sort((a, b) => {
+        if (q) {
+          const aName = (a.title || '').toLowerCase();
+          const bName = (b.title || '').toLowerCase();
+          const aStarts = aName.startsWith(q);
+          const bStarts = bName.startsWith(q);
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+        }
         if (sortBy === 'rating') {
           return parseFloat(b.rating) - parseFloat(a.rating);
         }
@@ -755,7 +772,7 @@ export default function Mapviewscreen() {
         {/* Search Bar */}
         <View className="flex-1 flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-4 py-2 shadow-sm">
           <TextInput
-            placeholder="Search gyms, yoga...."
+            placeholder="Search club name..."
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -797,9 +814,10 @@ export default function Mapviewscreen() {
             });
           }}
           onOpenGymDetail={(gymId) => {
+            const isFav = favoriteIds.has(String(gymId));
             router.push({
               pathname: '/gym/gym-detail' as any,
-              params: { id: gymId },
+              params: { id: gymId, initialIsFav: String(isFav) },
             });
           }}
           style={{ flex: 1, width: '100%', height: '100%' }}
@@ -953,8 +971,8 @@ export default function Mapviewscreen() {
                   key={opt.value}
                   onPress={() => setSortBy(opt.value as any)}
                   className={`mr-2 rounded-full border px-4 py-2 ${sortBy === opt.value
-                      ? 'border-[#E23744] bg-[#FFEAEF]'
-                      : 'border-gray-200 bg-white'
+                    ? 'border-[#E23744] bg-[#FFEAEF]'
+                    : 'border-gray-200 bg-white'
                     }`}>
                   <Text
                     className={`font-semibold text-xs ${sortBy === opt.value ? 'text-[#E23744]' : 'text-gray-700'

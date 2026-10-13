@@ -14,11 +14,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import GymDetailMapView from '@/components/modules/GymDetailMapView';
-import { useGymDetail } from '@/hook/useClient';
+import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface GymPhotoItem {
   url: string;
@@ -227,11 +229,6 @@ function GymDetailSkeletonScreen({ onBack }: { onBack: () => void }) {
               <GymDetailSkeletonBox style={{ height: 24, width: 65, borderRadius: 12 }} />
             </View>
 
-            {/* Rating & Review Count */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <GymDetailSkeletonBox style={{ height: 18, width: 65, borderRadius: 4 }} />
-              <GymDetailSkeletonBox style={{ height: 18, width: 95, borderRadius: 4 }} />
-            </View>
 
             {/* Timings row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -300,14 +297,86 @@ function GymDetailSkeletonScreen({ onBack }: { onBack: () => void }) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+const getAmenityIcon = (name: string): string => {
+  const n = name.toLowerCase();
+  if (n.includes('ac') || n.includes('air')) return 'snow-outline';
+  if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
+  if (n.includes('park')) return 'car-outline';
+  if (n.includes('train')) return 'barbell-outline';
+  if (n.includes('shower') || n.includes('bath')) return 'water-outline';
+  if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
+  if (n.includes('box')) return 'flame-outline';
+  if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
+  if (n.includes('pool') || n.includes('swim')) return 'water-outline';
+  if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
+  if (n.includes('lock')) return 'lock-closed-outline';
+  return 'checkmark-circle-outline';
+};
+
 export default function GymDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    initialImages?: string;
+    initialTitle?: string;
+    initialAddress?: string;
+    initialCategory?: string;
+    initialRating?: string;
+    initialCity?: string;
+    initialDescription?: string;
+    initialAmenities?: string;
+    initialLat?: string;
+    initialLng?: string;
+    initialIsFav?: string;
+  }>();
   const gymId = params.id || '';
+  const queryClient = useQueryClient();
+
+  // 1. Instantly parse photos passed from the GymCard
+  const initialPhotos: GymPhotoItem[] = useMemo(() => {
+    if (!params.initialImages) return [];
+    try {
+      const parsed = JSON.parse(params.initialImages);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter(Boolean)
+          .map((url: string) => ({ url: String(url) }));
+      }
+    } catch {}
+    return [];
+  }, [params.initialImages]);
+
+  // 2. Also check if the gym data already exists in React Query's nearby-gyms cache
+  const cachedFromNearby = useMemo(() => {
+    if (!gymId) return null;
+    try {
+      const queries = queryClient.getQueriesData<any>({ queryKey: ['nearby-gyms'] });
+      for (const [_, data] of queries) {
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.clubs)
+          ? data.clubs
+          : Array.isArray(data?.results)
+          ? data.results
+          : [];
+        const found = list.find(
+          (item: any) =>
+            String(item.id) === gymId ||
+            String(item.documentId) === gymId ||
+            String(item._id) === gymId ||
+            String(item?.attributes?.documentId) === gymId
+        );
+        if (found) return found?.attributes ? { id: found.id, ...found.attributes } : found;
+      }
+    } catch {}
+    return null;
+  }, [gymId, queryClient]);
 
   // ── Live API data ──────────────────────────────────────────────────────────
   const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(gymId || undefined);
-  const isGymLoading = (isDetailLoading || isPending) && !apiData;
+  const isDetailFetching = Boolean((isDetailLoading || isPending) && !apiData);
 
   useEffect(() => {
     if (apiData) {
@@ -316,14 +385,133 @@ export default function GymDetailScreen() {
     }
   }, [apiData, gymId]);
 
+  // ── Favorites management ──────────────────────────────────────────────────
+  const { data: favoritesData } = useGetFavorites();
+  const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
+  const { toggleFavorite: toggleFavApi, isPending: isTogglingFav } = useToggleFavorite();
+
+  const [isFavorite, setIsFavorite] = useState<boolean>(() => {
+    if (params.initialIsFav !== undefined) {
+      return params.initialIsFav === 'true';
+    }
+    return Boolean(
+      (cachedFromNearby as any)?.isFav ||
+      (cachedFromNearby as any)?.isFavorite
+    );
+  });
+
+  // Keep in sync with initialIsFav param passed from GymCard / Mapview
+  useEffect(() => {
+    if (params.initialIsFav !== undefined) {
+      setIsFavorite(params.initialIsFav === 'true');
+    }
+  }, [params.initialIsFav]);
+
+  // Keep in sync with global server favorites
+  useEffect(() => {
+    if (favoritesData) {
+      const candidates = [
+        gymId,
+        (cachedFromNearby as any)?.documentId,
+        (cachedFromNearby as any)?.id,
+        (apiData as any)?.data?.documentId,
+        (apiData as any)?.data?.id,
+      ].filter(Boolean);
+
+      const isFavInServer = candidates.some((id) => favoriteIds.has(String(id)));
+      setIsFavorite(isFavInServer);
+    }
+  }, [favoritesData, favoriteIds, gymId, cachedFromNearby, apiData]);
+
   // Map backend response to the shape this screen expects (NO DUMMY DATA)
   const gym = useMemo(() => {
     const raw = apiData?.data ?? apiData;
-    if (!raw || typeof raw !== 'object') {
+    const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
+
+    // When API data is not yet available, build gym object immediately from GymCard params / cache!
+    if (!d || typeof d !== 'object') {
+      if (initialPhotos.length > 0 || params.initialTitle || cachedFromNearby) {
+        const sourceData = cachedFromNearby || {};
+        const title =
+          params.initialTitle ||
+          sourceData.clubName ||
+          sourceData.businessName ||
+          sourceData.title ||
+          '';
+        const address =
+          params.initialAddress ||
+          sourceData.address ||
+          sourceData.clubAddress ||
+          sourceData.location?.address ||
+          '';
+        const category =
+          params.initialCategory ||
+          sourceData.category ||
+          sourceData.clubCategory ||
+          '';
+        const rating = params.initialRating
+          ? String(params.initialRating).split('/')[0]
+          : sourceData.rating
+          ? String(sourceData.rating).split('/')[0]
+          : '0';
+        const lat = Number(params.initialLat || sourceData.latitude || sourceData.lat || 0);
+        const lng = Number(params.initialLng || sourceData.longitude || sourceData.lng || 0);
+
+        let initialAmenitiesList: AmenityItem[] = [];
+        if (params.initialAmenities) {
+          try {
+            const parsed = JSON.parse(params.initialAmenities);
+            if (Array.isArray(parsed)) {
+              initialAmenitiesList = parsed.map((item: any) => {
+                const name = typeof item === 'string' ? item : String(item?.name || '');
+                return {
+                  name,
+                  icon: getAmenityIcon(name),
+                  library: 'ionicons',
+                };
+              });
+            }
+          } catch {}
+        } else if (Array.isArray(sourceData.amenities)) {
+          initialAmenitiesList = sourceData.amenities.map((item: any) => {
+            const name = typeof item === 'string' ? item : String(item?.name || '');
+            return {
+              name,
+              icon: getAmenityIcon(name),
+              library: 'ionicons',
+            };
+          });
+        }
+
+        return {
+          id: gymId,
+          clubId: sourceData.clubId || '',
+          ownerName: sourceData.ownerName || '',
+          logo: sourceData.logo || '',
+          clubCategory: sourceData.clubCategory || '',
+          title,
+          category,
+          services: [],
+          address,
+          coordinate: { latitude: lat, longitude: lng },
+          branches: [],
+          rating,
+          totalReviews: 0,
+          openHours: '',
+          holidays: Array.isArray(sourceData.holidays) ? sourceData.holidays : [],
+          description: params.initialDescription || sourceData.description || '',
+          amenities: initialAmenitiesList,
+          exerciseZones: [],
+          ratingBreakdown: [],
+          reviews: [],
+          images: initialPhotos.map((p) => p.url),
+          photos: initialPhotos,
+          documentId: sourceData.documentId || gymId,
+          isFav: isFavorite,
+        };
+      }
       return null;
     }
-
-    const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
 
     // Real photos extracted from backend response
     const rawPhotos =
@@ -333,7 +521,7 @@ export default function GymDetailScreen() {
       d.images ||
       d.gallery ||
       [];
-    const photos: GymPhotoItem[] = Array.isArray(rawPhotos)
+    let photos: GymPhotoItem[] = Array.isArray(rawPhotos)
       ? (rawPhotos
           .map((p: any) => {
             const url =
@@ -351,6 +539,11 @@ export default function GymDetailScreen() {
           })
           .filter(Boolean) as GymPhotoItem[])
       : [];
+
+    // If API returned empty photos, preserve the photos already displayed from the GymCard
+    if (photos.length === 0 && initialPhotos.length > 0) {
+      photos = initialPhotos;
+    }
 
     const images: string[] = photos.map((p) => p.url);
 
@@ -401,20 +594,12 @@ export default function GymDetailScreen() {
     const rawFacilities = extractList(d.facilities || d.facility);
     const rawAmenitiesList = extractList(d.amenities);
 
-    const title = d.clubName || d.businessName || d.gymName || d.name || d.title || 'Fitness Club';
-    const lowerT = title.toLowerCase();
-
+    const title = d.clubName || d.businessName || d.gymName || d.name || d.title || '';
     let category = '';
     if (rawCategories.length > 0) category = rawCategories[0];
     else if (rawServices.length > 0) category = rawServices[0];
     else if (d.clubType || d.club_type) category = d.clubType || d.club_type;
-    else if (lowerT.includes('yoga')) category = 'Yoga';
-    else if (lowerT.includes('box')) category = 'Boxing';
-    else if (lowerT.includes('dance')) category = 'Dance';
-    else if (lowerT.includes('crossfit')) category = 'CrossFit';
-    else if (lowerT.includes('zumba')) category = 'Zumba';
-    else if (lowerT.includes('pilates')) category = 'Pilates';
-    else category = 'Gym';
+    else if (d.category) category = d.category;
 
     const combinedAmenityNames = Array.from(
       new Set([...rawAmenitiesList, ...rawFacilities, ...rawServices])
@@ -431,7 +616,7 @@ export default function GymDetailScreen() {
     const reviews: ReviewItem[] = rawReviews.map((r: any, idx: number) => ({
       id: String(r?.id || r?._id || `r-${idx}`),
       name: r?.name || r?.userName || r?.user?.name || 'Member',
-      avatar: r?.avatar || r?.user?.avatar || r?.user?.photo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150',
+      avatar: r?.avatar || r?.user?.avatar || r?.user?.photo || '',
       rating: Number(r?.rating || 5),
       time: r?.time || (r?.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently'),
       comment: r?.comment || r?.text || r?.review || '',
@@ -478,8 +663,8 @@ export default function GymDetailScreen() {
             }));
 
     const coordinate = {
-      latitude: Number(d.latitude || d.lat || d.location?.latitude || d.coordinate?.latitude || 30.7046),
-      longitude: Number(d.longitude || d.lng || d.location?.longitude || d.coordinate?.longitude || 76.7179),
+      latitude: Number(d.latitude || d.lat || d.location?.latitude || d.coordinate?.latitude || 0),
+      longitude: Number(d.longitude || d.lng || d.location?.longitude || d.coordinate?.longitude || 0),
     };
 
     const openHours =
@@ -514,13 +699,52 @@ export default function GymDetailScreen() {
       reviews,
       images,
       photos,
+      documentId: String(d.documentId || d._id || d.id || gymId),
+      isFav: isFavorite,
     };
-  }, [apiData, gymId]);
+  }, [
+    apiData,
+    gymId,
+    initialPhotos,
+    params.initialTitle,
+    params.initialAddress,
+    params.initialCategory,
+    params.initialRating,
+    params.initialAmenities,
+    params.initialDescription,
+    params.initialLat,
+    params.initialLng,
+    params.initialIsFav,
+    cachedFromNearby,
+    isFavorite,
+  ]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
+
+  const handleToggleFavorite = async () => {
+    const raw = apiData?.data ?? apiData;
+    const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
+    const targetDocId =
+      d?.documentId ||
+      raw?.documentId ||
+      (cachedFromNearby as any)?.documentId ||
+      (gym as any)?.documentId ||
+      gymId;
+
+    const currentFav = isFavorite;
+    const nextFav = !currentFav;
+    setIsFavorite(nextFav);
+
+    if (targetDocId) {
+      try {
+        await toggleFavApi(String(targetDocId), currentFav);
+      } catch (err) {
+        setIsFavorite(currentFav); // Revert on failure
+      }
+    }
+  };
   const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<GymBranchItem | null>(null);
@@ -528,6 +752,9 @@ export default function GymDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const currentIndexRef = useRef(0);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const heroScrollX = useRef(new Animated.Value(0)).current;
+  const isHeroInteracting = useRef(false);
+  const heroInteractionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const HERO_HEIGHT = 330;
 
   useEffect(() => {
@@ -620,28 +847,23 @@ export default function GymDetailScreen() {
     extrapolate: 'clamp',
   });
 
-  // Auto-scroll hero carousel
+  // Auto-scroll hero carousel with smooth pacing and pause-on-interaction
   useEffect(() => {
     if (!screenWidth || !gym?.photos || gym.photos.length <= 1) return;
 
     const interval = setInterval(() => {
+      if (isHeroInteracting.current) return;
+
       const nextIndex = currentIndexRef.current + 1;
+      currentIndexRef.current = nextIndex;
+
       scrollRef.current?.scrollTo({
         x: nextIndex * screenWidth,
         animated: true,
       });
 
-      if (nextIndex >= gym.photos.length) {
-        setActiveImageIndex(0);
-        currentIndexRef.current = 0;
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({ x: 0, animated: false });
-        }, 450);
-      } else {
-        currentIndexRef.current = nextIndex;
-        setActiveImageIndex(nextIndex);
-      }
-    }, 3500);
+      setActiveImageIndex(nextIndex % gym.photos.length);
+    }, 4800);
 
     return () => clearInterval(interval);
   }, [screenWidth, gym?.photos]);
@@ -651,6 +873,8 @@ export default function GymDetailScreen() {
   const reviewIndexRef = useRef(0);
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
   const reviewScrollX = useRef(new Animated.Value(0)).current;
+  const isReviewInteracting = useRef(false);
+  const reviewInteractionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reviewCardWidth = screenWidth * 0.74;
   const reviewCardGap = 16;
@@ -668,6 +892,8 @@ export default function GymDetailScreen() {
     if (!reviewCardWidth || reviewCount <= 1) return;
 
     const interval = setInterval(() => {
+      if (isReviewInteracting.current) return;
+
       reviewIndexRef.current += 1;
       const currentPos = reviewIndexRef.current;
 
@@ -686,11 +912,14 @@ export default function GymDetailScreen() {
             x: resetPos * reviewCardStep,
             animated: false,
           });
-        }, 500);
+        }, 750);
       }
-    }, 3600);
+    }, 4800);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (reviewInteractionTimeout.current) clearTimeout(reviewInteractionTimeout.current);
+    };
   }, [reviewCount, reviewCardStep, reviewCardWidth]);
 
   const handleShare = async () => {
@@ -744,6 +973,8 @@ export default function GymDetailScreen() {
       });
     })();
   };
+
+  const isGymLoading = (isDetailLoading || isPending) && !gym;
 
   if (isGymLoading) {
     return <GymDetailSkeletonScreen onBack={() => router.back()} />;
@@ -835,7 +1066,8 @@ export default function GymDetailScreen() {
           {/* Right Action Icons (Favorite & Verified Badge) */}
           <View className="flex-row items-center space-x-2.5">
             <TouchableOpacity
-              onPress={() => setIsFavorite(!isFavorite)}
+              onPress={handleToggleFavorite}
+              disabled={isTogglingFav}
               activeOpacity={0.8}
               className="h-10 w-10 items-center justify-center overflow-hidden rounded-full">
               <Animated.View
@@ -945,15 +1177,31 @@ export default function GymDetailScreen() {
             height: HERO_HEIGHT,
             transform: [{ scale: heroScale }],
           }}
-          className="relative w-full bg-slate-900">
+          className="relative w-full bg-transparent">
           {gym.photos.length > 0 ? (
             <>
-              <ScrollView
-                ref={scrollRef}
+              <Animated.ScrollView
+                ref={scrollRef as any}
                 horizontal
                 pagingEnabled
+                decelerationRate="fast"
                 nestedScrollEnabled={true}
                 showsHorizontalScrollIndicator={false}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { x: heroScrollX } } }],
+                  { useNativeDriver: false }
+                )}
+                scrollEventThrottle={16}
+                onScrollBeginDrag={() => {
+                  isHeroInteracting.current = true;
+                  if (heroInteractionTimeout.current) clearTimeout(heroInteractionTimeout.current);
+                }}
+                onScrollEndDrag={() => {
+                  if (heroInteractionTimeout.current) clearTimeout(heroInteractionTimeout.current);
+                  heroInteractionTimeout.current = setTimeout(() => {
+                    isHeroInteracting.current = false;
+                  }, 3000);
+                }}
                 onMomentumScrollEnd={(e) => {
                   let idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
                   if (idx >= gym.photos.length) {
@@ -962,28 +1210,21 @@ export default function GymDetailScreen() {
                   }
                   currentIndexRef.current = idx;
                   setActiveImageIndex(idx);
-                }}
-                scrollEventThrottle={16}>
+                  if (heroInteractionTimeout.current) clearTimeout(heroInteractionTimeout.current);
+                  heroInteractionTimeout.current = setTimeout(() => {
+                    isHeroInteracting.current = false;
+                  }, 3000);
+                }}>
                 {slides.map((photo, idx) => (
                   <View
                     key={idx}
                     style={{ width: screenWidth, height: HERO_HEIGHT }}
-                    className="relative">
-                    <Image
+                    className="relative overflow-hidden">
+                    <ExpoImage
                       source={{ uri: photo.url }}
                       style={{ width: screenWidth, height: HERO_HEIGHT }}
-                      resizeMode="cover"
-                    />
-                    {/* Dark gradient overlay at bottom for badge legibility */}
-                    <View
-                      style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: 90,
-                        backgroundColor: 'rgba(0,0,0,0.28)',
-                      }}
+                      contentFit="cover"
+                      transition={400}
                     />
 
                     {/* Image Info Tag / Badge on the active photo */}
@@ -1014,21 +1255,44 @@ export default function GymDetailScreen() {
                     )}
                   </View>
                 ))}
-              </ScrollView>
+              </Animated.ScrollView>
 
-              {/* Slide Indicators on the bottom left */}
+              {/* Slide Indicators on the bottom left with dynamic morph animation */}
               {gym.photos.length > 1 && (
                 <View className="absolute bottom-12 left-5 flex-row items-center">
                   {gym.photos.length <= 6 ? (
-                    gym.photos.map((_, idx) => (
-                      <View
-                        key={idx}
-                        style={{ marginRight: idx === gym.photos.length - 1 ? 0 : 6 }}
-                        className={`h-1.5 rounded-full ${
-                          idx === activeImageIndex ? 'w-6 bg-[#E23744]' : 'w-1.5 bg-white/80'
-                        }`}
-                      />
-                    ))
+                    gym.photos.map((_, idx) => {
+                      const inputRange = [
+                        (idx - 1) * screenWidth,
+                        idx * screenWidth,
+                        (idx + 1) * screenWidth,
+                      ];
+
+                      const dotWidth = heroScrollX.interpolate({
+                        inputRange,
+                        outputRange: [6, 24, 6],
+                        extrapolate: 'clamp',
+                      });
+
+                      const dotOpacity = heroScrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.55, 1, 0.55],
+                        extrapolate: 'clamp',
+                      });
+
+                      return (
+                        <Animated.View
+                          key={idx}
+                          style={{
+                            width: dotWidth,
+                            opacity: dotOpacity,
+                            marginRight: idx === gym.photos.length - 1 ? 0 : 6,
+                            backgroundColor: idx === activeImageIndex ? '#E23744' : '#FFFFFF',
+                          }}
+                          className="h-1.5 rounded-full"
+                        />
+                      );
+                    })
                   ) : (
                     <View
                       style={{
@@ -1076,7 +1340,7 @@ export default function GymDetailScreen() {
           {/* Gym Header: Logo, Badges, Title, Owner, Address & Chat Button */}
           <View className="flex-row items-start justify-between">
             <View className="mr-3 flex-1">
-              {/* Badges: Category, Club Category, Club ID */}
+              {/* Badges: Category, Club Category */}
               <View className="mb-2 flex-row flex-wrap items-center gap-1.5">
                 {Boolean(gym.clubCategory) && (
                   <View className="flex-row items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 border border-amber-500/20">
@@ -1093,13 +1357,8 @@ export default function GymDetailScreen() {
                     </Text>
                   </View>
                 )}
-                {Boolean(gym.clubId) && (
-                  <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 border border-slate-200">
-                    <Ionicons name="qr-code-outline" size={11} color="#64748B" />
-                    <Text className="text-[11px] font-semibold text-slate-600">
-                      ID: {gym.clubId}
-                    </Text>
-                  </View>
+                {isDetailFetching && !gym.clubCategory && !gym.category && (
+                  <GymDetailSkeletonBox style={{ height: 20, width: 68, borderRadius: 10 }} />
                 )}
               </View>
 
@@ -1116,49 +1375,21 @@ export default function GymDetailScreen() {
                   <Text className="font-bold text-2xl text-slate-900 leading-tight">
                     {gym.title}
                   </Text>
-                  {Boolean(gym.ownerName) && (
+                  {Boolean(gym.ownerName) ? (
                     <View className="mt-1 flex-row items-center gap-1">
                       <Ionicons name="person-outline" size={12} color="#64748B" />
                       <Text className="text-xs font-medium text-slate-500">
                         Owner: <Text className="font-semibold text-slate-700">{gym.ownerName}</Text>
                       </Text>
                     </View>
-                  )}
+                  ) : isDetailFetching ? (
+                    <View className="mt-1.5">
+                      <GymDetailSkeletonBox style={{ height: 12, width: 95, borderRadius: 4 }} />
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
-              {/* Address */}
-              {Boolean(gym.address) && (
-                <View className="mt-2.5 flex-row items-center gap-1.5">
-                  <Ionicons name="location-outline" size={14} color="#64748B" />
-                  <Text className="flex-1 font-medium text-xs text-slate-500 leading-4">
-                    {gym.address}
-                  </Text>
-                </View>
-              )}
-
-              {/* Star Rating Badge (Only if ratings exist) */}
-              {Number(gym.rating) > 0 ? (
-                <TouchableOpacity
-                  onPress={() =>
-                    router.push({
-                      pathname: '/gym/reviews' as any,
-                      params: { id: gym.id },
-                    })
-                  }
-                  activeOpacity={0.7}
-                  className="mt-2.5 flex-row items-center space-x-1.5">
-                  <Ionicons name="star" size={15} color="#F59E0B" />
-                  <Text className="ml-1 font-bold text-xs text-slate-800">
-                    {gym.rating}/5
-                    {gym.totalReviews > 0 && (
-                      <Text className="font-normal text-slate-400">
-                        {'  '}({gym.totalReviews} Reviews)
-                      </Text>
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
 
             {/* Red Circular Chat Button */}
@@ -1179,15 +1410,52 @@ export default function GymDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Description Paragraph (Only if real description provided) */}
-          {Boolean(gym.description) && (
+          {/* Highlighted Address Card with Get Direction Button */}
+          {Boolean(gym.address) && (
+            <View className="mt-3.5 flex-row items-center justify-between rounded-2xl border border-slate-200/90 bg-slate-50 p-3 shadow-xs">
+              <TouchableOpacity
+                onPress={() => handleGetDirections()}
+                activeOpacity={0.7}
+                className="mr-2.5 flex-1 flex-row items-center gap-2.5">
+                <View className="h-9 w-9 items-center justify-center rounded-xl bg-red-500/10">
+                  <Ionicons name="location" size={18} color="#E23744" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Location
+                  </Text>
+                  <Text numberOfLines={2} className="font-semibold text-xs text-slate-800 leading-4">
+                    {gym.address}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Get Direction Button */}
+              <TouchableOpacity
+                onPress={() => handleGetDirections()}
+                activeOpacity={0.8}
+                className="flex-row items-center gap-1.5 rounded-xl bg-[#E23744] px-3 py-2 shadow-xs">
+                <Ionicons name="navigate" size={13} color="#FFFFFF" />
+                <Text className="font-bold text-xs text-white">Get Direction</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Description Paragraph (Only if real description provided, skeleton while loading) */}
+          {Boolean(gym.description) ? (
             <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
               {gym.description}
             </Text>
-          )}
+          ) : isDetailFetching ? (
+            <View className="mt-4">
+              <GymDetailSkeletonBox style={{ height: 12, width: '100%', borderRadius: 4, marginBottom: 8 }} />
+              <GymDetailSkeletonBox style={{ height: 12, width: '92%', borderRadius: 4, marginBottom: 8 }} />
+              <GymDetailSkeletonBox style={{ height: 12, width: '70%', borderRadius: 4 }} />
+            </View>
+          ) : null}
 
-          {/* 3. Where you'll exercise (Only if zones exist) */}
-          {gym.exerciseZones.length > 0 && (
+          {/* 3. Where you'll exercise (Only if zones exist, skeleton while loading) */}
+          {gym.exerciseZones.length > 0 ? (
             <View className="mt-6">
               <Text className="font-bold text-base text-slate-900">Where you'll exercise</Text>
 
@@ -1214,10 +1482,27 @@ export default function GymDetailScreen() {
                 ))}
               </ScrollView>
             </View>
-          )}
+          ) : isDetailFetching ? (
+            <View className="mt-6">
+              <GymDetailSkeletonBox style={{ height: 18, width: 160, borderRadius: 4, marginBottom: 12 }} />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mt-1 -mx-5 px-5">
+                {[1, 2, 3].map((_, idx) => (
+                  <View key={idx} className="mr-3 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+                    <GymDetailSkeletonBox style={{ height: 112, width: '100%', borderRadius: 0 }} />
+                    <View className="p-2.5">
+                      <GymDetailSkeletonBox style={{ height: 14, width: '70%', borderRadius: 4 }} />
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
 
-          {/* 4. Key Features / Amenities (Only if amenities exist) */}
-          {gym.amenities.length > 0 && (
+          {/* 4. Key Features / Amenities (Only if amenities exist, skeleton while loading) */}
+          {gym.amenities.length > 0 ? (
             <View className="mt-6">
               <Text className="font-bold text-base text-slate-900">Key Features</Text>
 
@@ -1232,10 +1517,24 @@ export default function GymDetailScreen() {
                 ))}
               </View>
             </View>
-          )}
+          ) : isDetailFetching ? (
+            <View className="mt-6">
+              <GymDetailSkeletonBox style={{ height: 18, width: 120, borderRadius: 4, marginBottom: 12 }} />
+              <View className="flex-row flex-wrap gap-2.5">
+                {[1, 2, 3, 4, 5, 6].map((_, idx) => (
+                  <View
+                    key={idx}
+                    className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
+                    <GymDetailSkeletonBox style={{ height: 20, width: 20, borderRadius: 10 }} />
+                    <GymDetailSkeletonBox style={{ height: 14, width: '60%', borderRadius: 4 }} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
-          {/* 5. Open Hours (Only if timings provided) */}
-          {Boolean(gym.openHours) && (
+          {/* 5. Open Hours (Only if timings provided, skeleton while loading) */}
+          {Boolean(gym.openHours) ? (
             <View className="mt-6">
               <Text className="font-bold text-base text-slate-900">Open Hours</Text>
 
@@ -1261,180 +1560,162 @@ export default function GymDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : isDetailFetching ? (
+            <View className="mt-6">
+              <GymDetailSkeletonBox style={{ height: 18, width: 100, borderRadius: 4, marginBottom: 12 }} />
+              <View className="flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3.5">
+                <GymDetailSkeletonBox style={{ height: 20, width: 20, borderRadius: 10 }} />
+                <GymDetailSkeletonBox style={{ height: 14, width: 140, borderRadius: 4 }} />
+              </View>
+            </View>
+          ) : null}
 
           {/* 6. Where you'll be (Location & Map) */}
-          <View className="mt-6">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 mr-3">
-                <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
-                {Boolean(gym.address) && (
-                  <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
-                    {gym.address}
-                  </Text>
-                )}
+          {Boolean(gym.coordinate?.latitude && gym.coordinate?.longitude && gym.coordinate.latitude !== 0) ? (
+            <View className="mt-6">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 mr-3">
+                  <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
+                  {Boolean(gym.address) && (
+                    <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
+                      {gym.address}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Right Side Directions Button */}
+                <TouchableOpacity
+                  onPress={() => handleGetDirections()}
+                  activeOpacity={0.85}
+                  className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3.5 py-2 shadow-xs">
+                  <Ionicons name="navigate" size={14} color="#E23744" />
+                  <Text className="font-bold text-xs text-[#E23744]">Directions</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Right Side Directions Button */}
-              <TouchableOpacity
-                onPress={() => handleGetDirections()}
-                activeOpacity={0.85}
-                className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3.5 py-2 shadow-xs">
-                <Ionicons name="navigate" size={14} color="#E23744" />
-                <Text className="font-bold text-xs text-[#E23744]">Directions</Text>
-              </TouchableOpacity>
+              {/* Live Interactive Dedicated Gym Map */}
+              <View className="mt-3 overflow-hidden rounded-[10px] border border-slate-200 shadow-sm" style={{ height: 260 }}>
+                <GymDetailMapView
+                  title={gym.title}
+                  address={gym.address}
+                  coordinate={gym.coordinate}
+                  userLocation={userLocation}
+                  height={260}
+                  onGetDirections={() => handleGetDirections()}
+                  onOpenAllGymsMap={() => router.push('/gym/Mapviewscreen' as any)}
+                />
+              </View>
             </View>
-
-            {/* Live Interactive Dedicated Gym Map */}
-            <View className="mt-3 overflow-hidden rounded-[10px] border border-slate-200 shadow-sm" style={{ height: 260 }}>
-              <GymDetailMapView
-                title={gym.title}
-                address={gym.address}
-                coordinate={gym.coordinate}
-                userLocation={userLocation}
-                height={260}
-                onGetDirections={() => handleGetDirections()}
-                onOpenAllGymsMap={() => router.push('/gym/Mapviewscreen' as any)}
-              />
-            </View>
-          </View>
-
-          {/* 7. Reviews and Ratings (Only if ratings or reviews exist) */}
-          {gym.totalReviews > 0 || gym.reviews.length > 0 ? (
+          ) : isDetailFetching ? (
             <View className="mt-6">
-              <Text className="font-bold text-base text-slate-900">Reviews and Ratings</Text>
+              <GymDetailSkeletonBox style={{ height: 18, width: 130, borderRadius: 4, marginBottom: 12 }} />
+              <GymDetailSkeletonBox style={{ height: 260, width: '100%', borderRadius: 10 }} />
+            </View>
+          ) : null}
 
-              {/* Ratings Breakdown Card */}
-              {gym.ratingBreakdown.length > 0 && (
-                <View className="mt-3 flex-row items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  {/* Left: Star percentage bars */}
-                  <View className="flex-1 pr-6 space-y-1.5">
-                    {gym.ratingBreakdown.map((r: RatingBreakdownItem) => (
-                      <View key={r.star} className="flex-row items-center">
-                        <Text className="w-3 font-semibold text-[11px] text-slate-500">{r.star}</Text>
-                        <Ionicons name="star" size={10} color="#F59E0B" className="mx-1" />
-                        <View className="h-1.5 flex-1 rounded-full bg-slate-200 ml-1">
-                          <View
-                            style={{ width: r.pct as any }}
-                            className="h-full rounded-full bg-[#E23744]"
-                          />
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Right: Big rating and total reviews */}
-                  <View className="items-center border-l border-slate-200 pl-6">
-                    <Text className="font-extrabold text-3xl text-slate-900">{gym.rating}</Text>
-                    <View className="my-1 flex-row">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Ionicons
-                          key={s}
-                          name="star"
-                          size={12}
-                          color={s <= Math.round(Number(gym.rating)) ? '#F59E0B' : '#CBD5E1'}
-                        />
-                      ))}
-                    </View>
-                    <Text className="font-medium text-[11px] text-slate-500">
-                      {gym.totalReviews} Reviews
-                    </Text>
-                  </View>
-                </View>
-              )}
+          {/* 7. Member Reviews (Only if real reviews exist) */}
+          {gym.reviews.length > 0 && (
+            <View className="mt-6">
+              <Text className="font-bold text-base text-slate-900">Member Reviews</Text>
 
               {/* Centered Coverflow Reviews Carousel */}
-              {gym.reviews.length > 0 && (
-                <View className="mt-4 -mx-5">
-                  <Animated.ScrollView
-                    ref={reviewScrollRef as any}
-                    horizontal
-                    nestedScrollEnabled={true}
-                    pagingEnabled={false}
-                    decelerationRate="fast"
-                    snapToInterval={reviewCardStep}
-                    snapToAlignment="center"
-                    showsHorizontalScrollIndicator={false}
-                    onScroll={Animated.event(
-                      [{ nativeEvent: { contentOffset: { y: reviewScrollX } } }],
-                      { useNativeDriver: true }
-                    )}
-                    onMomentumScrollEnd={(e) => {
-                      let idx = Math.round(e.nativeEvent.contentOffset.x / reviewCardStep);
-                      reviewIndexRef.current = idx;
-                      setActiveReviewIndex(idx % gym.reviews.length);
-                    }}
-                    scrollEventThrottle={16}
-                    contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 12 }}>
-                    {reviewSlides.map((rev, idx) => {
-                      const inputRange = [
-                        (idx - 1) * reviewCardStep,
-                        idx * reviewCardStep,
-                        (idx + 1) * reviewCardStep,
-                      ];
+              <View className="mt-4 -mx-5">
+                <Animated.ScrollView
+                  ref={reviewScrollRef as any}
+                  horizontal
+                  nestedScrollEnabled={true}
+                  pagingEnabled={false}
+                  decelerationRate="fast"
+                  snapToInterval={reviewCardStep}
+                  snapToAlignment="center"
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: reviewScrollX } } }],
+                    { useNativeDriver: true }
+                  )}
+                  onScrollBeginDrag={() => {
+                    isReviewInteracting.current = true;
+                    if (reviewInteractionTimeout.current) clearTimeout(reviewInteractionTimeout.current);
+                  }}
+                  onScrollEndDrag={() => {
+                    if (reviewInteractionTimeout.current) clearTimeout(reviewInteractionTimeout.current);
+                    reviewInteractionTimeout.current = setTimeout(() => {
+                      isReviewInteracting.current = false;
+                    }, 3000);
+                  }}
+                  onMomentumScrollEnd={(e) => {
+                    let idx = Math.round(e.nativeEvent.contentOffset.x / reviewCardStep);
+                    reviewIndexRef.current = idx;
+                    setActiveReviewIndex(idx % gym.reviews.length);
+                    if (reviewInteractionTimeout.current) clearTimeout(reviewInteractionTimeout.current);
+                    reviewInteractionTimeout.current = setTimeout(() => {
+                      isReviewInteracting.current = false;
+                    }, 3000);
+                  }}
+                  scrollEventThrottle={16}
+                  contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 12 }}>
+                  {reviewSlides.map((rev, idx) => {
+                    const inputRange = [
+                      (idx - 1) * reviewCardStep,
+                      idx * reviewCardStep,
+                      (idx + 1) * reviewCardStep,
+                    ];
 
-                      const scale = reviewScrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.91, 1, 0.91],
-                        extrapolate: 'clamp',
-                      });
+                    const scale = reviewScrollX.interpolate({
+                      inputRange,
+                      outputRange: [0.91, 1, 0.91],
+                      extrapolate: 'clamp',
+                    });
 
-                      const opacity = reviewScrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.62, 1, 0.62],
-                        extrapolate: 'clamp',
-                      });
+                    const opacity = reviewScrollX.interpolate({
+                      inputRange,
+                      outputRange: [0.62, 1, 0.62],
+                      extrapolate: 'clamp',
+                    });
 
-                      return (
-                        <Animated.View
-                          key={idx}
-                          style={{
-                            width: reviewCardWidth,
-                            minHeight: 145,
-                            marginRight: reviewCardGap,
-                            padding: 18,
-                            transform: [{ scale }],
-                            opacity,
-                          }}
-                          className="rounded-3xl border border-slate-100 bg-white shadow-sm">
-                          {/* Header: Avatar, Name, Rating & Time */}
-                          <View className="flex-row items-center gap-3">
+                    return (
+                      <Animated.View
+                        key={idx}
+                        style={{
+                          width: reviewCardWidth,
+                          minHeight: 120,
+                          marginRight: reviewCardGap,
+                          padding: 18,
+                          transform: [{ scale }],
+                          opacity,
+                        }}
+                        className="rounded-3xl border border-slate-100 bg-white shadow-sm">
+                        {/* Header: Avatar, Name & Time */}
+                        <View className="flex-row items-center gap-3">
+                          {Boolean(rev.avatar) ? (
                             <Image
                               source={{ uri: rev.avatar }}
-                              className="h-12 w-12 rounded-full border border-slate-200 bg-slate-200"
+                              className="h-10 w-10 rounded-full border border-slate-200 bg-slate-200"
                             />
-                            <View className="flex-1">
-                              <Text className="font-bold text-sm text-slate-900" numberOfLines={1}>
-                                {rev.name}
-                              </Text>
-                              <View className="mt-1 flex-row items-center">
-                                <View className="flex-row items-center">
-                                  {[1, 2, 3, 4, 5].map((star) => (
-                                    <Ionicons
-                                      key={star}
-                                      name="star"
-                                      size={12}
-                                      color={star <= rev.rating ? '#F59E0B' : '#CBD5E1'}
-                                    />
-                                  ))}
-                                </View>
-                                <Text className="ml-2 text-xs text-slate-400">
-                                  {rev.time}
-                                </Text>
-                              </View>
+                          ) : (
+                            <View className="h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
+                              <Ionicons name="person" size={18} color="#94A3B8" />
                             </View>
+                          )}
+                          <View className="flex-1">
+                            <Text className="font-bold text-sm text-slate-900" numberOfLines={1}>
+                              {rev.name}
+                            </Text>
+                            <Text className="mt-0.5 text-xs text-slate-400">
+                              {rev.time}
+                            </Text>
                           </View>
+                        </View>
 
-                          {/* Review Comment */}
-                          <Text className="mt-3 text-xs leading-5 text-slate-600">
-                            {rev.comment}
-                          </Text>
-                        </Animated.View>
-                      );
-                    })}
-                  </Animated.ScrollView>
-                </View>
-              )}
+                        {/* Review Comment */}
+                        <Text className="mt-3 text-xs leading-5 text-slate-600">
+                          {rev.comment}
+                        </Text>
+                      </Animated.View>
+                    );
+                  })}
+                </Animated.ScrollView>
+              </View>
 
               {/* Show All Reviews Button */}
               <TouchableOpacity
@@ -1447,50 +1728,13 @@ export default function GymDetailScreen() {
                 activeOpacity={0.8}
                 className="mt-3 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-3.5">
                 <Text className="font-bold text-xs text-slate-700">
-                  Show {gym.totalReviews} Reviews
+                  Show All Reviews
                 </Text>
               </TouchableOpacity>
             </View>
-          ) : null}
+          )}
 
-          {/* 8. Club Details & Contact Info */}
-          <View className="mt-6">
-            <Text className="font-bold text-base text-slate-900">Club Details</Text>
-
-            <View className="mt-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 p-4">
-              <View className="flex-row items-center justify-between pb-3 border-b border-slate-200/60">
-                <Text className="text-xs font-medium text-slate-500">Club ID</Text>
-                <Text className="text-xs font-bold text-slate-800">{gym.clubId || gym.id}</Text>
-              </View>
-              {Boolean(gym.ownerName) && (
-                <View className="flex-row items-center justify-between py-3 border-b border-slate-200/60">
-                  <Text className="text-xs font-medium text-slate-500">Owner / Manager</Text>
-                  <Text className="text-xs font-bold text-slate-800">{gym.ownerName}</Text>
-                </View>
-              )}
-              {Boolean(gym.clubCategory) && (
-                <View className="flex-row items-center justify-between py-3 border-b border-slate-200/60">
-                  <Text className="text-xs font-medium text-slate-500">Category</Text>
-                  <Text className="text-xs font-bold text-amber-700">{gym.clubCategory}</Text>
-                </View>
-              )}
-              <View className="flex-row items-center justify-between pt-3">
-                <Text className="text-xs font-medium text-slate-500">Direct Contact</Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    router.push({
-                      pathname: '/membership/buy-membership' as any,
-                      params: { gymName: gym.title, gymId: gym.id },
-                    })
-                  }
-                  activeOpacity={0.8}
-                  className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3 py-1.5">
-                  <Ionicons name="lock-closed" size={13} color="#E23744" />
-                  <Text className="text-xs font-bold text-[#E23744]">Unlock to View Contact</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          
         </View>
       </Animated.ScrollView>
 

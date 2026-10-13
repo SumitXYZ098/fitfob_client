@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Image as ExpoImage } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
 import { useToggleFavorite } from '@/hook/useClient';
 
@@ -582,7 +583,6 @@ export default function GymCard({
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
-  const currentIndexRef = useRef(0);
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 32;
 
@@ -620,48 +620,12 @@ export default function GymCard({
     return getHolidayInfo(gym.holidays);
   }, [gym.holidays]);
 
-  // Infinite forward loop: append first image at the end
-  const slides =
-    gym.images && gym.images.length > 1 ? [...gym.images, gym.images[0]] : gym.images || [];
-
-  useEffect(() => {
-    if (!cardWidth || !gym.images || gym.images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      const nextIndex = currentIndexRef.current + 1;
-
-      scrollRef.current?.scrollTo({
-        x: nextIndex * cardWidth,
-        animated: true,
-      });
-
-      if (nextIndex >= gym.images.length) {
-        // Forward scroll to clone completes, reset dot to 0 and silently return to origin
-        setActiveIndex(0);
-        currentIndexRef.current = 0;
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({
-            x: 0,
-            animated: false,
-          });
-        }, 450);
-      } else {
-        currentIndexRef.current = nextIndex;
-        setActiveIndex(nextIndex);
-      }
-    }, 3200);
-
-    return () => clearInterval(interval);
-  }, [cardWidth, gym.images?.length]);
+  const slides = gym.images || [];
 
   const handleMomentScrollEnd = (e: any) => {
+    if (!cardWidth) return;
     const scrollX = e.nativeEvent.contentOffset.x;
-    let newIndex = Math.round(scrollX / cardWidth);
-    if (gym.images && newIndex >= gym.images.length) {
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-      newIndex = 0;
-    }
-    currentIndexRef.current = newIndex;
+    const newIndex = Math.round(scrollX / cardWidth);
     setActiveIndex(newIndex);
   };
 
@@ -669,7 +633,20 @@ export default function GymCard({
     try {
       router.push({
         pathname: '/gym/gym-detail' as any,
-        params: { id: gym.id },
+        params: {
+          id: gym.id,
+          initialImages: gym.images && gym.images.length > 0 ? JSON.stringify(gym.images) : undefined,
+          initialTitle: gym.title || '',
+          initialAddress: gym.address || '',
+          initialCategory: gym.category || '',
+          initialRating: gym.rating || '',
+          initialCity: gym.city || '',
+          initialDescription: gym.description || '',
+          initialAmenities: gym.amenities ? JSON.stringify(gym.amenities) : undefined,
+          initialLat: gym.coordinate?.latitude,
+          initialLng: gym.coordinate?.longitude,
+          initialIsFav: String(localFav),
+        },
       });
     } catch (e) {
       console.log('Navigation push error:', e);
@@ -684,6 +661,7 @@ export default function GymCard({
           ref={scrollRef}
           horizontal
           pagingEnabled
+          decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handleMomentScrollEnd}
           scrollEventThrottle={16}>
@@ -692,10 +670,11 @@ export default function GymCard({
               key={idx}
               activeOpacity={0.95}
               onPress={handleOpenDetail}>
-              <Image
+              <ExpoImage
                 source={{ uri: imgUrl }}
                 style={{ width: cardWidth, height: 240 }}
-                resizeMode="cover"
+                contentFit="cover"
+                transition={500}
               />
             </TouchableOpacity>
           ))}
@@ -731,10 +710,10 @@ export default function GymCard({
           {holidayInfo ? (
             <View
               className={`flex-row items-center rounded-full px-2.5 py-1 shadow-sm ${holidayInfo.isToday && !holidayInfo.isPartial
-                  ? 'bg-red-600'
-                  : holidayInfo.isToday && holidayInfo.isPartial
-                    ? 'bg-amber-600'
-                    : 'bg-orange-600'
+                ? 'bg-red-600'
+                : holidayInfo.isToday && holidayInfo.isPartial
+                  ? 'bg-amber-600'
+                  : 'bg-orange-600'
                 }`}>
               <Ionicons
                 name={holidayInfo.isToday ? 'alert-circle' : 'calendar'}
@@ -781,10 +760,10 @@ export default function GymCard({
           <Text className="mr-2 flex-1 font-bold text-lg text-darkText" numberOfLines={1}>
             {gym.title}
           </Text>
-          <View className="flex-row items-center space-x-1">
+          {/* <View className="flex-row items-center space-x-1">
             <Ionicons name="star" size={14} color="#F59E0B" />
             <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
-          </View>
+          </View> */}
         </View>
 
         {/* Location & Distance */}
@@ -792,7 +771,7 @@ export default function GymCard({
           <View className="mt-1 flex-row items-center">
             <Ionicons name="location-outline" size={13} color="#9CA3AF" />
             <Text className="ml-1 flex-1 font-regular text-xs text-secondaryText" numberOfLines={1}>
-             {gym.distance ? `${gym.distance} away` : ''}
+              {gym.distance ? `${gym.distance} away` : ''}
             </Text>
           </View>
         )}
@@ -801,8 +780,8 @@ export default function GymCard({
         {holidayInfo && (
           <View
             className={`mt-2 flex-row items-center rounded-xl px-2.5 py-1.5 ${holidayInfo.isToday && !holidayInfo.isPartial
-                ? 'border border-red-200 bg-red-50'
-                : 'border border-amber-200 bg-amber-50'
+              ? 'border border-red-200 bg-red-50'
+              : 'border border-amber-200 bg-amber-50'
               }`}>
             <Ionicons
               name={holidayInfo.isToday ? 'information-circle' : 'calendar-outline'}
@@ -853,7 +832,7 @@ export default function GymCard({
         )}
 
         {/* Pricing */}
-        <Text className="mt-2.5 font-bold text-base text-darkText">{gym.price}</Text>
+        {/* <Text className="mt-2.5 font-bold text-base text-darkText">{gym.price}</Text> */}
       </TouchableOpacity>
     </View>
   );

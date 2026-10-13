@@ -309,7 +309,16 @@ export default function OutdoorPassScreen() {
             onPress={() =>
               router.push({
                 pathname: '/gym/gym-detail' as any,
-                params: { id: '1' },
+                params: {
+                  id: '1',
+                  initialImages: JSON.stringify([
+                    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+                  ]),
+                  initialTitle: 'Anytime Fitness Outdoor Turf',
+                  initialAddress: 'Sector 71, Mohali',
+                  initialCategory: 'Outdoor Turf',
+                  initialRating: '4.5',
+                },
               })
             }
             activeOpacity={0.85}
@@ -340,7 +349,16 @@ export default function OutdoorPassScreen() {
             onPress={() =>
               router.push({
                 pathname: '/gym/gym-detail' as any,
-                params: { id: '2' },
+                params: {
+                  id: '2',
+                  initialImages: JSON.stringify([
+                    'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
+                  ]),
+                  initialTitle: 'FitZone Calisthenics Arena',
+                  initialAddress: 'Phase 8, Industrial Area, Mohali',
+                  initialCategory: 'Calisthenics',
+                  initialRating: '4.8',
+                },
               })
             }
             activeOpacity={0.85}
