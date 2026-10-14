@@ -316,7 +316,10 @@ export default function ViewAllScreen() {
   const [onlyOpen, setOnlyOpen] = useState(false);
 
   const [city, setCity] = useState<string>('');
-  const [coords, setCoords] = useState<{ latitude?: number; longitude?: number }>({});
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: 30.832111611338167,
+    longitude: 76.6873704048281,
+  });
   const [refreshing, setRefreshing] = useState(false);
 
   // Auto-detect user GPS location to search gyms nearby
@@ -350,16 +353,16 @@ export default function ViewAllScreen() {
   }, []);
 
   // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
+  // Uses latitude & longitude (same as HomeScreen) so backend returns all clubs in region.
+  // Search and Category filtering are performed client-side in filteredGyms for instant results.
   const {
     data: nearbyData,
     isLoading,
     isPending,
     refetch,
   } = useNearbyGyms({
-    city: city || undefined,
     latitude: coords.latitude,
     longitude: coords.longitude,
-    query: searchQuery.trim() || undefined,
   });
 
   const onRefresh = useCallback(async () => {
@@ -441,12 +444,27 @@ export default function ViewAllScreen() {
       <View className="flex-row items-center px-4 pb-2 pt-2">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
+          className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-white"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.08,
+            shadowRadius: 2,
+            elevation: 2,
+          }}
           activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={22} color="#1F2937" />
         </TouchableOpacity>
 
-        <View className="flex-1 flex-row items-center rounded-full border border-[#E5E7EB] bg-white pl-4 pr-1.5 py-1 shadow-sm">
+        <View
+          className="flex-1 flex-row items-center rounded-full border border-[#E5E7EB] bg-white pl-4 pr-1.5 py-1"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 2,
+            elevation: 1,
+          }}>
           <TextInput
             placeholder="Search gyms, yoga...."
             placeholderTextColor="#9CA3AF"
@@ -488,8 +506,16 @@ export default function ViewAllScreen() {
         <Text className="font-bold text-xl text-darkText">Nearby gyms</Text>
         <TouchableOpacity
           onPress={() => setIsFilterModalVisible(true)}
-          className={`flex-row items-center rounded-full border px-4 py-1.5 shadow-sm ${sortBy !== 'all' || onlyOpen ? 'border-[#E23744] bg-[#FFEAEF]' : 'border-[#E5E7EB] bg-white'
-            }`}>
+          className="flex-row items-center rounded-full border px-4 py-1.5"
+          style={{
+            borderColor: sortBy !== 'all' || onlyOpen ? '#E23744' : '#E5E7EB',
+            backgroundColor: sortBy !== 'all' || onlyOpen ? '#FFEAEF' : '#FFFFFF',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 2,
+            elevation: 1,
+          }}>
           <Ionicons name="options-outline" size={16} color="#E23744" />
           <Text className="ml-1.5 font-semibold text-sm text-darkText">Filter</Text>
         </TouchableOpacity>
@@ -511,13 +537,21 @@ export default function ViewAllScreen() {
           paddingBottom: 110,
         }}>
         {(isLoading || (isPending && !nearbyData)) ? (
-          <View>
+          <View style={{ width: '100%' }}>
             <GymCardSkeleton />
             <GymCardSkeleton />
             <GymCardSkeleton />
           </View>
         ) : filteredGyms.length === 0 ? (
-          <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <View
+            className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6"
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.06,
+              shadowRadius: 3,
+              elevation: 2,
+            }}>
             <Image
               source={require('@/assets/images/empty-gyms.png')}
               style={{ width: 180, height: 180, borderRadius: 24 }}
@@ -537,7 +571,14 @@ export default function ViewAllScreen() {
                 setOnlyOpen(false);
               }}
               activeOpacity={0.85}
-              className="mt-5 rounded-full bg-[#E23744] px-6 py-2.5 shadow-sm">
+              className="mt-5 rounded-full bg-[#E23744] px-6 py-2.5"
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 2,
+                elevation: 1,
+              }}>
               <Text className="font-semibold text-xs text-white">Reset Filters</Text>
             </TouchableOpacity>
           </View>
@@ -567,7 +608,7 @@ export default function ViewAllScreen() {
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => router.push('/gym/Mapviewscreen' as any)}
-        className="absolute bottom-6 self-center z-30 flex-row items-center rounded-full bg-[#E23744] px-6 py-3 shadow-lg"
+        className="absolute bottom-6 self-center z-30 flex-row items-center rounded-full bg-[#E23744] px-6 py-3"
         style={{
           shadowColor: '#E23744',
           shadowOffset: { width: 0, height: 4 },
@@ -597,7 +638,7 @@ export default function ViewAllScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setIsFilterModalVisible(false)}>
-        <View className="flex-1 justify-end bg-black/50">
+        <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
           <View className="rounded-t-3xl bg-white p-5">
             <View className="mb-4 flex-row items-center justify-between">
               <Text className="font-bold text-xl text-darkText">Filter & Sort</Text>

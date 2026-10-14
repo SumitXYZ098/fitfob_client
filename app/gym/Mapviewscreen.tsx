@@ -19,479 +19,16 @@ import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import AllGymsMapView, { AllGymsMapViewHandle, MapGymItem } from '@/components/modules/AllGymsMapView';
-import { useNearbyGyms, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
-
-export interface GymItem {
-  id: string;
-  documentId?: string;
-  title: string;
-  rating: string;
-  amenities: string[];
-  price: string;
-  isOpen: boolean;
-  isVerified: boolean;
-  category: string;
-  images: string[];
-  coordinate: { latitude: number; longitude: number };
-}
-
+import { useNearbyGyms, useGetFavorites, extractFavoriteIds } from '@/hook/useClient';
 import CategoryPillItem, { CATEGORIES, CategoryOption } from '@/components/CategoryPillItem';
+import GymCard, {
+  GymCardSkeleton,
+  GymItem,
+  gymMatchesCategory,
+  mapClubOwnerToGym,
+} from '@/components/GymCard';
 
-const GYMS_LIST: GymItem[] = [
-  {
-    id: '1',
-    title: 'Anytime Fitness Gym',
-    rating: '4.5/5',
-    amenities: ['AC', 'Wi-Fi', 'Trainers', 'SPA', 'Shower', 'Parking'],
-    price: '₹1200/Monthly',
-    isOpen: true,
-    isVerified: true,
-    category: 'Gyms',
-    coordinate: { latitude: 30.7046, longitude: 76.7179 },
-    images: [
-      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '2',
-    title: 'Gold’s Fitness Club',
-    rating: '4.8/5',
-    amenities: ['AC', 'Wi-Fi', 'Personal Trainer', 'Sauna', 'Locker'],
-    price: '₹1500/Monthly',
-    isOpen: true,
-    isVerified: true,
-    category: 'Gyms',
-    coordinate: { latitude: 30.7188, longitude: 76.7145 },
-    images: [
-      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '3',
-    title: 'Cult.Fit Elite Center',
-    rating: '4.7/5',
-    amenities: ['Boxing', 'CrossFit', 'Steam', 'Nutritionist', 'Shower'],
-    price: '₹1800/Monthly',
-    isOpen: true,
-    isVerified: true,
-    category: 'Boxing',
-    coordinate: { latitude: 30.7265, longitude: 76.7095 },
-    images: [
-      'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '4',
-    title: 'Prana Yoga & Wellness Studio',
-    rating: '4.9/5',
-    amenities: ['Meditation', 'Mat Provided', 'AC', 'Herbal Tea', 'Locker'],
-    price: '₹1100/Monthly',
-    isOpen: true,
-    isVerified: true,
-    category: 'Yoga',
-    coordinate: { latitude: 30.7150, longitude: 76.7230 },
-    images: [
-      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '5',
-    title: 'Powerhouse Gym & Spa',
-    rating: '4.6/5',
-    amenities: ['AC', 'Wi-Fi', 'Swimming Pool', 'Sauna', 'Parking'],
-    price: '₹1600/Monthly',
-    isOpen: false,
-    isVerified: true,
-    category: 'Gyms',
-    coordinate: { latitude: 30.6970, longitude: 76.7260 },
-    images: [
-      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-  {
-    id: '6',
-    title: 'Ozone Fitness Club',
-    rating: '4.6/5',
-    amenities: ['AC', 'Wi-Fi', 'Spinning', 'Shower', 'Parking'],
-    price: '₹1400/Monthly',
-    isOpen: true,
-    isVerified: true,
-    category: 'Gyms',
-    coordinate: { latitude: 30.6720, longitude: 76.7350 },
-    images: [
-      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-    ],
-  },
-];
-
-const mapClubOwnerToGym = (item: any): GymItem => {
-  const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
-
-  const title =
-    data.clubName ||
-    data.businessName ||
-    data.gymName ||
-    data.name ||
-    data.title ||
-    data.club_name ||
-    'Fitness Club';
-
-  const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
-  const rating =
-    typeof ratingVal === 'string' && ratingVal.includes('/') ? ratingVal : `${ratingVal}/5`;
-
-  let amenities: string[] = [];
-  if (Array.isArray(data.amenities)) {
-    amenities = data.amenities
-      .map((a: any) => (typeof a === 'string' ? a : a?.name || a?.title || String(a)))
-      .filter(Boolean);
-  } else if (typeof data.amenities === 'string') {
-    amenities = data.amenities.split(',').map((s: string) => s.trim()).filter(Boolean);
-  } else if (Array.isArray(data.facilities)) {
-    amenities = data.facilities
-      .map((f: any) => (typeof f === 'string' ? f : f?.name || f?.title || String(f)))
-      .filter(Boolean);
-  }
-  if (!amenities.length) {
-    amenities = ['AC', 'Wi-Fi', 'Trainers', 'Shower', 'Parking'];
-  }
-
-  let price = '₹1200/Monthly';
-  if (data.price) {
-    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
-  } else if (data.monthlyPrice) {
-    price = `₹${data.monthlyPrice}/Monthly`;
-  } else if (data.startingPrice) {
-    price = `₹${data.startingPrice}/Monthly`;
-  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
-    price = `₹${data.membershipPlans[0].price}/Monthly`;
-  }
-
-  const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
-  const isVerified =
-    data.isVerified !== undefined
-      ? Boolean(data.isVerified)
-      : data.verification_status === 'approved' || true;
-
-  const fallbackImages = [
-    'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=1000&auto=format&fit=crop',
-  ];
-
-  let images: string[] = [];
-  const rawImages =
-    data.club_photos ||
-    data.clubPhotos ||
-    data.photos ||
-    data.images ||
-    data.gallery ||
-    [];
-
-  if (Array.isArray(rawImages) && rawImages.length > 0) {
-    images = rawImages
-      .map((img: any) => {
-        const url =
-          img?.url ||
-          img?.formats?.large?.url ||
-          img?.formats?.medium?.url ||
-          img?.formats?.small?.url ||
-          (typeof img === 'string' ? img : null);
-        if (!url) return null;
-        return url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
-      })
-      .filter(Boolean) as string[];
-  } else if (data.coverImage?.url || data.logo?.url) {
-    const single = data.coverImage?.url || data.logo?.url;
-    images = [single.startsWith('http') ? single : `${process.env.EXPO_PUBLIC_API_URL}${single}`];
-  }
-
-  if (!images.length) {
-    images = fallbackImages;
-  }
-
-  return {
-    id: String(data.documentId || data._id || data.id || Math.random().toString()),
-    documentId: data.documentId ? String(data.documentId) : (typeof data.id === 'string' ? data.id : undefined),
-    title,
-    rating,
-    amenities,
-    price,
-    isOpen,
-    isVerified,
-    category: data.category || (Array.isArray(data.services) && data.services[0]) || 'Gyms',
-    images,
-    coordinate: {
-      latitude: Number(data.latitude || data.lat || 30.7046),
-      longitude: Number(data.longitude || data.lng || 76.7179),
-    },
-  };
-};
-
-function MapSkeletonBox({ style }: { style?: object }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [anim]);
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
-  return (
-    <Animated.View
-      style={[{ backgroundColor: '#E2E8F0', borderRadius: 8, opacity }, style]}
-    />
-  );
-}
-
-function MapCardSkeleton() {
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-
-  return (
-    <View className="mb-4 overflow-hidden rounded-3xl bg-[#F8FAFC] border-[1.5px] border-[#E2E8F0] shadow-sm">
-      <MapSkeletonBox style={{ width: cardWidth, height: 208, borderRadius: 0 }} />
-      <View className="p-4">
-        <View className="flex-row items-center justify-between">
-          <MapSkeletonBox style={{ height: 18, width: '60%' }} />
-          <MapSkeletonBox style={{ height: 14, width: 40, borderRadius: 6 }} />
-        </View>
-        <MapSkeletonBox style={{ height: 12, width: '50%', marginTop: 10 }} />
-        <View className="mt-3 flex-row items-center justify-between">
-          <MapSkeletonBox style={{ height: 16, width: '35%' }} />
-          <MapSkeletonBox style={{ height: 26, width: 70, borderRadius: 13 }} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function GymCardItem({
-  gym,
-  isFav,
-  isSelected,
-  onToggleFavorite,
-  onFocusOnMap,
-}: {
-  gym: GymItem;
-  isFav: boolean;
-  isSelected: boolean;
-  onToggleFavorite: () => void;
-  onFocusOnMap: () => void;
-}) {
-  const router = useRouter();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  const currentIndexRef = useRef(0);
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32;
-
-  const { toggleFavorite, isPending: isTogglingFav } = useToggleFavorite();
-  const [localFav, setLocalFav] = useState<boolean>(Boolean(isFav));
-
-  useEffect(() => {
-    setLocalFav(Boolean(isFav));
-  }, [isFav]);
-
-  const handleToggleFavorite = async () => {
-    const clubDocumentId = gym.documentId || gym.id;
-    const nextState = !localFav;
-    setLocalFav(nextState);
-
-    if (onToggleFavorite) {
-      onToggleFavorite();
-    }
-
-    if (clubDocumentId) {
-      try {
-        await toggleFavorite(clubDocumentId, localFav);
-      } catch (e) {
-        setLocalFav(localFav);
-      }
-    }
-  };
-
-  const slides = [...gym.images, gym.images[0]];
-
-  useEffect(() => {
-    if (!cardWidth || gym.images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      const nextIndex = currentIndexRef.current + 1;
-
-      scrollRef.current?.scrollTo({
-        x: nextIndex * cardWidth,
-        animated: true,
-      });
-
-      if (nextIndex >= gym.images.length) {
-        setActiveIndex(0);
-        currentIndexRef.current = 0;
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({
-            x: 0,
-            animated: false,
-          });
-        }, 450);
-      } else {
-        currentIndexRef.current = nextIndex;
-        setActiveIndex(nextIndex);
-      }
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [cardWidth, gym.images.length]);
-
-  const handleMomentumScrollEnd = (e: any) => {
-    const scrollX = e.nativeEvent.contentOffset.x;
-    let newIndex = Math.round(scrollX / cardWidth);
-    if (newIndex >= gym.images.length) {
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-      newIndex = 0;
-    }
-    currentIndexRef.current = newIndex;
-    setActiveIndex(newIndex);
-  };
-
-  const handleOpenDetail = () => {
-    router.push({
-      pathname: '/gym/gym-detail' as any,
-      params: {
-        id: gym.id,
-        initialImages: gym.images && gym.images.length > 0 ? JSON.stringify(gym.images) : undefined,
-        initialTitle: gym.title || '',
-        initialCategory: gym.category || '',
-        initialRating: gym.rating || '',
-        initialLat: gym.coordinate?.latitude,
-        initialLng: gym.coordinate?.longitude,
-        initialIsFav: String(localFav),
-      },
-    });
-  };
-
-  return (
-    <View className="mb-4 overflow-hidden rounded-3xl bg-[#F8FAFC] border-[1.5px] border-[#CBD5E1] shadow-sm">
-      {/* Image Carousel */}
-      <View className="relative h-52 w-full bg-gray-200">
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          scrollEventThrottle={16}>
-          {slides.map((imgUrl, idx) => (
-            <TouchableOpacity
-              key={idx}
-              activeOpacity={0.95}
-              onPress={handleOpenDetail}>
-              <Image
-                source={{ uri: imgUrl }}
-                style={{ width: cardWidth, height: 208 }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Top Left: Heart Favorite Button */}
-        <TouchableOpacity
-          onPress={handleToggleFavorite}
-          activeOpacity={0.7}
-          disabled={isTogglingFav}
-          className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
-          <Ionicons
-            name={localFav ? 'heart' : 'heart-outline'}
-            size={18}
-            color={localFav ? '#E23744' : '#FFF'}
-          />
-        </TouchableOpacity>
-
-        {/* Top Right: Verified Badge */}
-        {gym.isVerified && (
-          <View className="absolute right-3 top-3 z-10 h-7 w-7 items-center justify-center rounded-full bg-[#E23744] shadow-sm">
-            <Svg width={14} height={14} viewBox="0 0 13 13" fill="none">
-              <Path
-                d="M12.8333 6.10167L11.41 4.48L11.6083 2.33333L9.5025 1.855L8.4 0L6.41667 0.851667L4.43333 0L3.33083 1.855L1.225 2.3275L1.42333 4.47417L0 6.10167L1.42333 7.72333L1.225 9.87583L3.33083 10.3542L4.43333 12.2092L6.41667 11.3517L8.4 12.2033L9.5025 10.3483L11.6083 9.87L11.41 7.72333L12.8333 6.10167ZM5.25 9.01833L2.91667 6.685L3.73917 5.8625L5.25 7.3675L9.09417 3.52333L9.91667 4.35167L5.25 9.01833Z"
-                fill="#FFFFFF"
-              />
-            </Svg>
-          </View>
-        )}
-
-        {/* Bottom Left: Open Now Badge */}
-        {gym.isOpen && (
-          <View className="absolute bottom-3 left-3 z-10 rounded-full bg-white px-3 py-1 shadow-sm">
-            <Text className="font-semibold text-xs text-[#E23744]">Open now</Text>
-          </View>
-        )}
-
-        {/* Bottom Right: Dynamic Carousel Pagination Dots */}
-        <View className="absolute bottom-3 right-3 z-10 flex-row items-center">
-          {gym.images.map((_, idx) => (
-            <View
-              key={idx}
-              style={{ marginRight: idx === gym.images.length - 1 ? 0 : 6 }}
-              className={`h-1.5 rounded-full ${idx === activeIndex ? 'w-5 bg-[#E23744]' : 'w-1.5 bg-white/70'
-                }`}
-            />
-          ))}
-        </View>
-      </View>
-
-      {/* Card Details */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handleOpenDetail}
-        className="p-4">
-        {/* Title & Rating */}
-        <View className="flex-row items-center justify-between">
-          <Text className="mr-2 flex-1 font-bold text-lg text-darkText" numberOfLines={1}>
-            {gym.title}
-          </Text>
-          <View className="flex-row items-center space-x-1">
-            <Ionicons name="star" size={14} color="#F59E0B" />
-            <Text className="ml-1 font-medium text-xs text-secondaryText">{gym.rating}</Text>
-          </View>
-        </View>
-
-        {/* Amenities (Limited to 4 items on card) */}
-        <Text className="font-regular mt-1.5 text-sm text-secondaryText" numberOfLines={1}>
-          {gym.amenities.slice(0, 4).map((item) => `• ${item}`).join('  ')}
-        </Text>
-
-        {/* Pricing & Locate Button */}
-        <View className="mt-2.5 flex-row items-center justify-between">
-          <Text className="font-bold text-base text-darkText">{gym.price}</Text>
-
-          <TouchableOpacity
-            onPress={onFocusOnMap}
-            className="flex-row items-center rounded-full bg-[#FFEAEF] px-3.5 py-1.5">
-            <Ionicons name="navigate-outline" size={14} color="#E23744" />
-            <Text className="ml-1 font-semibold text-xs text-[#E23744]">Locate</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-}
+export { GymItem };
 
 export default function Mapviewscreen() {
   const router = useRouter();
@@ -512,22 +49,27 @@ export default function Mapviewscreen() {
   const translateYAnim = useRef(new Animated.Value(TRANSLATE_HALF)).current;
   const currentTranslateY = useRef(TRANSLATE_HALF);
 
-  const [selectedCategory, setSelectedCategory] = useState('Gyms');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
-    id: 'Gyms',
+    id: 'All',
     time: 0,
   });
 
   const handleSelectCategory = (catId: string) => {
-    setSelectedCategory(catId);
-    setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    if (selectedCategory === catId) {
+      setSelectedCategory('All');
+      setCategoryAnimTrigger({ id: 'All', time: Date.now() });
+    } else {
+      setSelectedCategory(catId);
+      setCategoryAnimTrigger({ id: catId, time: Date.now() });
+    }
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGymId, setSelectedGymId] = useState<string>('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [city, setCity] = useState<string>('');
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
-  const { data: favoritesData } = useGetFavorites();
+  const { data: favoritesData, refetch: refetchFavorites } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'all'>('all');
@@ -683,12 +225,13 @@ export default function Mapviewscreen() {
     return rawGyms
       .filter((gym) => {
         const matchesCategory =
-          selectedCategory === 'Gyms' ||
-          gym.category?.toLowerCase() === selectedCategory.toLowerCase();
+          selectedCategory === 'All' || gymMatchesCategory(gym, selectedCategory);
         const matchesSearch =
           !q ||
           gym.title.toLowerCase().includes(q) ||
-          gym.amenities.some((a) => a.toLowerCase().includes(q));
+          gym.amenities.some((a) => a.toLowerCase().includes(q)) ||
+          (gym.address && gym.address.toLowerCase().includes(q)) ||
+          (gym.city && gym.city.toLowerCase().includes(q));
         const matchesOpen = !onlyOpen || gym.isOpen;
         return matchesCategory && matchesSearch && matchesOpen;
       })
@@ -736,7 +279,7 @@ export default function Mapviewscreen() {
       title: g.title,
       rating: g.rating,
       price: g.price,
-      category: g.category,
+      category: g.category || 'Gym',
       isOpen: g.isOpen,
       image: g.images && g.images.length > 0 ? g.images[0] : '',
       coordinate: g.coordinate,
@@ -896,29 +439,33 @@ export default function Mapviewscreen() {
           }}>
           {(isLoading || (isPending && !nearbyData)) ? (
             <View>
-              <MapCardSkeleton />
-              <MapCardSkeleton />
-              <MapCardSkeleton />
+              <GymCardSkeleton />
+              <GymCardSkeleton />
+              <GymCardSkeleton />
             </View>
           ) : displayGyms.length === 0 ? (
             <View className="items-center justify-center py-12">
-              <Ionicons name="fitness-outline" size={44} color="#D1D5DB" />
-              <Text className="mt-2 font-medium text-sm text-gray-400">No gyms found</Text>
+            <GymCardSkeleton />
             </View>
           ) : (
             displayGyms.map((gym) => {
+              const isTopMatch =
+                selectedCategory !== 'All' && gymMatchesCategory(gym, selectedCategory);
               const isGymFav =
                 favorites[gym.id] !== undefined
                   ? favorites[gym.id]
                   : favoriteIds.has(String(gym.documentId || gym.id));
               return (
-                <GymCardItem
+                <GymCard
                   key={gym.id}
                   gym={gym}
+                  isTopMatch={isTopMatch}
+                  selectedCategory={selectedCategory}
                   isFav={isGymFav}
-                  isSelected={selectedGymId === gym.id}
-                  onToggleFavorite={() => toggleFavorite(gym.id)}
-                  onFocusOnMap={() => focusGymOnMap(gym)}
+                  onToggleFavorite={() => {
+                    toggleFavorite(gym.id);
+                    refetchFavorites?.();
+                  }}
                 />
               );
             })

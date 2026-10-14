@@ -51,8 +51,12 @@ export default function Layout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="gym" options={{ headerShown: false }} />
+      </Stack>
       <Toast />
     </QueryClientProvider>
-  );
+  ); 
 }

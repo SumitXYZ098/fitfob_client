@@ -93,7 +93,28 @@ export default function Login() {
 
     loginMutation(payload, {
       onSuccess: async (response) => {
-        if (response && response.jwt && response.user) {
+        const user = response?.user || response;
+        const token = response?.jwt || response?.token || user?.token;
+
+        if (response && token && user) {
+          // Check role: must be 'client'
+          const role = user?.role || response?.role;
+          const roleType = (
+            typeof role === 'string'
+              ? role
+              : role?.type || role?.name || ''
+          ).toLowerCase().trim();
+
+          if (roleType !== 'client') {
+            await useAuthStore.getState().logOut();
+
+            setError('identifier', {
+              type: 'manual',
+              message: 'Only client account can log in here. Please register as a client.',
+            });
+            return;
+          }
+
           if (rememberMe) {
             await AsyncStorage.setItem(
               'rememberedUser',
@@ -104,8 +125,8 @@ export default function Login() {
           }
 
           const userWithToken = {
-            ...response.user,
-            token: response.jwt,
+            ...user,
+            token,
           };
           await setUser(userWithToken, rememberMe);
 
@@ -114,6 +135,10 @@ export default function Login() {
             text1: 'Login Successful',
             text2: 'Welcome back! 👋',
           });
+
+          if (router.canDismiss()) {
+            router.dismissAll();
+          }
 
           if (userWithToken.verification_status === 'approved') {
             router.replace('/(tabs)');
@@ -178,7 +203,21 @@ export default function Login() {
       googleLogin(
         { idToken },
         {
-          onSuccess: () => {
+          onSuccess: (data: any) => {
+            const user = data?.user || data;
+            const role = user?.role || data?.role;
+            const roleType = (
+              typeof role === 'string' ? role : role?.type || role?.name || ''
+            ).toLowerCase().trim();
+
+            if (roleType && roleType !== 'client') {
+              setError('identifier', {
+                type: 'manual',
+                message: 'Only client account can log in here. Please register as a client.',
+              });
+              return;
+            }
+
             console.log('Google Login: Backend verification succeeded.');
             Toast.show({
               type: 'success',

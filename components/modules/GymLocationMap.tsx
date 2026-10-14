@@ -361,6 +361,14 @@ export const GymLocationMap: React.FC<GymLocationMapProps> = ({
               background: #FFEAEF;
               transform: scale(0.92);
             }
+            .btn-ctrl svg {
+              display: block;
+              pointer-events: none;
+            }
+            .btn-ctrl.active {
+              background: #FFEAEF;
+              border-color: #E23744;
+            }
 
             /* Leaflet popup styling */
             .leaflet-popup-content-wrapper {
@@ -402,10 +410,36 @@ export const GymLocationMap: React.FC<GymLocationMapProps> = ({
 
           <!-- Top-Right Floating Controls -->
           <div class="floating-controls">
-            <div class="btn-ctrl" id="satBtn" onclick="toggleSatellite()" title="Satellite Toggle">🛰️</div>
-            <div class="btn-ctrl" onclick="recenterToActiveBranch()" title="Current Branch">🏢</div>
-            <div class="btn-ctrl" onclick="fitAllBranches()" title="All Branches">🗺️</div>
-            <div class="btn-ctrl" id="userBtn" onclick="recenterToUser()" title="My Location" style="display:none;">📍</div>
+            <div class="btn-ctrl" id="satBtn" onclick="toggleSatellite()" title="Satellite / Layer Toggle">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+              </svg>
+            </div>
+            <div class="btn-ctrl" onclick="recenterToActiveBranch()" title="Current Branch">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="7.5"></circle>
+                <circle cx="12" cy="12" r="2.5" fill="#E23744"></circle>
+                <line x1="12" y1="1.5" x2="12" y2="4.5"></line>
+                <line x1="12" y1="19.5" x2="12" y2="22.5"></line>
+                <line x1="1.5" y1="12" x2="4.5" y2="12"></line>
+                <line x1="19.5" y1="12" x2="22.5" y2="12"></line>
+              </svg>
+            </div>
+            <div class="btn-ctrl" onclick="fitAllBranches()" title="All Branches">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                <line x1="8" y1="2" x2="8" y2="18"></line>
+                <line x1="16" y1="6" x2="16" y2="22"></line>
+              </svg>
+            </div>
+            <div class="btn-ctrl" id="userBtn" onclick="recenterToUser()" title="My Location" style="display:none;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
             <div class="btn-ctrl" onclick="map.zoomIn()" title="Zoom In">+</div>
             <div class="btn-ctrl" onclick="map.zoomOut()" title="Zoom Out">−</div>
           </div>
@@ -648,6 +682,8 @@ export const GymLocationMap: React.FC<GymLocationMapProps> = ({
                 setTimeout(refreshMap, 800);
 
                 var currentMode = 'roadmap';
+                var layersSvg = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>';
+                var mapSvg = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>';
 
                 window.toggleSatellite = function() {
                   var satBtn = document.getElementById('satBtn');
@@ -655,12 +691,18 @@ export const GymLocationMap: React.FC<GymLocationMapProps> = ({
                     map.removeLayer(osmLayer);
                     satLayer.addTo(map);
                     currentMode = 'satellite';
-                    if (satBtn) satBtn.innerHTML = '🗺️';
+                    if (satBtn) {
+                      satBtn.innerHTML = mapSvg;
+                      satBtn.classList.add('active');
+                    }
                   } else {
                     map.removeLayer(satLayer);
                     osmLayer.addTo(map);
                     currentMode = 'roadmap';
-                    if (satBtn) satBtn.innerHTML = '🛰️';
+                    if (satBtn) {
+                      satBtn.innerHTML = layersSvg;
+                      satBtn.classList.remove('active');
+                    }
                   }
                 };
 

@@ -9,12 +9,14 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Animated,
+  BackHandler,
 } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface SlideData {
   id: string;
@@ -81,8 +83,28 @@ const { width } = Dimensions.get('window');
 
 export default function Welcome() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
   const [index, setIndex] = useState(1);
   const ref = useRef<FlatList>(null);
+
+  // If already logged in, immediately redirect to Home tabs
+  useEffect(() => {
+    if (user?.token) {
+      router.replace('/(tabs)');
+    }
+  }, [user?.token]);
+
+  // On Welcome screen, pressing hardware back closes the app
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [])
+  );
 
   // Animated values for motivational card transition
   const fadeAnim = useRef(new Animated.Value(1)).current;

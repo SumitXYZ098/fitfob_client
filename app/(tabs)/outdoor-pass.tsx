@@ -251,7 +251,7 @@ export default function OutdoorPassScreen() {
         <View className="mt-6">
           <Text className="font-bold text-base text-slate-900">How Outdoor Pass Works</Text>
 
-          <View className="mt-3 space-y-2.5">
+          <View className="mt-3">
             {[
               {
                 step: '1',

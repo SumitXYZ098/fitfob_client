@@ -212,6 +212,14 @@ export const GymDetailMapView: React.FC<GymDetailMapViewProps> = ({
             background: #FFEAEF;
             transform: scale(0.92);
           }
+          .btn-ctrl svg {
+            display: block;
+            pointer-events: none;
+          }
+          .btn-ctrl.active {
+            background: #FFEAEF;
+            border-color: #E23744;
+          }
         </style>
       </head>
       <body>
@@ -219,8 +227,23 @@ export const GymDetailMapView: React.FC<GymDetailMapViewProps> = ({
 
         <!-- Floating Controls -->
         <div class="floating-controls">
-          <div class="btn-ctrl" id="satBtn" onclick="toggleSatellite()" title="Satellite Toggle">🛰️</div>
-          <div class="btn-ctrl" onclick="recenterGym()" title="Recenter Gym">🎯</div>
+          <div class="btn-ctrl" id="satBtn" onclick="toggleSatellite()" title="Satellite / Layer Toggle">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </div>
+          <div class="btn-ctrl" onclick="recenterGym()" title="Recenter Gym Location">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="7.5"></circle>
+              <circle cx="12" cy="12" r="2.5" fill="#E23744"></circle>
+              <line x1="12" y1="1.5" x2="12" y2="4.5"></line>
+              <line x1="12" y1="19.5" x2="12" y2="22.5"></line>
+              <line x1="1.5" y1="12" x2="4.5" y2="12"></line>
+              <line x1="19.5" y1="12" x2="22.5" y2="12"></line>
+            </svg>
+          </div>
           <div class="btn-ctrl" onclick="map.zoomIn()" title="Zoom In">+</div>
           <div class="btn-ctrl" onclick="map.zoomOut()" title="Zoom Out">−</div>
         </div>
@@ -229,6 +252,9 @@ export const GymDetailMapView: React.FC<GymDetailMapViewProps> = ({
           var data = ${gymDataJson};
           var map = null;
           var currentMode = 'streets';
+
+          var layersSvg = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>';
+          var mapSvg = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>';
 
           var googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 24,
@@ -248,12 +274,18 @@ export const GymDetailMapView: React.FC<GymDetailMapViewProps> = ({
               map.removeLayer(googleStreets);
               googleSatellite.addTo(map);
               currentMode = 'satellite';
-              if (satBtn) satBtn.innerHTML = '🗺️';
+              if (satBtn) {
+                satBtn.innerHTML = mapSvg;
+                satBtn.classList.add('active');
+              }
             } else {
               map.removeLayer(googleSatellite);
               googleStreets.addTo(map);
               currentMode = 'streets';
-              if (satBtn) satBtn.innerHTML = '🛰️';
+              if (satBtn) {
+                satBtn.innerHTML = layersSvg;
+                satBtn.classList.remove('active');
+              }
             }
           };
 

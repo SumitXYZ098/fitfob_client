@@ -11,10 +11,11 @@ import {
   ActivityIndicator,
   StatusBar,
   Keyboard,
+  BackHandler,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
@@ -232,6 +233,19 @@ export default function HomeScreen() {
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
 
+  // Prevent back gesture / button from going back to Login screen
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
+
   const { data: favoritesData } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
 
@@ -321,7 +335,7 @@ export default function HomeScreen() {
 
   const handleSearchSubmit = () => {
     Keyboard.dismiss();
-};
+  };
 
   const handleClearSearch = () => {
     setSearchQuery('');

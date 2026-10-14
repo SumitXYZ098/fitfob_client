@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
-import { Platform, View, Image } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import { Platform, View, Image, BackHandler } from 'react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export default function TabLayout() {
@@ -12,6 +12,16 @@ export default function TabLayout() {
       router.replace('/welcome');
     }
   }, [user, isInitializing, router]);
+
+  // When inside tabs, pressing hardware back exits the app
+  useEffect(() => {
+    const onBackPress = () => {
+      BackHandler.exitApp();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
   const homeFill = require('../../assets/icons/fill_home.png');
   const homeUnfill = require('../../assets/icons/home.png');
 

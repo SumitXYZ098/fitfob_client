@@ -211,7 +211,21 @@ export default function SignUp() {
       googleLogin(
         { idToken },
         {
-          onSuccess: () => {
+          onSuccess: (data: any) => {
+            const user = data?.user || data;
+            const role = user?.role || data?.role;
+            const roleType = (
+              typeof role === 'string' ? role : role?.type || role?.name || ''
+            ).toLowerCase().trim();
+
+            if (roleType && roleType !== 'client') {
+              setError('identifier', {
+                type: 'manual',
+                message: 'Only client account can log in here. Please register as a client.',
+              });
+              return;
+            }
+
             console.log('Google Login: Backend verification succeeded.');
             Toast.show({
               type: 'success',

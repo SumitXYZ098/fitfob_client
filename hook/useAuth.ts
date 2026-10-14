@@ -57,12 +57,24 @@ export const useLoginRequest = () => {
   return useMutation({
     mutationFn: loginUserApi,
     onSuccess: (data) => {
-      if (data && data.jwt && data.user) {
-        console.log('✅ Login Success:', data.user.username);
+      const user = data?.user || data;
+      const role = user?.role || data?.role;
+      const roleType = (
+        typeof role === 'string' ? role : role?.type || role?.name || ''
+      ).toLowerCase().trim();
+
+      if (roleType && roleType !== 'client') {
+        console.warn('⛔ Login rejected: User role is not client:', roleType);
+        return;
+      }
+
+      const token = data?.jwt || data?.token || user?.token;
+      if (token && user) {
+        console.log('✅ Login Success:', user.username);
 
         const userWithToken = {
-          ...data.user,
-          token: data.jwt,
+          ...user,
+          token,
         };
 
         setUser(userWithToken, true);
@@ -151,18 +163,46 @@ export const useGoogleLogin = () => {
   return useMutation({
     mutationFn: googleLoginApi,
     onSuccess: (data) => {
-      if (data && data.jwt && data.user) {
-        console.log('✅ Google Login Success:', data.user.username);
+      const user = data?.user || data;
+      const role = user?.role || data?.role;
+      const roleType = (
+        typeof role === 'string' ? role : role?.type || role?.name || ''
+      ).toLowerCase().trim();
+
+      if (roleType && roleType !== 'client') {
+        console.warn('⛔ Google Login rejected: User role is not client:', roleType);
+        useAuthStore.getState().logOut();
+        Toast.show({
+          type: 'error',
+          text1: 'Access Denied 🚫',
+          text2: 'Only client account can log in here. Please register as a client.',
+        });
+        return;
+      }
+
+      const token = data?.jwt || data?.token || user?.token;
+      if (token && user) {
+        console.log('✅ Google Login Success:', user.username);
 
         const userWithToken = {
-          ...data.user,
-          token: data.jwt,
+          ...user,
+          token,
         };
 
         setUser(userWithToken, true);
         console.log(userWithToken, 'usr Data');
 
-        router.replace('/onBoardingScreen/OnBoardingStep');
+        if (router.canDismiss()) {
+          router.dismissAll();
+        }
+
+        if (userWithToken.verification_status === 'approved') {
+          router.replace('/(tabs)');
+        } else if (userWithToken.verification_status === 'in-review') {
+          router.replace('/onBoardingScreen/UnderReview');
+        } else {
+          router.replace('/onBoardingScreen/OnBoardingStep');
+        }
       }
     },
     onError: (error: any) => {
@@ -185,24 +225,52 @@ export const useFacebookLogin = () => {
   return useMutation({
     mutationFn: facebookLoginApi,
     onSuccess: (data) => {
-      if (data && data.jwt && data.user) {
-        console.log('✅ Google Login Success:', data.user.username);
+      const user = data?.user || data;
+      const role = user?.role || data?.role;
+      const roleType = (
+        typeof role === 'string' ? role : role?.type || role?.name || ''
+      ).toLowerCase().trim();
+
+      if (roleType && roleType !== 'client') {
+        console.warn('⛔ Facebook Login rejected: User role is not client:', roleType);
+        useAuthStore.getState().logOut();
+        Toast.show({
+          type: 'error',
+          text1: 'Access Denied 🚫',
+          text2: 'Only client account can log in here. Please register as a client.',
+        });
+        return;
+      }
+
+      const token = data?.jwt || data?.token || user?.token;
+      if (token && user) {
+        console.log('✅ Facebook Login Success:', user.username);
 
         const userWithToken = {
-          ...data.user,
-          token: data.jwt,
+          ...user,
+          token,
         };
 
         setUser(userWithToken, true);
         console.log(userWithToken, 'usr Data');
 
-        router.replace('/onBoardingScreen/OnBoardingStep');
+        if (router.canDismiss()) {
+          router.dismissAll();
+        }
+
+        if (userWithToken.verification_status === 'approved') {
+          router.replace('/(tabs)');
+        } else if (userWithToken.verification_status === 'in-review') {
+          router.replace('/onBoardingScreen/UnderReview');
+        } else {
+          router.replace('/onBoardingScreen/OnBoardingStep');
+        }
       }
     },
     onError: (error: any) => {
       Toast.show({
         type: 'error',
-        text1: 'Google Sign-In Failed',
+        text1: 'Facebook Sign-In Failed',
         text2:
           error.response?.data?.error?.message ||
           error.response?.data?.message ||

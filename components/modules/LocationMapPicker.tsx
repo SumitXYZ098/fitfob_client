@@ -118,11 +118,19 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
                 user-select: none;
                 font-size: 18px;
                 font-weight: 800;
-                color: #0F172A;
+                color: #E23744;
               }
               .btn-float:active {
-                background: #F1F5F9;
+                background: #FFEAEF;
                 transform: scale(0.94);
+              }
+              .btn-float svg {
+                display: block;
+                pointer-events: none;
+              }
+              .btn-float.active {
+                background: #FFEAEF;
+                border-color: #E23744;
               }
             </style>
           </head>
@@ -130,7 +138,13 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
             <div id="map"></div>
 
             <div class="floating-controls">
-              <div class="btn-float" id="satBtn" onclick="toggleSatellite()" title="Toggle Satellite">🛰️</div>
+              <div class="btn-float" id="satBtn" onclick="toggleSatellite()" title="Toggle Satellite">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                  <polyline points="2 17 12 22 22 17"></polyline>
+                  <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+              </div>
               <div class="btn-float" onclick="map.zoomIn()" title="Zoom In">+</div>
               <div class="btn-float" onclick="map.zoomOut()" title="Zoom Out">−</div>
             </div>
@@ -182,6 +196,8 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
               osmLayer.addTo(map);
 
               var currentMode = 'roadmap';
+              var layersSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>';
+              var mapSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E23744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>';
 
               function toggleSatellite() {
                 var satBtn = document.getElementById('satBtn');
@@ -190,13 +206,19 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
                   satLayer.addTo(map);
                   satLabelsLayer.addTo(map);
                   currentMode = 'satellite';
-                  if (satBtn) satBtn.innerHTML = '🗺️';
+                  if (satBtn) {
+                    satBtn.innerHTML = mapSvg;
+                    satBtn.classList.add('active');
+                  }
                 } else {
                   map.removeLayer(satLayer);
                   map.removeLayer(satLabelsLayer);
                   osmLayer.addTo(map);
                   currentMode = 'roadmap';
-                  if (satBtn) satBtn.innerHTML = '🛰️';
+                  if (satBtn) {
+                    satBtn.innerHTML = layersSvg;
+                    satBtn.classList.remove('active');
+                  }
                 }
               }
 
