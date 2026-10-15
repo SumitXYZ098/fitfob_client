@@ -125,9 +125,11 @@ export default function Login() {
           }
 
           const userWithToken = {
-            ...user,
-            token,
+            ...response.user,
+            token: response.jwt,
           };
+          console.log(userWithToken, 'usr Data');
+
           await setUser(userWithToken, rememberMe);
 
           Toast.show({
@@ -135,13 +137,9 @@ export default function Login() {
             text1: 'Login Successful',
             text2: 'Welcome back! 👋',
           });
-
-          if (router.canDismiss()) {
-            router.dismissAll();
-          }
-
           if (userWithToken.verification_status === 'approved') {
             router.replace('/(tabs)');
+            
           } else if (userWithToken.verification_status === 'in-review') {
             router.replace('/onBoardingScreen/UnderReview');
           } else {

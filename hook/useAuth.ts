@@ -53,34 +53,8 @@ export const useVerifyOtp = () => {
 };
 
 export const useLoginRequest = () => {
-  const { setUser } = useAuthStore();
   return useMutation({
     mutationFn: loginUserApi,
-    onSuccess: (data) => {
-      const user = data?.user || data;
-      const role = user?.role || data?.role;
-      const roleType = (
-        typeof role === 'string' ? role : role?.type || role?.name || ''
-      ).toLowerCase().trim();
-
-      if (roleType && roleType !== 'client') {
-        console.warn('⛔ Login rejected: User role is not client:', roleType);
-        return;
-      }
-
-      const token = data?.jwt || data?.token || user?.token;
-      if (token && user) {
-        console.log('✅ Login Success:', user.username);
-
-        const userWithToken = {
-          ...user,
-          token,
-        };
-
-        setUser(userWithToken, true);
-        console.log(userWithToken, 'usr Data');
-      }
-    },
   });
 };
 

@@ -223,18 +223,21 @@ export const useNearbyGyms = (params: {
   longitude?: number | string;
   query?: string;
 }) => {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ['nearby-gyms', params.city, params.latitude, params.longitude, params.query],
     queryFn: () => searchNearbyGyms(params),
     staleTime: 1000 * 60 * 3, // 3 minutes
+    enabled: !!user?.token && user.verification_status === 'approved'
   });
 };
 
 export const useGymDetail = (id: string | undefined) => {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ['gym-detail', id],
     queryFn: () => getGymDetail(id!),
-    enabled: !!id,
+    enabled: !!id && !!user?.token,
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1,
   });
@@ -272,10 +275,12 @@ export const extractFavoriteIds = (favData: any): Set<string> => {
 
 // 1. Get all client favorites
 export const useGetFavorites = () => {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ['client-favorites'],
     queryFn: getFavorites,
     staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!user?.token
   });
 };
 

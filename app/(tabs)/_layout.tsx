@@ -8,8 +8,14 @@ export default function TabLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isInitializing && !user) {
+    if (isInitializing) return;
+
+    if (!user) {
       router.replace('/welcome');
+    } else if (user.verification_status === 'in-review') {
+      router.replace('/onBoardingScreen/UnderReview');
+    } else if (user.verification_status !== 'approved') {
+      router.replace('/onBoardingScreen/OnBoardingStep');
     }
   }, [user, isInitializing, router]);
 

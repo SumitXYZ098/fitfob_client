@@ -44,8 +44,12 @@ export default function OnBoardingStep() {
       try {
         const response = await checkUserStepMutation.mutateAsync();
         if (response) {
-          if (response.status === 'completed') {
+          if (response.status === 'completed' || response.verification_status === 'approved') {
             router.replace('/(tabs)');
+            return;
+          }
+          if (response.status === 'in-review' || response.verification_status === 'in-review') {
+            router.replace('/onBoardingScreen/UnderReview');
             return;
           }
           if (response.details) {

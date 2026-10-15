@@ -87,12 +87,20 @@ export default function Welcome() {
   const [index, setIndex] = useState(1);
   const ref = useRef<FlatList>(null);
 
-  // If already logged in, immediately redirect to Home tabs
-  useEffect(() => {
-    if (user?.token) {
-      router.replace('/(tabs)');
-    }
-  }, [user?.token]);
+  // If already logged in and welcome screen is focused, redirect based on onboarding/verification status
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.token) {
+        if (user.verification_status === 'approved') {
+          router.replace('/(tabs)');
+        } else if (user.verification_status === 'in-review') {
+          router.replace('/onBoardingScreen/UnderReview');
+        } else {
+          router.replace('/onBoardingScreen/OnBoardingStep');
+        }
+      }
+    }, [user?.token, user?.verification_status])
+  );
 
   // On Welcome screen, pressing hardware back closes the app
   useFocusEffect(

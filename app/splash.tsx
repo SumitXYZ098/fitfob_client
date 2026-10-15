@@ -53,14 +53,12 @@ export default function Splash() {
 
       if (!user) {
         router.replace('/welcome');
+      } else if (user.verification_status === 'approved') {
+        router.replace('/(tabs)');
+      } else if (user.verification_status === 'in-review') {
+        router.replace('/onBoardingScreen/UnderReview');
       } else {
-        if (user.verification_status === 'in-review') {
-          router.replace('/onBoardingScreen/UnderReview');
-        } else if (user.verification_status === 'pending') {
-          router.replace('/onBoardingScreen/OnBoardingStep');
-        } else {
-          router.replace('/(tabs)');
-        }
+        router.replace('/onBoardingScreen/OnBoardingStep');
       }
     }, 1500);
 

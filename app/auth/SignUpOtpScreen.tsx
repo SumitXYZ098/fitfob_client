@@ -101,7 +101,7 @@ export default function SignUpOtpScreen() {
     console.log('📡 [OtpScreen] SENDING TO API:', JSON.stringify(finalPayload, null, 2));
 
     verifyMutation(finalPayload, {
-      onSuccess: (data) => {
+      onSuccess: async (data) => {
         console.log(data, 'Vergiy otp');
 
         if (data && data.jwt && data.user) {
@@ -110,9 +110,10 @@ export default function SignUpOtpScreen() {
           const userWithToken = {
             ...data.user,
             token: data.jwt,
+            verification_status: data.user.verification_status || 'pending',
           };
 
-          setUser(userWithToken, true);
+          await setUser(userWithToken, true);
 
           Toast.show({
             type: 'success',
@@ -120,7 +121,7 @@ export default function SignUpOtpScreen() {
             text2: 'Welcome to the app!',
           });
           router.replace('/onBoardingScreen/OnBoardingStep');
-          console.log('🚀 User Data Saved. Redirecting to Dashboard...');
+          console.log('🚀 User Data Saved. Redirecting to Onboarding...');
         } else {
           console.warn('⚠️ API Success but missing fields in response:', data);
           router.replace('/auth/Login');

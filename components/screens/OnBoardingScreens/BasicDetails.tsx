@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import CountryPicker, { CountryCode, Country } from 'react-native-country-picker-modal';
 import {
@@ -700,95 +701,106 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
           visible={isOtpModalOpen}
           transparent
           animationType="slide"
-          onRequestClose={() => setIsOtpModalOpen(false)}>
+          statusBarTranslucent
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setIsOtpModalOpen(false);
+          }}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            className="flex-1 justify-end bg-black/60">
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
             <TouchableOpacity
               activeOpacity={1}
-              onPress={() => setIsOtpModalOpen(false)}
-              className="flex-1"
+              onPress={() => {
+                Keyboard.dismiss();
+                setIsOtpModalOpen(false);
+              }}
+              style={{ flex: 1 }}
             />
             <View className="rounded-t-[32px] bg-white p-6 shadow-2xl">
-              {/* Drag Handle Indicator */}
-              <View className="mb-4 items-center">
-                <View className="h-1.5 w-12 rounded-full bg-slate-200" />
-              </View>
-
-              {/* Header */}
-              <View className="mb-4 flex-row items-start justify-between">
-                <View className="flex-1 pr-2">
-                  <Text className="font-bold text-2xl text-slate-900">
-                    Verify {verifyingType === 'phone' ? 'Phone Number' : 'Email Address'}
-                  </Text>
-                  <Text className="mt-1 text-sm text-slate-500">
-                    Enter the 6-digit code sent to{' '}
-                    <Text className="font-semibold text-slate-800">
-                      {verifyingType === 'phone' ? `+${callingCode} ${phoneNumber}` : email}
-                    </Text>
-                  </Text>
+                {/* Drag Handle Indicator */}
+                <View className="mb-4 items-center">
+                  <View className="h-1.5 w-12 rounded-full bg-slate-200" />
                 </View>
-                <TouchableOpacity
-                  onPress={() => setIsOtpModalOpen(false)}
-                  className="h-9 w-9 items-center justify-center rounded-full bg-slate-100"
-                  activeOpacity={0.7}>
-                  <Ionicons name="close" size={20} color="#64748B" />
-                </TouchableOpacity>
-              </View>
 
-              {/* 6 OTP Input Boxes */}
-              <View className="my-5 flex-row justify-between">
-                {otp.map((digit, idx) => (
-                  <TextInput
-                    key={idx}
-                    ref={(el) => {
-                      otpInputRefs.current[idx] = el;
-                    }}
-                    value={digit}
-                    onChangeText={(text) => handleOtpChange(text, idx)}
-                    onKeyPress={(e) => handleOtpKeyPress(e, idx)}
-                    keyboardType="number-pad"
-                    maxLength={idx === 0 ? 6 : 1}
-                    className={`h-14 w-12 rounded-2xl border text-center font-bold text-xl ${digit
-                      ? 'border-[#F6163C] bg-red-50/20 text-slate-900'
-                      : 'border-slate-200 bg-slate-50 text-slate-900'
-                      }`}
-                    selectTextOnFocus
-                  />
-                ))}
-              </View>
-
-              {/* Resend OTP & Timer */}
-              <View className="mb-6 flex-row items-center justify-center">
-                <Text className="text-sm text-slate-500">Didn't receive the code? </Text>
-                {timer > 0 ? (
-                  <Text className="font-semibold text-sm text-slate-400">
-                    Resend in {timer}s
-                  </Text>
-                ) : (
+                {/* Header */}
+                <View className="mb-4 flex-row items-start justify-between">
+                  <View className="flex-1 pr-2">
+                    <Text className="font-bold text-2xl text-slate-900">
+                      Verify {verifyingType === 'phone' ? 'Phone Number' : 'Email Address'}
+                    </Text>
+                    <Text className="mt-1 text-sm text-slate-500">
+                      Enter the 6-digit code sent to{' '}
+                      <Text className="font-semibold text-slate-800">
+                        {verifyingType === 'phone' ? `+${callingCode} ${phoneNumber}` : email}
+                      </Text>
+                    </Text>
+                  </View>
                   <TouchableOpacity
-                    onPress={handleResendFromModal}
-                    disabled={resendOtpMutation.isPending}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setIsOtpModalOpen(false);
+                    }}
+                    className="h-9 w-9 items-center justify-center rounded-full bg-slate-100"
                     activeOpacity={0.7}>
-                    {resendOtpMutation.isPending ? (
-                      <ActivityIndicator size="small" color="#F6163C" />
-                    ) : (
-                      <Text className="font-bold text-sm text-[#F6163C]">Resend OTP</Text>
-                    )}
+                    <Ionicons name="close" size={20} color="#64748B" />
                   </TouchableOpacity>
-                )}
-              </View>
+                </View>
 
-              {/* Verify OTP Button */}
-              <View className="mb-2">
-                <Button
-                  title="Verify OTP"
-                  onPress={handleVerifyOtp}
-                  loading={verifyOtpMutation.isPending}
-                  disabled={!isOtpComplete || verifyOtpMutation.isPending}
-                />
+                {/* 6 OTP Input Boxes */}
+                <View className="my-5 flex-row justify-between">
+                  {otp.map((digit, idx) => (
+                    <TextInput
+                      key={idx}
+                      ref={(el) => {
+                        otpInputRefs.current[idx] = el;
+                      }}
+                      value={digit}
+                      onChangeText={(text) => handleOtpChange(text, idx)}
+                      onKeyPress={(e) => handleOtpKeyPress(e, idx)}
+                      keyboardType="number-pad"
+                      maxLength={idx === 0 ? 6 : 1}
+                      className={`h-14 w-12 rounded-2xl border text-center font-bold text-xl ${
+                        digit
+                          ? 'border-[#F6163C] bg-red-50/20 text-slate-900'
+                          : 'border-slate-200 bg-slate-50 text-slate-900'
+                      }`}
+                      selectTextOnFocus
+                    />
+                  ))}
+                </View>
+
+                {/* Resend OTP & Timer */}
+                <View className="mb-6 flex-row items-center justify-center">
+                  <Text className="text-sm text-slate-500">Didn't receive the code? </Text>
+                  {timer > 0 ? (
+                    <Text className="font-semibold text-sm text-slate-400">
+                      Resend in {timer}s
+                    </Text>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleResendFromModal}
+                      disabled={resendOtpMutation.isPending}
+                      activeOpacity={0.7}>
+                      {resendOtpMutation.isPending ? (
+                        <ActivityIndicator size="small" color="#F6163C" />
+                      ) : (
+                        <Text className="font-bold text-sm text-[#F6163C]">Resend OTP</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Verify OTP Button */}
+                <View className="mb-2">
+                  <Button
+                    title="Verify OTP"
+                    onPress={handleVerifyOtp}
+                    loading={verifyOtpMutation.isPending}
+                    disabled={!isOtpComplete || verifyOtpMutation.isPending}
+                  />
+                </View>
               </View>
-            </View>
           </KeyboardAvoidingView>
         </Modal>
       </View>
