@@ -343,8 +343,13 @@ export default function TransactionsScreen() {
         return true;
       }
 
-      // 2. Month-wise Mode
-      if (selectedMonth === 'All') return true;
+      // 2. Month-wise Mode (filters to previous 6 months when 'All' is selected)
+      if (selectedMonth === 'All') {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+        return checkin.getTime() >= sixMonthsAgo.getTime();
+      }
       const m = checkin.toLocaleString('en-US', { month: 'short' });
       const y = checkin.getFullYear();
       return `${m}' ${y}` === selectedMonth;
@@ -399,7 +404,7 @@ export default function TransactionsScreen() {
       if (startDate) return `From ${fmt(startDate)}`;
       if (endDate) return `Up to ${fmt(endDate)}`;
     }
-    return selectedMonth === 'All' ? 'All Months' : selectedMonth;
+    return selectedMonth === 'All' ? 'Previous 6 Months' : selectedMonth;
   }, [dateFilterTab, selectedMonth, startDate, endDate]);
 
   const isFilterActive = useMemo(() => {
@@ -927,7 +932,7 @@ export default function TransactionsScreen() {
                         className={`font-semibold text-sm ${
                           selectedMonth === month ? 'text-[#E23744]' : 'text-darkText'
                         }`}>
-                        {month === 'All' ? 'All Months (All Time)' : month}
+                        {month === 'All' ? 'Previous 6 Months' : month}
                       </Text>
                       {selectedMonth === month && (
                         <Ionicons name="checkmark-circle" size={18} color="#E23744" />

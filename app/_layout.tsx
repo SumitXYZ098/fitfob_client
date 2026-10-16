@@ -7,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
 import { registerDeviceTokenWithBackend } from '@/services/notificationService';
 
@@ -49,14 +50,16 @@ export default function Layout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="gym" options={{ headerShown: false }} />
-      </Stack>
-      <Toast />
-    </QueryClientProvider>
-  ); 
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="gym" options={{ headerShown: false }} />
+        </Stack>
+        <Toast />
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  );
 }

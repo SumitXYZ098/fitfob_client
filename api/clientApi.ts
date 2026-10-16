@@ -270,6 +270,7 @@ export const searchNearbyGyms = async (params: {
   latitude?: number | string;
   longitude?: number | string;
   query?: string;
+  radius?: number | string;
 }) => {
   try {
     const queryParts: string[] = [];
@@ -285,6 +286,10 @@ export const searchNearbyGyms = async (params: {
       if (params.longitude !== undefined && params.longitude !== null && params.longitude !== '') {
         queryParts.push(`longitude=${encodeURIComponent(params.longitude.toString())}`);
       }
+    }
+
+    if (params.radius !== undefined && params.radius !== null && params.radius !== '') {
+      queryParts.push(`radius=${encodeURIComponent(params.radius.toString())}`);
     }
 
     if (params.query && params.query.trim()) {

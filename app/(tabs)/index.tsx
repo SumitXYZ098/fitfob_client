@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
@@ -35,17 +35,7 @@ import GymCard, {
   getHolidayInfo,
 } from '@/components/GymCard';
 
-export {
-  GymCard,
-  GymCardSkeleton,
-  GymItem,
-  HolidayItem,
-  HolidayInfo,
-  gymMatchesCategory,
-  getDisplayFeatures,
-  getFeatureIcon,
-  getHolidayInfo,
-};
+
 
 const extractStringList = (val: any): string[] => {
   if (!val) return [];
@@ -69,6 +59,26 @@ const extractStringList = (val: any): string[] => {
   }
   return [];
 };
+
+function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(1));
+}
 
 const mapClubOwnerToGym = (item: any): GymItem => {
   const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
@@ -234,17 +244,15 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Prevent back gesture / button from going back to Login screen
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        BackHandler.exitApp();
-        return true;
-      };
+  useEffect(() => {
+    const onBackPress = () => {
+      BackHandler.exitApp();
+      return true;
+    };
 
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => subscription.remove();
-    }, [])
-  );
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
 
   const { data: favoritesData } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
@@ -255,22 +263,35 @@ export default function HomeScreen() {
     longitude: 76.6873704048281,
   });
   const [city, setCity] = useState<string>('');
+  const [searchRadius, setSearchRadius] = useState<number>(10);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
 
+  const formattedCityName = useMemo(() => {
+    if (!city || typeof city !== 'string' || !city.trim()) return '';
+    const clean = city.trim();
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }, [city]);
+
   const handleLocationConfirmed = (locData: SelectedLocationData) => {
-    setCoords({
-      latitude: locData.latitude,
-      longitude: locData.longitude,
-    });
-    let selectedCity = locData.city;
+    if (!locData) return;
+    if (typeof locData.latitude === 'number' && typeof locData.longitude === 'number') {
+      setCoords({
+        latitude: locData.latitude,
+        longitude: locData.longitude,
+      });
+    }
+    if (locData.radius) {
+      setSearchRadius(locData.radius);
+    }
+    let selectedCity = typeof locData.city === 'string' ? locData.city.trim() : '';
     if (
       selectedCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
       selectedCity.toLowerCase().includes('sas nagar')
     ) {
       selectedCity = 'Mohali';
     }
-    setCity(selectedCity.toLowerCase());
+    setCity(selectedCity ? selectedCity.toLowerCase() : '');
     setSearchQuery('');
   };
 
@@ -331,6 +352,7 @@ export default function HomeScreen() {
   } = useNearbyGyms({
     latitude: coords.latitude,
     longitude: coords.longitude,
+    radius: searchRadius,
   });
 
   const handleSearchSubmit = () => {
@@ -343,7 +365,12 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (nearbyData) {
-      console.log('📋 [HomeScreen] Nearby Gyms API Response:', JSON.stringify(nearbyData.data[3], null, 2));
+      const count = Array.isArray(nearbyData)
+        ? nearbyData.length
+        : Array.isArray(nearbyData?.data)
+          ? nearbyData.data.length
+          : 0;
+      console.log('📋 [HomeScreen] Nearby Gyms count:', count);
     }
   }, [nearbyData]);
 
@@ -360,8 +387,17 @@ export default function HomeScreen() {
             ? nearbyData.results
             : [];
 
-    return rawList.map(mapClubOwnerToGym);
-  }, [nearbyData]);
+    return rawList.map((item: any) => {
+      const g = mapClubOwnerToGym(item);
+      if (!g.distance && coords?.latitude && coords?.longitude && g.coordinate?.latitude && g.coordinate?.longitude) {
+        const d = calculateDistanceKm(coords.latitude, coords.longitude, g.coordinate.latitude, g.coordinate.longitude);
+        if (d > 0) {
+          g.distance = `${d} km`;
+        }
+      }
+      return g;
+    });
+  }, [nearbyData, coords]);
 
   const filteredGyms = useMemo(() => {
     // 1. Instant Search Query Filter by clubName and title
@@ -410,15 +446,26 @@ export default function HomeScreen() {
       });
     }
 
+    // 2. Filter by Search Range / Radius (up to searchRadius km, max 30km)
+    let radiusFiltered = searchFiltered.filter((gym) => {
+      if (gym.distance) {
+        const distNum = parseFloat(gym.distance);
+        if (!isNaN(distNum)) {
+          return distNum <= searchRadius;
+        }
+      }
+      return true;
+    });
+
     if (!selectedCategory || selectedCategory === 'All') {
-      return searchFiltered;
+      return radiusFiltered;
     }
 
-    // 2. Prioritize: cards matching selectedCategory appear FIRST!
+    // 3. Prioritize: cards matching selectedCategory appear FIRST!
     const matching: GymItem[] = [];
     const others: GymItem[] = [];
 
-    searchFiltered.forEach((g) => {
+    radiusFiltered.forEach((g) => {
       if (gymMatchesCategory(g, selectedCategory)) {
         matching.push(g);
       } else {
@@ -427,7 +474,7 @@ export default function HomeScreen() {
     });
 
     return [...matching, ...others];
-  }, [gyms, selectedCategory, searchQuery]);
+  }, [gyms, selectedCategory, searchQuery, searchRadius]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -484,9 +531,15 @@ export default function HomeScreen() {
                     style={{ marginLeft: 6, flexShrink: 0 }}
                   />
                 )}
+                {/* Search Range Badge */}
+                <View className="ml-2 rounded-full bg-[#FFEAEF] px-2 py-0.5 border border-[#FFD0DC]">
+                  <Text className="text-[10px] font-bold text-[#E23744]">
+                    {searchRadius} km
+                  </Text>
+                </View>
               </View>
               <Text className="font-regular text-[11px] text-slate-400" numberOfLines={1}>
-                Tap to change location
+                Tap to change location & range ({searchRadius}km)
               </Text>
             </View>
           </TouchableOpacity>
@@ -592,16 +645,18 @@ export default function HomeScreen() {
         {/* 5. Nearby Gym Section Header */}
         <View className="mb-3 mt-4 flex-row items-center justify-between px-4">
           <Text className="font-bold text-xl text-darkText">Nearby Gym</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/gym/ViewAllScreen' as any)}
-            className="flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1.5 ">
-            <Text className="font-semibold text-sm text-[#E23744]">View All</Text>
-            <Ionicons name="chevron-forward" size={14} color="#E23744" style={{ marginLeft: 3 }} />
-          </TouchableOpacity>
+          {filteredGyms.length > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push('/gym/ViewAllScreen' as any)}
+              className="flex-row items-center rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1.5 ">
+              <Text className="font-semibold text-sm text-[#E23744]">View All</Text>
+              <Ionicons name="chevron-forward" size={14} color="#E23744" style={{ marginLeft: 3 }} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 6. Gym Cards */}
-        <View className="px-4">
+        <View style={{ paddingHorizontal: 16 }}>
           {(isLoading || (isPending && !nearbyData)) ? (
             <View>
               <GymCardSkeleton />
@@ -655,50 +710,127 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View className="my-6 items-center justify-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-              <Image
-                source={require('@/assets/images/empty-gyms.png')}
-                style={{ width: 190, height: 190, borderRadius: 24 }}
-                resizeMode="contain"
-              />
-              <Text className="mt-3 text-center font-bold text-lg text-darkText">
-                No Gyms Found Nearby
+            <View
+              style={{
+                marginVertical: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: '#F1F5F9',
+                backgroundColor: '#FFFFFF',
+                padding: 24,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 8,
+                elevation: 2,
+              }}>
+              <View
+                style={{
+                  marginBottom: 12,
+                  height: 64,
+                  width: 64,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 32,
+                  backgroundColor: '#FFEAEF',
+                }}>
+                <Ionicons name="location-outline" size={32} color="#E23744" />
+              </View>
+              <Text
+                style={{
+                  marginTop: 4,
+                  textAlign: 'center',
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: '#0F172A',
+                }}>
+                {formattedCityName
+                  ? `No Gyms Found in ${formattedCityName}`
+                  : 'No Gyms Found in This Area'}
               </Text>
-              <Text className="mt-1 px-4 text-center font-regular text-xs text-secondaryText leading-5">
-                We couldn&apos;t find any fitness clubs registered around this area yet. You can explore all clubs across other areas or choose a different location.
+              <Text
+                style={{
+                  marginTop: 8,
+                  paddingHorizontal: 12,
+                  textAlign: 'center',
+                  fontSize: 13,
+                  lineHeight: 20,
+                  color: '#64748B',
+                }}>
+                {formattedCityName
+                  ? `We couldn't find any fitness clubs registered within ${searchRadius} km of ${formattedCityName}. Try expanding your search range up to 30 km or search in another city.`
+                  : `We couldn't find any fitness clubs registered within ${searchRadius} km of this location. Try expanding your search range up to 30 km or search in another city.`}
               </Text>
 
               {/* Action Buttons */}
-              <View className="mt-5 w-full items-center gap-2.5">
+              <View style={{ marginTop: 20, width: '100%', gap: 10 }}>
+                {searchRadius < 30 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchRadius(30)}
+                    activeOpacity={0.85}
+                    style={{
+                      width: '100%',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 9999,
+                      backgroundColor: '#E23744',
+                      paddingVertical: 14,
+                    }}>
+                    <Ionicons name="expand-outline" size={17} color="#FFF" />
+                    <Text style={{ marginLeft: 8, fontWeight: '700', fontSize: 14, color: '#FFF' }}>
+                      Expand Search to 30 km Radius
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => setIsLocationModalVisible(true)}
+                  activeOpacity={0.85}
+                  style={{
+                    width: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 9999,
+                    borderWidth: 1,
+                    borderColor: 'rgba(226, 55, 68, 0.25)',
+                    backgroundColor: '#FFEAEF',
+                    paddingVertical: 14,
+                  }}>
+                  <Ionicons name="location-outline" size={17} color="#E23744" />
+                  <Text style={{ marginLeft: 8, fontWeight: '600', fontSize: 14, color: '#E23744' }}>
+                    Choose Another City or Location
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={() => {
                     setCity('');
                     setSelectedCategory('All');
+                    setSearchRadius(30);
                     handleClearSearch();
                     refetch();
                   }}
                   activeOpacity={0.85}
-                  className="w-full flex-row items-center justify-center rounded-full bg-[#E23744] py-3 shadow-sm">
-                  <Ionicons name="globe-outline" size={17} color="#FFF" />
-                  <Text className="ml-2 font-semibold text-sm text-white">Explore All Registered Clubs</Text>
+                  style={{
+                    width: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 9999,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    backgroundColor: '#F8FAFC',
+                    paddingVertical: 14,
+                  }}>
+                  <Ionicons name="globe-outline" size={17} color="#475569" />
+                  <Text style={{ marginLeft: 8, fontWeight: '600', fontSize: 14, color: '#334155' }}>
+                    Explore All Registered Clubs
+                  </Text>
                 </TouchableOpacity>
-
-                <View className="flex-row items-center justify-center gap-2.5 w-full">
-                  <TouchableOpacity
-                    onPress={() => setIsLocationModalVisible(true)}
-                    activeOpacity={0.85}
-                    className="flex-1 flex-row items-center justify-center rounded-full border border-[#E23744]/20 bg-[#FFEAEF] py-2.5">
-                    <Ionicons name="location-outline" size={15} color="#E23744" />
-                    <Text className="ml-1.5 font-semibold text-xs text-[#E23744]">Change City</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => refetch()}
-                    activeOpacity={0.8}
-                    className="flex-1 flex-row items-center justify-center rounded-full border border-slate-200 bg-slate-50 py-2.5">
-                    <Ionicons name="refresh-outline" size={15} color="#475569" />
-                    <Text className="ml-1.5 font-semibold text-xs text-slate-600">Retry</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           )}
@@ -710,6 +842,7 @@ export default function HomeScreen() {
         visible={isLocationModalVisible}
         initialCoords={coords}
         initialCity={city}
+        initialRadius={searchRadius}
         onClose={() => setIsLocationModalVisible(false)}
         onConfirm={handleLocationConfirmed}
       />

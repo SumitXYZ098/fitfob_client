@@ -222,10 +222,11 @@ export const useNearbyGyms = (params: {
   latitude?: number | string;
   longitude?: number | string;
   query?: string;
+  radius?: number | string;
 }) => {
   const { user } = useAuthStore();
   return useQuery({
-    queryKey: ['nearby-gyms', params.city, params.latitude, params.longitude, params.query],
+    queryKey: ['nearby-gyms', params.city, params.latitude, params.longitude, params.query, params.radius],
     queryFn: () => searchNearbyGyms(params),
     staleTime: 1000 * 60 * 3, // 3 minutes
     enabled: !!user?.token && user.verification_status === 'approved'

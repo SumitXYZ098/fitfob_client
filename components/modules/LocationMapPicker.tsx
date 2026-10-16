@@ -11,6 +11,7 @@ export interface Region {
 
 export interface LocationMapPickerHandle {
   animateToRegion: (region: Region, duration?: number) => void;
+  setRadiusCircle?: (radiusKm: number, center?: { latitude: number; longitude: number }) => void;
 }
 
 interface LocationMapPickerProps {
@@ -53,6 +54,14 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
               applyRegion(pendingRegionRef.current);
             }
           }, 1200);
+        }
+      },
+      setRadiusCircle: (radiusKm: number, center?: { latitude: number; longitude: number }) => {
+        if (webViewRef.current) {
+          const latArg = center?.latitude !== undefined ? center.latitude : 'undefined';
+          const lngArg = center?.longitude !== undefined ? center.longitude : 'undefined';
+          const js = `if (window.updateRadiusCircle) { window.updateRadiusCircle(${radiusKm}, ${latArg}, ${lngArg}); } true;`;
+          webViewRef.current.injectJavaScript(js);
         }
       },
     }));
@@ -262,6 +271,41 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
                   map.setView([newLat, newLng], z, { animate: true, duration: 0.5 });
                 }
               };
+
+              var radiusCircle = null;
+              window.updateRadiusCircle = function(radiusKm, centerLat, centerLng) {
+                var cLat = (typeof centerLat === 'number') ? centerLat : map.getCenter().lat;
+                var cLng = (typeof centerLng === 'number') ? centerLng : map.getCenter().lng;
+                var rMeters = (radiusKm || 10) * 1000;
+                if (radiusCircle) {
+                  radiusCircle.setLatLng([cLat, cLng]);
+                  radiusCircle.setRadius(rMeters);
+                } else {
+                  radiusCircle = L.circle([cLat, cLng], {
+                    radius: rMeters,
+                    color: '#E23744',
+                    weight: 2,
+                    dashArray: '6, 6',
+                    fillColor: '#E23744',
+                    fillOpacity: 0.1
+                  }).addTo(map);
+                }
+
+                // Smoothly adjust zoom to keep the radius circle nicely in view
+                var targetZoom = 13;
+                if (radiusKm <= 5) targetZoom = 13;
+                else if (radiusKm <= 10) targetZoom = 12;
+                else if (radiusKm <= 15) targetZoom = 11;
+                else if (radiusKm <= 20) targetZoom = 11;
+                else targetZoom = 10;
+                map.setZoom(targetZoom);
+              };
+
+              map.on('move', function() {
+                if (radiusCircle) {
+                  radiusCircle.setLatLng(map.getCenter());
+                }
+              });
 
               setTimeout(function() {
                 if (window.ReactNativeWebView) {
