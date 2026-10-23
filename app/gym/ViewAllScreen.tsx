@@ -285,6 +285,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     address: data.address || data.location?.address || data.clubAddress || '',
     description: data.description || data.about || data.bio || '',
     holidays: Array.isArray(data.holidays) ? data.holidays : [],
+    membershipPlans: Array.isArray(data.membershipPlans) ? data.membershipPlans : [],
   };
 };
 // ─── ViewAllScreen Component ──────────────────────────────────────────────

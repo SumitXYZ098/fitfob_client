@@ -31,6 +31,8 @@ export const ENDPOINTS = {
   // Clubs & Search
   SEARCH_CLUBS: `${BASE_URL}/api/club-owners/search`,
   GET_CLUB_DETAIL: `${BASE_URL}/api/club-owners/client`,
+  OUTDOOR_MEMBERSHIP_PLANS: `${BASE_URL}/api/outdoor-membership-plans`,
+  MEMBERSHIP_CHECKOUT_BUY: `${BASE_URL}/api/membership-checkout/buy`,
   GET_QR: `${BASE_URL}/api/client-details/me/qr`,
 
   // Notifications

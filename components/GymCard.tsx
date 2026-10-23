@@ -45,6 +45,7 @@ export interface GymItem {
   coordinate?: { latitude: number; longitude: number };
   description?: string;
   holidays?: HolidayItem[];
+  membershipPlans?: any[];
 }
 
 export interface HolidayInfo {
@@ -428,14 +429,21 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
   );
 
   let price = '₹1200/Monthly';
-  if (data.price) {
+  if (Array.isArray(data.membershipPlans) && data.membershipPlans.length > 0) {
+    const activePlans = data.membershipPlans.filter((p: any) => p && (p.isActive === undefined || p.isActive === true));
+    if (activePlans.length > 0) {
+      const monthlyPlan = activePlans.find((p: any) => p.monthDuration === 1 || p.planName?.toLowerCase()?.includes('month'));
+      const displayPlan = monthlyPlan || activePlans[0];
+      if (displayPlan?.price) {
+        price = `₹${displayPlan.price}/Monthly`;
+      }
+    }
+  } else if (data.price) {
     price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
   } else if (data.monthlyPrice) {
     price = `₹${data.monthlyPrice}/Monthly`;
   } else if (data.startingPrice) {
     price = `₹${data.startingPrice}/Monthly`;
-  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
-    price = `₹${data.membershipPlans[0].price}/Monthly`;
   }
 
   const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
@@ -511,6 +519,7 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
     },
     description: data.description || data.about || data.bio || '',
     holidays: Array.isArray(data.holidays) ? data.holidays : [],
+    membershipPlans: Array.isArray(data.membershipPlans) ? data.membershipPlans : [],
   };
 };
 
@@ -646,6 +655,10 @@ export default function GymCard({
           initialLat: gym.coordinate?.latitude,
           initialLng: gym.coordinate?.longitude,
           initialIsFav: String(localFav),
+          initialMembershipPlans:
+            gym.membershipPlans && gym.membershipPlans.length > 0
+              ? JSON.stringify(gym.membershipPlans)
+              : undefined,
         },
       });
     } catch (e) {

@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
+import { useOutdoorMembershipPlans } from '@/hook/useClient';
 
 interface PassOption {
   id: 'premium' | 'luxury';
@@ -73,6 +74,7 @@ export default function BuyOutdoorPassScreen() {
   }>();
   const [selectedPassId, setSelectedPassId] = useState<'premium' | 'luxury'>('premium');
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
+  const { data: outdoorClubs } = useOutdoorMembershipPlans();
 
   const selectedPass = PASS_OPTIONS.find((p) => p.id === selectedPassId) || PASS_OPTIONS[0];
 
@@ -258,15 +260,49 @@ export default function BuyOutdoorPassScreen() {
 
               {/* Partner Gym Type Chips */}
               <View className="flex-row flex-wrap gap-1.5">
-                {selectedPass.partnerGyms.map((gym, gIdx) => (
-                  <View
-                    key={gIdx}
-                    className="rounded-lg bg-white border border-slate-200/90 px-2.5 py-1">
-                    <Text className="text-[11.5px] font-semibold text-slate-700">
-                      • {gym}
-                    </Text>
-                  </View>
-                ))}
+                {outdoorClubs && outdoorClubs.length > 0 ? (
+                  outdoorClubs.map((club, gIdx) => (
+                    <TouchableOpacity
+                      key={club.documentId || club.id || gIdx}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/gym/gym-detail' as any,
+                          params: {
+                            id: club.documentId || String(club.id),
+                            initialTitle: club.clubName,
+                            initialAddress: club.address || '',
+                            initialCity: club.city || '',
+                            initialImages: JSON.stringify(club.club_photos?.map((p) => p.url) || []),
+                            initialAmenities: JSON.stringify([
+                              ...(club.facilities || []),
+                              ...(club.services || []),
+                            ]),
+                            initialLat: club.latitude?.toString(),
+                            initialLng: club.longitude?.toString(),
+                            initialMembershipPlans: JSON.stringify(club.membershipPlans || []),
+                          },
+                        })
+                      }
+                      className="rounded-lg bg-white border border-slate-200/90 px-2.5 py-1 flex-row items-center gap-1 shadow-2xs">
+                      <Ionicons name="business" size={11} color="#E23744" />
+                      <Text className="text-[11.5px] font-semibold text-slate-700">
+                        {club.clubName} {club.city ? `(${club.city})` : ''}
+                      </Text>
+                      <Ionicons name="arrow-forward" size={10} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  selectedPass.partnerGyms.map((gym, gIdx) => (
+                    <View
+                      key={gIdx}
+                      className="rounded-lg bg-white border border-slate-200/90 px-2.5 py-1">
+                      <Text className="text-[11.5px] font-semibold text-slate-700">
+                        • {gym}
+                      </Text>
+                    </View>
+                  ))
+                )}
               </View>
             </View>
 

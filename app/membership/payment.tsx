@@ -13,51 +13,173 @@ import Toast from 'react-native-toast-message';
 import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
 import GradientDivider from '@/components/GradientDivider';
 
+import { createMembershipCheckoutBuy } from '@/api/clientApi';
+import { openRazorpayPayment } from '@/services/razorpayService';
+import { useAuthStore } from '@/store/useAuthStore';
+
 export default function PaymentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user } = useAuthStore();
   const { setActivePass } = useOutdoorPassStore();
 
   const totalAmount = parseFloat((params.totalAmount as string) || '2199');
   const gymName = (params.gymName as string) || 'Anytime Fitness Gym';
   const visits = parseInt((params.visits as string) || '7', 10);
+  const membershipTier = (params.membershipTier as string) || 'Premium Membership';
+  const passTitle = (params.passTitle as string) || 'Premium Outdoor Pass';
+  const localPlanDocumentId = (params.planDocumentId as string) || '';
+  const outdoorPlanDocumentId = (params.outdoorPlanDocumentId as string) || '';
+
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleSelectPaymentMethod = (methodName: string) => {
-    setIsProcessing(true);
+  const handleSelectPaymentMethod = async (methodName: string) => {
+    if (isProcessing) return;
 
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      setIsProcessing(true);
 
-      const generatedPassId = `123-${Math.floor(100 + Math.random() * 900)}-${Math.floor(100 + Math.random() * 900)}`;
-      setActivePass({
-        id: generatedPassId,
-        passName: 'Premium Outdoor Pass',
-        tierId: 'premium',
-        visits,
-        totalVisits: visits,
-        expiresOn: '02/02/2026',
-        price: totalAmount,
-        location: 'Sector 71',
-        isPaused: false,
-        purchasedAt: new Date().toISOString(),
-      });
+      let orderId = params.razorpayOrderId as string;
+      let keyId = params.razorpayKeyId as string;
+      let amountInPaise = parseInt((params.totalAmountInPaise as string) || '0', 10);
+      let currency = (params.currency as string) || 'INR';
 
-      Toast.show({
-        type: 'success',
-        text1: 'Payment Successful! 🎉',
-        text2: `Paid ₹${totalAmount.toFixed(2)} via ${methodName}`,
-      });
+      // 1. If order not created yet, create it now
+      if (!orderId || !keyId) {
+        const payload = {
+          local_membership_plan: localPlanDocumentId,
+          ...(outdoorPlanDocumentId ? { outdoor_membership_plan: outdoorPlanDocumentId } : {}),
+        };
 
-      router.replace({
-        pathname: '/membership/gym-verification' as any,
-        params: {
-          gymName,
-          location: 'Sector 71',
-          passId: generatedPassId,
+        console.log('💳 Creating Razorpay Order for method:', methodName, payload);
+        const checkoutRes = await createMembershipCheckoutBuy(payload);
+        orderId = checkoutRes.razorpayOrderId;
+        keyId = checkoutRes.razorpayKeyId;
+        amountInPaise = checkoutRes.totalAmountInPaise || Math.round(totalAmount * 100);
+        currency = checkoutRes.currency || 'INR';
+      }
+
+      if (!amountInPaise) {
+        amountInPaise = Math.round(totalAmount * 100);
+      }
+
+      // 2. Open Razorpay native modal
+      const options = {
+        description: `${membershipTier} - ${gymName}`,
+        image:
+          'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop',
+        currency,
+        key: keyId,
+        amount: amountInPaise,
+        name: 'FitFob',
+        order_id: orderId,
+        prefill: {
+          email: user?.email || '',
+          contact: user?.mobile_number || (user as any)?.phone || '',
+          name: user?.full_name || user?.username || 'FitFob Member',
+          method: methodName.toLowerCase().includes('card') ? 'card' : 'upi',
         },
+        theme: { color: '#E23744' },
+      };
+
+      try {
+        const paymentResult = await openRazorpayPayment(options);
+        console.log('🎉 Razorpay payment succeeded via', methodName, paymentResult);
+
+        const generatedPassId = paymentResult.razorpay_payment_id || `FF-${Date.now()}`;
+        setActivePass({
+          id: generatedPassId,
+          passName: passTitle,
+          tierId: passTitle.toLowerCase().includes('luxury') ? 'luxury' : 'premium',
+          visits,
+          totalVisits: visits,
+          expiresOn: '30 Days',
+          price: totalAmount,
+          location: gymName,
+          isPaused: false,
+          purchasedAt: new Date().toISOString(),
+        });
+
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Successful! 🎉',
+          text2: `Paid ₹${totalAmount.toFixed(2)} via ${methodName}`,
+        });
+
+        router.replace({
+          pathname: '/membership/gym-verification' as any,
+          params: {
+            gymName,
+            location: gymName,
+            passId: generatedPassId,
+            orderId,
+          },
+        });
+      } catch (nativeErr: any) {
+        if (nativeErr?.message === 'NATIVE_MODULE_NOT_LINKED') {
+          // Fallback simulation in Expo Go
+          console.log('Simulating payment success in Expo Go dev mode');
+          const generatedPassId = `DEV-${Date.now()}`;
+          setActivePass({
+            id: generatedPassId,
+            passName: passTitle,
+            tierId: 'premium',
+            visits,
+            totalVisits: visits,
+            expiresOn: '30 Days',
+            price: totalAmount,
+            location: gymName,
+            isPaused: false,
+            purchasedAt: new Date().toISOString(),
+          });
+
+          Toast.show({
+            type: 'success',
+            text1: 'Payment Successful! 🎉',
+            text2: `Dev simulation via ${methodName}`,
+          });
+
+          router.replace({
+            pathname: '/membership/gym-verification' as any,
+            params: {
+              gymName,
+              location: gymName,
+              passId: generatedPassId,
+              orderId,
+            },
+          });
+          return;
+        }
+
+        const isCancelled =
+          nativeErr?.code === 2 ||
+          nativeErr?.code === 0 ||
+          nativeErr?.description?.toLowerCase()?.includes('cancelled');
+
+        if (isCancelled) {
+          Toast.show({
+            type: 'info',
+            text1: 'Payment Cancelled',
+            text2: 'Transaction was cancelled.',
+          });
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Payment Failed',
+            text2: nativeErr?.description || nativeErr?.message || 'Transaction could not be completed.',
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('❌ Payment processing error:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Order Creation Failed',
+        text2: err?.response?.data?.message || err?.message || 'Could not start payment transaction.',
       });
-    }, 1200);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (

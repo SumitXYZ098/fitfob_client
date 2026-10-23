@@ -62,6 +62,16 @@ export interface ReviewItem {
   comment: string;
 }
 
+export interface ClubMembershipPlan {
+  id?: number | string;
+  documentId?: string;
+  planName: string;
+  price: number;
+  monthDuration: number;
+  isActive: boolean;
+  validUpto: string;
+}
+
 // Kept for backward compatibility with external imports (empty record - no dummy data)
 export const GYM_DETAILS: Record<string, any> = {};
 
@@ -330,6 +340,7 @@ export default function GymDetailScreen() {
     initialLat?: string;
     initialLng?: string;
     initialIsFav?: string;
+    initialMembershipPlans?: string;
   }>();
   const gymId = params.id || '';
   const queryClient = useQueryClient();
@@ -347,6 +358,28 @@ export default function GymDetailScreen() {
     } catch {}
     return [];
   }, [params.initialImages]);
+
+  // 1b. Instantly parse membershipPlans passed from the GymCard
+  const initialMembershipPlans: ClubMembershipPlan[] = useMemo(() => {
+    if (!params.initialMembershipPlans) return [];
+    try {
+      const parsed = JSON.parse(params.initialMembershipPlans);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((p) => p && (p.isActive === undefined || p.isActive === true))
+          .map((p, idx) => ({
+            id: p.id || p.documentId || `plan-${idx}`,
+            documentId: p.documentId || String(p.id || ''),
+            planName: p.planName || p.name || 'Membership Plan',
+            price: Number(p.price || 0),
+            monthDuration: Number(p.monthDuration || 1),
+            isActive: p.isActive !== false,
+            validUpto: p.validUpto || 'unlimited',
+          }));
+      }
+    } catch {}
+    return [];
+  }, [params.initialMembershipPlans]);
 
   // 2. Also check if the gym data already exists in React Query's nearby-gyms cache
   const cachedFromNearby = useMemo(() => {
@@ -485,6 +518,25 @@ export default function GymDetailScreen() {
           });
         }
 
+        const rawCachedPlans =
+          (sourceData as any)?.membershipPlans ||
+          (sourceData as any)?.plans ||
+          [];
+        const cachedMembershipPlans: ClubMembershipPlan[] =
+          initialMembershipPlans.length > 0
+            ? initialMembershipPlans
+            : Array.isArray(rawCachedPlans)
+            ? rawCachedPlans.map((p: any, idx: number) => ({
+                id: p.id || p.documentId || `plan-${idx}`,
+                documentId: p.documentId || String(p.id || ''),
+                planName: p.planName || p.name || 'Membership Plan',
+                price: Number(p.price || 0),
+                monthDuration: Number(p.monthDuration || 1),
+                isActive: p.isActive !== false,
+                validUpto: p.validUpto || 'unlimited',
+              }))
+            : [];
+
         return {
           id: gymId,
           clubId: sourceData.clubId || '',
@@ -510,6 +562,9 @@ export default function GymDetailScreen() {
           photos: initialPhotos,
           documentId: sourceData.documentId || gymId,
           isFav: isFavorite,
+          phoneNumber: String(sourceData.phoneNumber || sourceData.phone || ''),
+          email: String(sourceData.email || ''),
+          membershipPlans: cachedMembershipPlans,
         };
       }
       return null;
@@ -678,6 +733,25 @@ export default function GymDetailScreen() {
 
     const holidays = Array.isArray(d.holidays) ? d.holidays : [];
 
+    const rawPlans = d.membershipPlans || d.plans || [];
+    let membershipPlans: ClubMembershipPlan[] =
+      Array.isArray(rawPlans) && rawPlans.length > 0
+        ? rawPlans
+            .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
+            .map((p: any, idx: number) => ({
+              id: p.id || p.documentId || `plan-${idx}`,
+              documentId: p.documentId || String(p.id || ''),
+              planName: p.planName || p.name || 'Membership Plan',
+              price: Number(p.price || 0),
+              monthDuration: Number(p.monthDuration || 1),
+              isActive: p.isActive !== false,
+              validUpto: p.validUpto || 'unlimited',
+            }))
+        : initialMembershipPlans;
+
+    const phoneNumber: string = String(d.phoneNumber || d.phone || d.contactNumber || '');
+    const email: string = String(d.email || d.contactEmail || '');
+
     return {
       id: String(d.documentId || d._id || d.id || gymId),
       clubId,
@@ -703,11 +777,15 @@ export default function GymDetailScreen() {
       photos,
       documentId: String(d.documentId || d._id || d.id || gymId),
       isFav: isFavorite,
+      phoneNumber,
+      email,
+      membershipPlans,
     };
   }, [
     apiData,
     gymId,
     initialPhotos,
+    initialMembershipPlans,
     params.initialTitle,
     params.initialAddress,
     params.initialCategory,
@@ -720,6 +798,14 @@ export default function GymDetailScreen() {
     cachedFromNearby,
     isFavorite,
   ]);
+
+  const lowestPlanPrice = useMemo(() => {
+    if (!gym?.membershipPlans || gym.membershipPlans.length === 0) return 0;
+    const prices = gym.membershipPlans.map((p) =>
+      p.monthDuration > 1 ? Math.round(p.price / p.monthDuration) : p.price
+    );
+    return Math.min(...prices);
+  }, [gym?.membershipPlans]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
@@ -1494,6 +1580,35 @@ export default function GymDetailScreen() {
             </View>
           )}
 
+          {/* Quick Action Chips: Call Club, Directions, Share */}
+          <View className="mt-2.5 flex-row items-center gap-2">
+            {Boolean(gym.phoneNumber) && (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(`tel:${gym.phoneNumber}`).catch(() => {})}
+                activeOpacity={0.8}
+                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 shadow-2xs">
+                <Ionicons name="call" size={13} color="#1E293B" />
+                <Text className="font-semibold text-xs text-slate-800">Call</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => handleGetDirections()}
+              activeOpacity={0.8}
+              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 shadow-2xs">
+              <Ionicons name="navigate" size={13} color="#E23744" />
+              <Text className="font-semibold text-xs text-[#E23744]">Directions</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleShare()}
+              activeOpacity={0.8}
+              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 shadow-2xs">
+              <Ionicons name="share-social-outline" size={13} color="#1E293B" />
+              <Text className="font-semibold text-xs text-slate-800">Share</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Description Paragraph (Only if real description provided, skeleton while loading) */}
           {Boolean(gym.description) ? (
             <Text className="mt-4 font-sans text-xs leading-5 text-slate-600">
@@ -1612,7 +1727,146 @@ export default function GymDetailScreen() {
             </View>
           ) : null}
 
-          {/* 5. Open Hours (Only if timings provided, skeleton while loading) */}
+          {/* 5. Official Membership Plans */}
+          {gym.membershipPlans && gym.membershipPlans.length > 0 ? (
+            <View className="mt-7">
+              {/* Section Header */}
+              <View className="flex-row items-center justify-between mb-3.5">
+                <View>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="font-extrabold text-base text-slate-900 tracking-tight">
+                      Membership Plans
+                    </Text>
+                    <View className="rounded-full bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                      <Text className="text-[10px] font-bold text-emerald-700">
+                        {gym.membershipPlans.length} Available
+                      </Text>
+                    </View>
+                  </View>
+                  <Text className="mt-0.5 text-xs text-slate-500 font-medium">
+                    Official club pricing for {gym.title}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Plan Cards */}
+              <View className="gap-3">
+                {gym.membershipPlans.map((plan: ClubMembershipPlan, idx: number) => {
+                  const isMonthly = plan.monthDuration === 1;
+                  const isBestValue = plan.monthDuration >= 3 || (!isMonthly && idx > 0);
+                  const monthlyEquivalent =
+                    plan.monthDuration > 1 ? Math.round(plan.price / plan.monthDuration) : plan.price;
+
+                  return (
+                    <TouchableOpacity
+                      key={plan.documentId ? `${plan.documentId}-${idx}` : idx}
+                      activeOpacity={0.9}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/membership/buy-membership' as any,
+                          params: {
+                            gymName: gym.title,
+                            gymId: gym.id,
+                            selectedPlanId: plan.documentId || String(idx),
+                            selectedPlanName: plan.planName,
+                            selectedPlanPrice: plan.price.toString(),
+                            selectedPlanDuration: plan.monthDuration.toString(),
+                            plans: JSON.stringify(gym.membershipPlans),
+                          },
+                        })
+                      }
+                      className={`overflow-hidden rounded-2xl border ${
+                        isBestValue
+                          ? 'border-red-200 bg-red-50/20'
+                          : 'border-slate-200 bg-white'
+                      } p-4 shadow-xs`}>
+                      {/* Top row: Plan Name + Duration badge + Price */}
+                      <View className="flex-row items-start justify-between">
+                        <View className="flex-row items-center gap-2.5">
+                          <View className="h-9 w-9 items-center justify-center rounded-xl bg-red-500/10">
+                            <Ionicons name="barbell-outline" size={18} color="#E23744" />
+                          </View>
+                          <View>
+                            <View className="flex-row items-center gap-2">
+                              <Text className="font-bold text-base text-slate-900">
+                                {plan.planName} Plan
+                              </Text>
+                              {isBestValue && (
+                                <View className="rounded-full bg-rose-50 px-2 py-0.5 border border-rose-200">
+                                  <Text className="text-[10px] font-bold text-[#E23744]">
+                                    Best Value
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <View className="flex-row items-center gap-1.5 mt-0.5">
+                              <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                              <Text className="text-xs font-semibold text-slate-500">
+                                {plan.monthDuration} Month{plan.monthDuration > 1 ? 's' : ''} Duration
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Price */}
+                        <View className="items-end">
+                          <Text className="font-extrabold text-lg text-slate-900">
+                            ₹{plan.price.toLocaleString('en-IN')}
+                          </Text>
+                          {plan.monthDuration > 1 ? (
+                            <Text className="text-[11px] font-semibold text-emerald-600">
+                              ₹{monthlyEquivalent.toLocaleString('en-IN')}/mo
+                            </Text>
+                          ) : (
+                            <Text className="text-[11px] font-medium text-slate-400">/month</Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Subtle Divider */}
+                      <View className="my-3 h-[1px] bg-slate-100" />
+
+                      {/* Plan Perks */}
+                      <View className="gap-1.5">
+                        <View className="flex-row items-center gap-2">
+                          <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                          <Text className="text-xs text-slate-600 font-medium">
+                            Unlimited check-ins ({plan.validUpto} access)
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                          <Text className="text-xs text-slate-600 font-medium">
+                            Full access to workout equipment & amenities
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Footer row: Button */}
+                      <View className="mt-3.5 flex-row items-center justify-between pt-2.5 border-t border-slate-100">
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="shield-checkmark" size={13} color="#16A34A" />
+                          <Text className="text-[11px] font-medium text-slate-500">Verified Partner Club</Text>
+                        </View>
+                        <View className="flex-row items-center gap-1 bg-[#E23744] px-3.5 py-1.5 rounded-xl">
+                          <Text className="text-xs font-bold text-white">Select Plan</Text>
+                          <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : isDetailFetching ? (
+            <View className="mt-7">
+              <GymDetailSkeletonBox style={{ height: 18, width: 150, borderRadius: 4, marginBottom: 12 }} />
+              <GymDetailSkeletonBox style={{ height: 110, width: '100%', borderRadius: 16, marginBottom: 10 }} />
+              <GymDetailSkeletonBox style={{ height: 110, width: '100%', borderRadius: 16 }} />
+            </View>
+          ) : null}
+
+          {/* 6. Open Hours (Only if timings provided, skeleton while loading) */}
           {Boolean(gym.openHours) ? (
             <View className="mt-6">
               <Text className="font-bold text-base text-slate-900">Open Hours</Text>
@@ -1834,13 +2088,33 @@ export default function GymDetailScreen() {
               },
             }),
           }}
-          className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-slate-100 bg-white px-4 pt-3">
+          className="absolute bottom-0 left-0 right-0 flex-row items-center gap-3 border-t border-slate-100 bg-white px-4 pt-3">
+          {/* Starting price indicator if plans exist */}
+          {lowestPlanPrice > 0 && (
+            <View className="pr-1 justify-center">
+              <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Starts at
+              </Text>
+              <Text className="font-extrabold text-[17px] text-slate-900 leading-tight">
+                ₹{lowestPlanPrice.toLocaleString('en-IN')}
+                <Text className="text-xs font-medium text-slate-400">/mo</Text>
+              </Text>
+            </View>
+          )}
+
           {/* Buy Membership Button */}
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: '/membership/buy-membership' as any,
-                params: { gymName: gym.title, gymId: gym.id },
+                params: {
+                  gymName: gym.title,
+                  gymId: gym.id,
+                  plans:
+                    gym.membershipPlans && gym.membershipPlans.length > 0
+                      ? JSON.stringify(gym.membershipPlans)
+                      : undefined,
+                },
               })
             }
             activeOpacity={0.85}
@@ -1852,8 +2126,8 @@ export default function GymDetailScreen() {
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/outdoor-pass')}
             activeOpacity={0.85}
-            className="flex-1 items-center justify-center rounded-2xl border-2 border-[#E23744] bg-white py-3.5">
-            <Text className="font-bold text-sm text-[#E23744]">Use Outdoor Pass</Text>
+            className="items-center justify-center rounded-2xl border-2 border-[#E23744] bg-white px-4 py-3.5">
+            <Text className="font-bold text-sm text-[#E23744]">Outdoor Pass</Text>
           </TouchableOpacity>
         </View>
       )}

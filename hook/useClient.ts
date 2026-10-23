@@ -19,6 +19,12 @@ import {
   getMyCheckins,
   CheckinItem,
   MyCheckinsResponse,
+  getOutdoorMembershipPlans,
+  OutdoorMembershipClub,
+  OutdoorPlanItem,
+  createMembershipCheckoutBuy,
+  MembershipCheckoutBuyPayload,
+  MembershipCheckoutBuyResponse,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -352,6 +358,30 @@ export const useToggleFavorite = () => {
   };
 };
 
+// ─── Outdoor Membership Plans Hook ──────────────────────────────────────────
+export const useOutdoorMembershipPlans = (params?: {
+  latitude?: number | string;
+  longitude?: number | string;
+  city?: string;
+  radius?: number | string;
+  search?: string;
+}) => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: [
+      'outdoor-membership-plans',
+      params?.city,
+      params?.latitude,
+      params?.longitude,
+      params?.search,
+      params?.radius,
+    ],
+    queryFn: () => getOutdoorMembershipPlans(params),
+    staleTime: 1000 * 60 * 3, // 3 minutes
+    enabled: !!user?.token,
+  });
+};
+
 // ─── Visits / Check-ins Hooks ──────────────────────────────────────────────
 export const useMyCheckins = () => {
   return useQuery({
@@ -361,5 +391,20 @@ export const useMyCheckins = () => {
   });
 };
 
-export type { CheckinItem, MyCheckinsResponse };
+// ─── Membership Checkout Hook ──────────────────────────────────────────────
+export const useMembershipCheckoutBuy = () => {
+  return useMutation({
+    mutationFn: (payload: MembershipCheckoutBuyPayload) => createMembershipCheckoutBuy(payload),
+  });
+};
+
+export type {
+  CheckinItem,
+  MyCheckinsResponse,
+  OutdoorMembershipClub,
+  OutdoorPlanItem,
+  MembershipCheckoutBuyPayload,
+  MembershipCheckoutBuyResponse,
+};
+
 
