@@ -7,7 +7,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
@@ -66,6 +66,7 @@ const PASS_OPTIONS: PassOption[] = [
 
 export default function BuyOutdoorPassScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { gymName, gymAddress, gymImage, gymRating } = useLocalSearchParams<{
     gymName?: string;
     gymAddress?: string;
@@ -408,6 +409,8 @@ export default function BuyOutdoorPassScreen() {
       <Modal
         visible={isInfoModalVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setIsInfoModalVisible(false)}>
         <View className="flex-1 justify-end bg-black/60">
@@ -416,7 +419,11 @@ export default function BuyOutdoorPassScreen() {
             onPress={() => setIsInfoModalVisible(false)}
             className="flex-1"
           />
-          <View className="rounded-t-[32px] bg-white px-5 pt-3 pb-8 max-h-[82%] shadow-2xl">
+          <View
+            style={{
+              paddingBottom: Math.max(insets.bottom, 24),
+            }}
+            className="rounded-t-[32px] bg-white px-5 pt-3 max-h-[85%] shadow-2xl">
             {/* Modal Drag Handle */}
             <View className="mb-3 items-center">
               <View className="h-1.5 w-12 rounded-full bg-slate-200" />

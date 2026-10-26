@@ -321,7 +321,8 @@ export default function OpenStreetMapLocationModal({
       visible={visible}
       animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      statusBarTranslucent
+      navigationBarTranslucent>
       <View style={styles.container}>
         {/* Fullscreen OpenStreetMap via LocationMapPicker */}
         <View style={StyleSheet.absoluteFill}>

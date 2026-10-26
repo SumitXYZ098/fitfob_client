@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -19,6 +19,7 @@ import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
 
 export default function ReviewAndBuyScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const { user } = useAuthStore();
   const { setActivePass } = useOutdoorPassStore();
@@ -78,7 +79,13 @@ export default function ReviewAndBuyScreen() {
           contact: user?.mobile_number || (user as any)?.phone || '',
           name: user?.full_name || user?.username || 'FitFob Member',
         },
-        theme: { color: '#E23744' },
+        theme: {
+          color: '#E23744',
+          backdrop_color: '#FFFFFF',
+        },
+        modal: {
+          backdrop_color: '#FFFFFF',
+        },
         retry: {
           enabled: true,
           max_count: 3,
@@ -290,9 +297,11 @@ export default function ReviewAndBuyScreen() {
       </ScrollView>
 
       {/* 5. Sticky Bottom Action Button */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white">
+      <View
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        className="absolute bottom-0 left-0 right-0 bg-white shadow-lg">
         <GradientDivider />
-        <View className="px-5 pt-3 pb-6">
+        <View className="px-5 pt-3 pb-2">
           <TouchableOpacity
             onPress={handlePayAndActivate}
             activeOpacity={0.88}

@@ -79,7 +79,13 @@ export default function PaymentScreen() {
           name: user?.full_name || user?.username || 'FitFob Member',
           method: methodName.toLowerCase().includes('card') ? 'card' : 'upi',
         },
-        theme: { color: '#E23744' },
+        theme: {
+          color: '#E23744',
+          backdrop_color: '#FFFFFF',
+        },
+        modal: {
+          backdrop_color: '#FFFFFF',
+        },
       };
 
       try {

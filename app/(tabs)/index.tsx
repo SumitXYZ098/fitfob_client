@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   StatusBar,
   Keyboard,
-  BackHandler,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -241,19 +240,8 @@ export default function HomeScreen() {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
 
-  // Prevent back gesture / button from going back to Login screen
-  useEffect(() => {
-    const onBackPress = () => {
-      BackHandler.exitApp();
-      return true;
-    };
-
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => subscription.remove();
-  }, []);
 
   const { data: favoritesData } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
@@ -488,10 +476,6 @@ export default function HomeScreen() {
     }
   }, [refetch, detectLocation]);
 
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]">
       <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
@@ -533,10 +517,8 @@ export default function HomeScreen() {
                   />
                 )}
                 {/* Search Range Badge */}
-                <View className="ml-2 rounded-full bg-[#FFEAEF] px-2 py-0.5 border border-[#FFD0DC]">
-                  <Text className="text-[10px] font-bold text-[#E23744]">
-                    {searchRadius} km
-                  </Text>
+                <View className="ml-2 rounded-full  x-2 py-0.5">
+                  
                 </View>
               </View>
               <Text className="font-regular text-[11px] text-slate-400" numberOfLines={1}>
@@ -668,10 +650,7 @@ export default function HomeScreen() {
             filteredGyms.map((gym) => {
               const isTopMatch =
                 selectedCategory !== 'All' && gymMatchesCategory(gym, selectedCategory);
-              const isGymFav =
-                favorites[gym.id] !== undefined
-                  ? favorites[gym.id]
-                  : favoriteIds.has(String(gym.documentId || gym.id));
+              const isGymFav = favoriteIds.has(String(gym.documentId || gym.id));
               return (
                 <GymCard
                   key={gym.id}
@@ -679,7 +658,6 @@ export default function HomeScreen() {
                   isTopMatch={isTopMatch}
                   selectedCategory={selectedCategory}
                   isFav={isGymFav}
-                  onToggleFavorite={() => toggleFavorite(gym.id)}
                 />
               );
             })

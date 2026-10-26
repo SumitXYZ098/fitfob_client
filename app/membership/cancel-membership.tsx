@@ -170,6 +170,8 @@ export default function CancelMembershipScreen() {
       <Modal
         visible={isReasonModalOpen}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setIsReasonModalOpen(false)}>
         <TouchableOpacity

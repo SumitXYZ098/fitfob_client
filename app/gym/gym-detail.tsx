@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  type ScrollViewInstance,
   Image,
   Platform,
   useWindowDimensions,
@@ -815,7 +816,7 @@ export default function GymDetailScreen() {
   // Exercise Zones Photo Lightbox Modal State
   const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
   const zoneListRef = useRef<FlatList>(null);
-  const thumbnailScrollRef = useRef<ScrollView>(null);
+  const thumbnailScrollRef = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (selectedZoneIndex !== null && thumbnailScrollRef.current) {
@@ -888,7 +889,7 @@ export default function GymDetailScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<GymBranchItem | null>(null);
   const mapInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const currentIndexRef = useRef(0);
   const scrollY = useRef(new Animated.Value(0)).current;
   const heroScrollX = useRef(new Animated.Value(0)).current;
@@ -1008,7 +1009,7 @@ export default function GymDetailScreen() {
   }, [screenWidth, gym?.photos]);
 
   // Review Carousel State & Infinite Circular Auto-Scroll
-  const reviewScrollRef = useRef<ScrollView>(null);
+  const reviewScrollRef = useRef<ScrollViewInstance>(null);
   const reviewIndexRef = useRef(0);
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
   const reviewScrollX = useRef(new Animated.Value(0)).current;
@@ -1581,7 +1582,7 @@ export default function GymDetailScreen() {
           )}
 
           {/* Quick Action Chips: Call Club, Directions, Share */}
-          <View className="mt-2.5 flex-row items-center gap-2">
+          {/* <View className="mt-2.5 flex-row items-center gap-2">
             {Boolean(gym.phoneNumber) && (
               <TouchableOpacity
                 onPress={() => Linking.openURL(`tel:${gym.phoneNumber}`).catch(() => {})}
@@ -1607,7 +1608,7 @@ export default function GymDetailScreen() {
               <Ionicons name="share-social-outline" size={13} color="#1E293B" />
               <Text className="font-semibold text-xs text-slate-800">Share</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Description Paragraph (Only if real description provided, skeleton while loading) */}
           {Boolean(gym.description) ? (
@@ -2142,11 +2143,7 @@ export default function GymDetailScreen() {
         presentationStyle="fullScreen"
         onRequestClose={handleCloseZoneViewer}>
         <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} className="justify-between">
-          <StatusBar
-            barStyle="dark-content"
-            backgroundColor="transparent"
-            translucent={true}
-          />
+          <StatusBar barStyle="dark-content" />
 
           {/* Top Header Bar */}
           <View

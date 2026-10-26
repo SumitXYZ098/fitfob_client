@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGymDetail } from '@/hook/useClient';
@@ -189,6 +189,7 @@ const FILTER_TABS = [
 
 export default function ReviewsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const gymId = (params.id as string) || (params.gymId as string) || '';
   const { data: apiData } = useGymDetail(gymId || undefined);
@@ -571,6 +572,8 @@ export default function ReviewsScreen() {
       <Modal
         visible={isWriteModalVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setIsWriteModalVisible(false)}>
         <KeyboardAvoidingView
@@ -581,7 +584,9 @@ export default function ReviewsScreen() {
             onPress={() => setIsWriteModalVisible(false)}
             className="flex-1"
           />
-          <View className="rounded-t-[32px] bg-white p-5 max-h-[85%] shadow-2xl">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="rounded-t-[32px] bg-white p-5 max-h-[85%] shadow-2xl">
             {/* Modal Drag Handle */}
             <View className="mb-3 items-center">
               <View className="h-1.5 w-12 rounded-full bg-slate-300" />

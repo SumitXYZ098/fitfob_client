@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -91,6 +92,7 @@ const CATEGORIES = [
 
 export default function HelpSupportScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -379,9 +381,13 @@ export default function HelpSupportScreen() {
         visible={isTicketModalOpen}
         animationType="slide"
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setIsTicketModalOpen(false)}>
         <View className="flex-1 justify-end bg-black/60">
-          <View className="max-h-[85%] rounded-t-[32px] bg-white p-6 shadow-2xl">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="max-h-[85%] rounded-t-[32px] bg-white p-6 shadow-2xl">
             {/* Modal Header */}
             <View className="flex-row items-center justify-between pb-3">
               <View>

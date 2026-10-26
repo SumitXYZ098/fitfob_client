@@ -16,6 +16,13 @@ export interface RazorpayOptions {
   };
   theme?: {
     color?: string;
+    backdrop_color?: string;
+  };
+  modal?: {
+    backdrop_color?: string;
+    backdropclose?: boolean;
+    handleback?: boolean;
+    confirm_close?: boolean;
   };
   retry?: {
     enabled: boolean;
@@ -43,14 +50,28 @@ export const openRazorpayPayment = async (
       throw new Error('NATIVE_MODULE_NOT_LINKED');
     }
 
+    // Ensure white backdrop and navigation bar backgrounds so no red line leaks underneath
+    const checkoutPayload = {
+      ...options,
+      theme: {
+        color: '#E23744',
+        backdrop_color: '#FFFFFF',
+        ...(options.theme || {}),
+      },
+      modal: {
+        backdrop_color: '#FFFFFF',
+        ...(options.modal || {}),
+      },
+    };
+
     console.log('🚀 Opening Razorpay Native Checkout:', {
-      order_id: options.order_id,
-      amount: options.amount,
-      currency: options.currency,
-      key: `${(options.key || '').substring(0, 8)}...`,
+      order_id: checkoutPayload.order_id,
+      amount: checkoutPayload.amount,
+      currency: checkoutPayload.currency,
+      key: `${(checkoutPayload.key || '').substring(0, 8)}...`,
     });
 
-    const result: RazorpayPaymentSuccess = await RazorpayCheckout.open(options);
+    const result: RazorpayPaymentSuccess = await RazorpayCheckout.open(checkoutPayload);
     console.log('✅ Razorpay Payment Success Callback:', result);
     return result;
   } catch (error: any) {

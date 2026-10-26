@@ -6,7 +6,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
@@ -68,6 +68,7 @@ const PLANS: MembershipPlan[] = [
 export default function BuyMembershipScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
 
   const gymName = (params.gymName as string) || 'Anytime Fitness Gym';
 
@@ -89,7 +90,7 @@ export default function BuyMembershipScreen() {
               validUpto: p.validUpto || 'unlimited',
             }));
         }
-      } catch {}
+      } catch { }
     }
     return [];
   }, [params.plans]);
@@ -219,15 +220,13 @@ export default function BuyMembershipScreen() {
                   key={tab.id}
                   onPress={() => setSelectedDuration(tab.id)}
                   activeOpacity={0.8}
-                  className={`flex-1 items-center justify-center py-2 rounded-lg ${
-                    isActive ? 'bg-white shadow-xs' : ''
-                  }`}>
+                  className={`flex-1 items-center justify-center py-2 rounded-lg ${isActive ? 'bg-white shadow-xs' : ''
+                    }`}>
                   <Text
-                    className={`text-[12.5px] ${
-                      isActive
+                    className={`text-[12.5px] ${isActive
                         ? 'font-semibold text-slate-800'
                         : 'font-medium text-slate-500'
-                    }`}>
+                      }`}>
                     {tab.label}
                   </Text>
                 </TouchableOpacity>
@@ -275,9 +274,8 @@ export default function BuyMembershipScreen() {
                     <View className="items-end">
                       <View className="flex-row items-baseline">
                         <Text
-                          className={`font-bold text-[18px] ${
-                            isSelected ? 'text-[#E23744]' : 'text-slate-800'
-                          }`}>
+                          className={`font-bold text-[18px] ${isSelected ? 'text-[#E23744]' : 'text-slate-800'
+                            }`}>
                           ₹{plan.price.toLocaleString('en-IN')}
                         </Text>
                       </View>
@@ -355,9 +353,8 @@ export default function BuyMembershipScreen() {
 
                     <View className="flex-row items-baseline">
                       <Text
-                        className={`font-bold text-[18px] ${
-                          isSelected ? 'text-[#E23744]' : 'text-slate-800'
-                        }`}>
+                        className={`font-bold text-[18px] ${isSelected ? 'text-[#E23744]' : 'text-slate-800'
+                          }`}>
                         {priceStr}
                       </Text>
                       <Text className="text-[12px] text-slate-400 font-normal ml-0.5">
@@ -394,9 +391,11 @@ export default function BuyMembershipScreen() {
       </ScrollView>
 
       {/* 5. Sticky Bottom Action Button */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white">
+      <View
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        className="absolute bottom-0 left-0 right-0 bg-white shadow-lg">
         <GradientDivider />
-        <View className="px-5 pt-3 pb-6">
+        <View className="px-5 pt-3 pb-2">
           <TouchableOpacity
             onPress={handleContinue}
             activeOpacity={0.88}
@@ -411,6 +410,8 @@ export default function BuyMembershipScreen() {
       <Modal
         visible={isAddOnModalOpen}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setIsAddOnModalOpen(false)}>
         <View className="flex-1 justify-end bg-black/50">
@@ -419,7 +420,11 @@ export default function BuyMembershipScreen() {
             onPress={() => setIsAddOnModalOpen(false)}
             className="flex-1"
           />
-          <View className="rounded-t-[32px] bg-white px-6 pt-4 pb-8 shadow-2xl">
+          <View
+            style={{
+              paddingBottom: Math.max(insets.bottom, 24),
+            }}
+            className="rounded-t-[32px] bg-white px-6 pt-4 shadow-2xl">
             {/* Modal Drag Handle */}
             <View className="mb-3 items-center">
               <View className="h-1 w-10 rounded-full bg-slate-300" />

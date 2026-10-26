@@ -296,16 +296,14 @@ export const useAddFavorite = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (clubDocumentId: string) => addFavorite(clubDocumentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+    onSuccess: (_data, clubDocumentId) => {
+      queryClient.setQueryData(['client-favorites'], (old: any) => {
+        if (!old) return [{ documentId: clubDocumentId }];
+        const list = Array.isArray(old) ? old : Array.isArray(old?.data) ? old.data : [];
+        return [...list, { documentId: clubDocumentId }];
+      });
     },
-    onError: (error: any) => {
-      const msg =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.message ||
-        'Failed to add to favorites';
-      Toast.show({ type: 'error', text1: 'Favorites', text2: msg });
-    },
+    onError: () => {},
   });
 };
 
@@ -314,16 +312,17 @@ export const useRemoveFavorite = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (clubDocumentId: string) => removeFavorite(clubDocumentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['client-favorites'] });
+    onSuccess: (_data, clubDocumentId) => {
+      queryClient.setQueryData(['client-favorites'], (old: any) => {
+        if (!old) return [];
+        const list = Array.isArray(old) ? old : Array.isArray(old?.data) ? old.data : [];
+        return list.filter((item: any) => {
+          const docId = item?.documentId || item?.club?.documentId || item?.id;
+          return String(docId) !== String(clubDocumentId);
+        });
+      });
     },
-    onError: (error: any) => {
-      const msg =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.message ||
-        'Failed to remove from favorites';
-      Toast.show({ type: 'error', text1: 'Favorites', text2: msg });
-    },
+    onError: () => {},
   });
 };
 
@@ -337,18 +336,8 @@ export const useToggleFavorite = () => {
 
     if (isCurrentlyFav) {
       await removeMutation.mutateAsync(clubDocumentId);
-      Toast.show({
-        type: 'info',
-        text1: 'Removed from Favorites',
-        text2: 'Gym removed from your favorites list',
-      });
     } else {
       await addMutation.mutateAsync(clubDocumentId);
-      Toast.show({
-        type: 'success',
-        text1: 'Added to Favorites ❤️',
-        text2: 'Gym added to your favorites list',
-      });
     }
   };
 

@@ -23,6 +23,7 @@ import {
 } from '@/hook/useClient';
 import { Button } from '@/components/modules/Button';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const getMaxPhoneLength = (code: string): number => {
   const lengths: Record<string, number> = {
@@ -56,6 +57,7 @@ interface BasicDetailsProps {
 
 const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
   ({ prefill, onVerificationChange, onSaveData }, ref) => {
+    const insets = useSafeAreaInsets();
     const { user, setUser } = useAuthStore();
     const { mutateAsync } = useClientBasicDetails();
     const sendOtpMutation = useClientSendOtp();
@@ -702,6 +704,7 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
           transparent
           animationType="slide"
           statusBarTranslucent
+          navigationBarTranslucent
           onRequestClose={() => {
             Keyboard.dismiss();
             setIsOtpModalOpen(false);
@@ -717,7 +720,9 @@ const BasicDetails = forwardRef<BasicDetailsRef, BasicDetailsProps>(
               }}
               style={{ flex: 1 }}
             />
-            <View className="rounded-t-[32px] bg-white p-6 shadow-2xl">
+            <View
+              style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+              className="rounded-t-[32px] bg-white p-6 shadow-2xl">
                 {/* Drag Handle Indicator */}
                 <View className="mb-4 items-center">
                   <View className="h-1.5 w-12 rounded-full bg-slate-200" />

@@ -12,7 +12,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Polygon, Line, Circle } from 'react-native-svg';
 import * as Location from 'expo-location';
@@ -293,6 +293,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
 
 export default function ViewAllScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoryAnimTrigger, setCategoryAnimTrigger] = useState<{ id: string; time: number }>({
     id: 'All',
@@ -637,10 +638,14 @@ export default function ViewAllScreen() {
       <Modal
         visible={isFilterModalVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setIsFilterModalVisible(false)}>
         <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-          <View className="rounded-t-3xl bg-white p-5">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="rounded-t-3xl bg-white p-5">
             <View className="mb-4 flex-row items-center justify-between">
               <Text className="font-bold text-xl text-darkText">Filter & Sort</Text>
               <TouchableOpacity onPress={() => setIsFilterModalVisible(false)}>
