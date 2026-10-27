@@ -11,12 +11,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
 import { registerDeviceTokenWithBackend } from '@/services/notificationService';
 
+SplashScreen.preventAutoHideAsync();
+
 const queryClient = new QueryClient();
 
 export default function Layout() {
   const { user, isInitializing, initializeAuth } = useAuthStore();
 
-  const [loaded] = useFonts({
+  const [loaded, fontError] = useFonts({
     'PlusJakartaSans-Regular': require('../assets/fonts/PlusJakartaSans-Regular.ttf'),
     'PlusJakartaSans-Medium': require('../assets/fonts/PlusJakartaSans-Medium.ttf'),
     'PlusJakartaSans-SemiBold': require('../assets/fonts/PlusJakartaSans-SemiBold.ttf'),
@@ -31,15 +33,17 @@ export default function Layout() {
 
   useEffect(() => {
     if (user?.token) {
-      registerDeviceTokenWithBackend();
+      registerDeviceTokenWithBackend().catch((e) =>
+        console.warn('Notification registration warning:', e)
+      );
     }
   }, [user?.token]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (loaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [loaded]);
+  }, [loaded, fontError]);
 
   if (!loaded || isInitializing) {
     return (
