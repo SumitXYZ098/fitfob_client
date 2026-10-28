@@ -5,12 +5,14 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  type ScrollViewInstance,
   Pressable,
   StyleSheet,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // -------------------------------------------------------------
 // Constants & Helper Functions
@@ -113,7 +115,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | null>(value || null);
   const [viewMode, setViewMode] = useState<ViewMode>('days');
 
-  const yearScrollViewRef = useRef<ScrollView>(null);
+  const yearScrollViewRef = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (value) {
@@ -511,6 +513,7 @@ export const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   cancelText = 'Cancel',
   primaryColor = '#F6163C',
 }) => {
+  const insets = useSafeAreaInsets();
   const [tempDate, setTempDate] = useState<Date>(
     value || (maxDate && maxDate < new Date() ? maxDate : new Date())
   );
@@ -537,11 +540,12 @@ export const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
       transparent
       animationType="fade"
       statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={handleCancel}>
       <View style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleCancel} />
 
-        <View style={styles.modalSheet}>
+        <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           {/* Top Sheet Handle */}
           <View style={styles.modalHandle} />
 

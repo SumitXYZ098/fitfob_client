@@ -13,11 +13,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
+import { useOutdoorMembershipPlans, OutdoorMembershipClub } from '@/hook/useClient';
+import * as Location from 'expo-location';
 
 export default function OutdoorPassScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const { activePass } = useOutdoorPassStore();
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getLastKnownPositionAsync();
+          if (loc) {
+            setUserLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const { data: outdoorClubs, isLoading: isOutdoorLoading } = useOutdoorMembershipPlans({
+    latitude: userLocation?.latitude,
+    longitude: userLocation?.longitude,
+  });
 
   // Smooth floating, breathing & gentle tilt animation so the 3D pass moves like a live GIF!
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -295,94 +320,150 @@ export default function OutdoorPassScreen() {
           </View>
         </View>
 
-        {/* 5. Recommended Passes Near You */}
+        {/* 5. Live Outdoor Clubs & Arenas Near You */}
         <View className="mt-6">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="font-bold text-base text-slate-900">Available Near You</Text>
+            <View>
+              <Text className="font-extrabold text-base text-slate-900">Available Near You</Text>
+              <Text className="text-[11px] font-medium text-slate-500">
+                Partner fitness clubs accepting outdoor passes
+              </Text>
+            </View>
             <TouchableOpacity onPress={() => router.push('/gym/ViewAllScreen' as any)}>
               <Text className="font-bold text-xs text-[#E23744]">View All</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Mini Pass Card 1 */}
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: '/gym/gym-detail' as any,
-                params: {
-                  id: '1',
-                  initialImages: JSON.stringify([
-                    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
-                  ]),
-                  initialTitle: 'Anytime Fitness Outdoor Turf',
-                  initialAddress: 'Sector 71, Mohali',
-                  initialCategory: 'Outdoor Turf',
-                  initialRating: '4.5',
-                },
-              })
-            }
-            activeOpacity={0.85}
-            className="flex-row items-center rounded-2xl border border-slate-200/70 bg-white p-3 shadow-xs mb-2.5">
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=300&auto=format&fit=crop',
-              }}
-              className="h-16 w-16 rounded-xl"
-              resizeMode="cover"
-            />
-            <View className="ml-3 flex-1">
-              <Text className="font-bold text-xs text-slate-900" numberOfLines={1}>
-                Anytime Fitness Outdoor Turf
-              </Text>
-              <Text className="text-[11px] text-slate-500">Sector 71, Mohali</Text>
-              <View className="mt-1 flex-row items-center">
-                <Ionicons name="star" size={11} color="#F59E0B" />
-                <Text className="ml-1 text-[11px] font-semibold text-slate-700">4.5</Text>
-                <Text className="ml-2 font-bold text-xs text-[#E23744]">₹199 / Day Pass</Text>
-              </View>
+          {isOutdoorLoading ? (
+            <View className="space-y-2.5">
+              {[1, 2].map((_, i) => (
+                <View
+                  key={i}
+                  className="flex-row items-center rounded-2xl border border-slate-200/60 bg-white p-3">
+                  <View className="h-16 w-16 rounded-xl bg-slate-200 animate-pulse" />
+                  <View className="ml-3 flex-1 space-y-1.5">
+                    <View className="h-3.5 w-3/4 rounded bg-slate-200 animate-pulse" />
+                    <View className="h-2.5 w-1/2 rounded bg-slate-100 animate-pulse" />
+                    <View className="h-3 w-1/3 rounded bg-slate-200 animate-pulse" />
+                  </View>
+                </View>
+              ))}
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          ) : outdoorClubs && outdoorClubs.length > 0 ? (
+            <View className="space-y-2.5">
+              {outdoorClubs.map((club: OutdoorMembershipClub, idx: number) => {
+                const photoUrl =
+                  club.club_photos?.[0]?.url ||
+                  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop';
+                const displayPhoto = photoUrl.startsWith('http')
+                  ? photoUrl
+                  : `${process.env.EXPO_PUBLIC_API_URL}${photoUrl}`;
 
-          {/* Mini Pass Card 2 */}
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: '/gym/gym-detail' as any,
-                params: {
-                  id: '2',
-                  initialImages: JSON.stringify([
-                    'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=1000&auto=format&fit=crop',
-                  ]),
-                  initialTitle: 'FitZone Calisthenics Arena',
-                  initialAddress: 'Phase 8, Industrial Area, Mohali',
-                  initialCategory: 'Calisthenics',
-                  initialRating: '4.8',
-                },
-              })
-            }
-            activeOpacity={0.85}
-            className="flex-row items-center rounded-2xl border border-slate-200/70 bg-white p-3 shadow-xs">
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?q=80&w=300&auto=format&fit=crop',
-              }}
-              className="h-16 w-16 rounded-xl"
-              resizeMode="cover"
-            />
-            <View className="ml-3 flex-1">
-              <Text className="font-bold text-xs text-slate-900" numberOfLines={1}>
-                Gold’s Outdoor CrossFit Arena
-              </Text>
-              <Text className="text-[11px] text-slate-500">Phase 5, Mohali</Text>
-              <View className="mt-1 flex-row items-center">
-                <Ionicons name="star" size={11} color="#F59E0B" />
-                <Text className="ml-1 text-[11px] font-semibold text-slate-700">4.8</Text>
-                <Text className="ml-2 font-bold text-xs text-[#E23744]">₹249 / Day Pass</Text>
-              </View>
+                const activePlans = (club.membershipPlans || []).filter(
+                  (p) => p.isActive === undefined || p.isActive === true
+                );
+                const lowestPrice =
+                  activePlans.length > 0
+                    ? Math.min(
+                        ...activePlans.map((p) => {
+                          const duration = p.monthDuration || 1;
+                          return duration > 1 ? Math.round(p.price / duration) : p.price;
+                        })
+                      )
+                    : 0;
+                const priceLabel =
+                  lowestPrice > 0 ? `From ₹${lowestPrice.toLocaleString('en-IN')}/mo` : 'Pass Available';
+
+                return (
+                  <TouchableOpacity
+                    key={club.documentId || club.id || idx}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/gym/gym-detail' as any,
+                        params: {
+                          id: club.documentId || String(club.id),
+                          initialTitle: club.clubName,
+                          initialAddress: club.address || '',
+                          initialCity: club.city || '',
+                          initialImages: JSON.stringify(club.club_photos?.map((p) => p.url) || []),
+                          initialAmenities: JSON.stringify([
+                            ...(club.facilities || []),
+                            ...(club.services || []),
+                          ]),
+                          initialLat: club.latitude?.toString(),
+                          initialLng: club.longitude?.toString(),
+                          initialMembershipPlans: JSON.stringify(club.membershipPlans || []),
+                        },
+                      })
+                    }
+                    activeOpacity={0.88}
+                    className="flex-row items-center rounded-2xl border border-slate-200/80 bg-white p-3 shadow-xs">
+                    <Image
+                      source={{ uri: displayPhoto }}
+                      className="h-16 w-16 rounded-xl bg-slate-100"
+                      resizeMode="cover"
+                    />
+                    <View className="ml-3 flex-1 pr-1">
+                      <View className="flex-row items-center justify-between">
+                        <Text
+                          className="font-extrabold text-[13.5px] text-slate-900 flex-1 mr-1"
+                          numberOfLines={1}>
+                          {club.clubName}
+                        </Text>
+                        {club.distance !== undefined && club.distance !== null && (
+                          <View className="flex-row items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5">
+                            <Ionicons name="location-sharp" size={10} color="#E23744" />
+                            <Text className="text-[10px] font-bold text-slate-600">
+                              {typeof club.distance === 'number'
+                                ? club.distance.toFixed(1)
+                                : club.distance}{' '}
+                              {club.distanceUnit || 'km'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text className="mt-0.5 text-[11px] text-slate-500" numberOfLines={1}>
+                        {club.address || club.city || 'Verified Outdoor Partner Gym'}
+                      </Text>
+
+                      {/* Services Chips */}
+                      {club.services && club.services.length > 0 && (
+                        <View className="mt-1 flex-row flex-wrap gap-1">
+                          {club.services.slice(0, 3).map((s, sIdx) => (
+                            <View key={sIdx} className="rounded-md bg-slate-100 px-1.5 py-0.5">
+                              <Text className="text-[9.5px] font-semibold text-slate-600">{s}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* Price & Action */}
+                      <View className="mt-1.5 flex-row items-center justify-between">
+                        <Text className="font-bold text-xs text-[#E23744]">{priceLabel}</Text>
+                        <View className="flex-row items-center">
+                          <Text className="text-[11px] font-semibold text-slate-700 mr-0.5">
+                            View Details
+                          </Text>
+                          <Ionicons name="chevron-forward" size={12} color="#E23744" />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          ) : (
+            <View className="rounded-2xl border border-slate-200 bg-white p-5 items-center">
+              <Ionicons name="barbell-outline" size={32} color="#94A3B8" />
+              <Text className="font-bold text-xs text-slate-700 mt-1">
+                No Partner Clubs Near You
+              </Text>
+              <Text className="text-[11px] text-slate-400 text-center mt-0.5">
+                New outdoor fitness arenas and clubs are joining daily!
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

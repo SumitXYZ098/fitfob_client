@@ -112,6 +112,12 @@
     },
     "react-art": {
       "react": "$react"
+    },
+    "@react-native-clipboard/clipboard": {
+      "react-native": "$react-native"
+    },
+    "react-native-otp-inputs": {
+      "react-native": "$react-native"
     }
   }
 }

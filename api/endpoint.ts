@@ -25,12 +25,11 @@ export const ENDPOINTS = {
   CLIENT_VERIFY_OTP: `${BASE_URL}/api/pending-client/verify-otp`,
   CLIENT_RESEND_OTP: `${BASE_URL}/api/pending-client/resend-otp`,
 
-
-  // Dashboard
-
   // Clubs & Search
   SEARCH_CLUBS: `${BASE_URL}/api/club-owners/search`,
   GET_CLUB_DETAIL: `${BASE_URL}/api/club-owners/client`,
+  OUTDOOR_MEMBERSHIP_PLANS: `${BASE_URL}/api/outdoor-membership-plans`,
+  MEMBERSHIP_CHECKOUT_BUY: `${BASE_URL}/api/membership-checkout/buy`,
   GET_QR: `${BASE_URL}/api/client-details/me/qr`,
 
   // Notifications

@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  type ScrollViewInstance,
   Image,
   useWindowDimensions,
   Modal,
@@ -13,7 +14,7 @@ import {
   Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
@@ -32,6 +33,7 @@ export { GymItem };
 
 export default function Mapviewscreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
 
   // 3-Stage Snap Positions (GPU hardware accelerated translateY):
@@ -137,7 +139,7 @@ export default function Mapviewscreen() {
     return rawList.map(mapClubOwnerToGym);
   }, [nearbyData]);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const mapRef = useRef<AllGymsMapViewHandle>(null);
 
   const toggleFavorite = (id: string) => {
@@ -495,10 +497,14 @@ export default function Mapviewscreen() {
       <Modal
         visible={isFilterModalVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setIsFilterModalVisible(false)}>
         <View className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t-3xl bg-white p-5">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="rounded-t-3xl bg-white p-5">
             <View className="mb-4 flex-row items-center justify-between">
               <Text className="font-bold text-xl text-darkText">Filter & Sort</Text>
               <TouchableOpacity onPress={() => setIsFilterModalVisible(false)}>

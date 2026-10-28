@@ -13,7 +13,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import { CustomCalendarModal } from '@/components/modules/CustomCalendar';
@@ -216,6 +216,7 @@ const formatDetailDate = (dateStr?: string | null) => {
 
 export default function TransactionsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const soundWebViewRef = React.useRef<any>(null);
 
   const playRefreshFeedback = useCallback(() => {
@@ -838,13 +839,17 @@ export default function TransactionsScreen() {
       <Modal
         visible={filterModalVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setFilterModalVisible(false)}>
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => setFilterModalVisible(false)}
           className="flex-1 justify-end bg-black/40">
-          <View className="rounded-t-3xl bg-white p-6 max-h-[90%]">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="rounded-t-3xl bg-white p-6 max-h-[90%]">
             <View className="mb-4 flex-row items-center justify-between">
               <Text className="font-bold text-lg text-darkText">Filter by Date</Text>
               <View className="flex-row items-center gap-3">
@@ -1073,6 +1078,8 @@ export default function TransactionsScreen() {
       <Modal
         visible={Boolean(selectedVisit)}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setSelectedVisit(null)}>
         <View className="flex-1 justify-end bg-black/60">
@@ -1081,7 +1088,9 @@ export default function TransactionsScreen() {
             onPress={() => setSelectedVisit(null)}
             className="flex-1"
           />
-          <View className="rounded-t-[32px] bg-white px-5 pt-3 pb-8 max-h-[85%]">
+          <View
+            style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            className="rounded-t-[32px] bg-white px-5 pt-3 max-h-[85%]">
             {/* Modal Drag Handle */}
             <View className="mb-3 items-center">
               <View className="h-1.5 w-12 rounded-full bg-slate-200" />

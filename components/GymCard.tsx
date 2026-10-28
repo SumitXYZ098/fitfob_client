@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  type ScrollViewInstance,
   Image,
   Animated,
   useWindowDimensions,
@@ -12,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 import { useToggleFavorite } from '@/hook/useClient';
 
 export interface HolidayItem {
@@ -45,6 +47,7 @@ export interface GymItem {
   coordinate?: { latitude: number; longitude: number };
   description?: string;
   holidays?: HolidayItem[];
+  membershipPlans?: any[];
 }
 
 export interface HolidayInfo {
@@ -428,14 +431,21 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
   );
 
   let price = '₹1200/Monthly';
-  if (data.price) {
+  if (Array.isArray(data.membershipPlans) && data.membershipPlans.length > 0) {
+    const activePlans = data.membershipPlans.filter((p: any) => p && (p.isActive === undefined || p.isActive === true));
+    if (activePlans.length > 0) {
+      const monthlyPlan = activePlans.find((p: any) => p.monthDuration === 1 || p.planName?.toLowerCase()?.includes('month'));
+      const displayPlan = monthlyPlan || activePlans[0];
+      if (displayPlan?.price) {
+        price = `₹${displayPlan.price}/Monthly`;
+      }
+    }
+  } else if (data.price) {
     price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
   } else if (data.monthlyPrice) {
     price = `₹${data.monthlyPrice}/Monthly`;
   } else if (data.startingPrice) {
     price = `₹${data.startingPrice}/Monthly`;
-  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
-    price = `₹${data.membershipPlans[0].price}/Monthly`;
   }
 
   const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
@@ -511,6 +521,7 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
     },
     description: data.description || data.about || data.bio || '',
     holidays: Array.isArray(data.holidays) ? data.holidays : [],
+    membershipPlans: Array.isArray(data.membershipPlans) ? data.membershipPlans : [],
   };
 };
 
@@ -573,7 +584,7 @@ export interface GymCardProps {
   onToggleFavorite?: () => void;
 }
 
-export default function GymCard({
+const GymCard = React.memo(function GymCard({
   gym,
   isFav = false,
   isTopMatch,
@@ -582,33 +593,53 @@ export default function GymCard({
 }: GymCardProps) {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 32;
 
-  const { toggleFavorite, isPending: isTogglingFav } = useToggleFavorite();
+  const { toggleFavorite } = useToggleFavorite();
   const [localFav, setLocalFav] = useState<boolean>(Boolean(isFav));
+  const userToggledRef = useRef(false);
+
+  const heartScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    setLocalFav(Boolean(isFav));
+    if (!userToggledRef.current) {
+      setLocalFav(Boolean(isFav));
+    }
   }, [isFav]);
 
-  const handleToggleFavorite = async () => {
+  const handleToggleFavorite = () => {
     const clubDocumentId = gym.documentId || gym.id;
     const nextState = !localFav;
+    userToggledRef.current = true;
     setLocalFav(nextState);
+
+    // Trigger haptic asynchronously so it never stalls Android UI thread
+    setTimeout(() => {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {}
+    }, 0);
+
+    // Instant native spring punch (0ms start delay, 60fps on Android UI thread)
+    heartScale.setValue(0.75);
+    Animated.spring(heartScale, {
+      toValue: 1,
+      friction: 3.5,
+      tension: 220,
+      useNativeDriver: true,
+    }).start();
 
     if (onToggleFavorite) {
       onToggleFavorite();
     }
 
+    // Fire API call asynchronously in background without blocking UI
     if (clubDocumentId) {
-      try {
-        await toggleFavorite(clubDocumentId, localFav);
-      } catch (e) {
-        // Revert on error
+      toggleFavorite(clubDocumentId, localFav).catch(() => {
         setLocalFav(localFav);
-      }
+      });
     }
   };
 
@@ -646,6 +677,10 @@ export default function GymCard({
           initialLat: gym.coordinate?.latitude,
           initialLng: gym.coordinate?.longitude,
           initialIsFav: String(localFav),
+          initialMembershipPlans:
+            gym.membershipPlans && gym.membershipPlans.length > 0
+              ? JSON.stringify(gym.membershipPlans)
+              : undefined,
         },
       });
     } catch (e) {
@@ -680,17 +715,19 @@ export default function GymCard({
           ))}
         </ScrollView>
 
-        {/* Top Left: Heart Favorite Button */}
+        {/* Top Left: Heart Favorite Button with Snappy Spring Reaction */}
         <TouchableOpacity
           onPress={handleToggleFavorite}
           activeOpacity={0.7}
-          disabled={isTogglingFav}
-          className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/30">
-          <Ionicons
-            name={localFav ? 'heart' : 'heart-outline'}
-            size={18}
-            color={localFav ? '#E23744' : '#FFF'}
-          />
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          className="absolute left-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full bg-black/40">
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Ionicons
+              name={localFav ? 'heart' : 'heart-outline'}
+              size={18}
+              color={localFav ? '#E23744' : '#FFF'}
+            />
+          </Animated.View>
         </TouchableOpacity>
 
         {/* Top Right: Verified Badge */}
@@ -836,4 +873,6 @@ export default function GymCard({
       </TouchableOpacity>
     </View>
   );
-}
+});
+
+export default GymCard;

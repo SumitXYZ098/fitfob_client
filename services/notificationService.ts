@@ -23,73 +23,86 @@ if (isRunningInExpoGo() && Platform.OS === 'android') {
 }
 
 // Configure notification behavior when app is in foreground
-if (Notifications?.setNotificationHandler) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
+try {
+  if (Notifications?.setNotificationHandler) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  }
+} catch (handlerError) {
+  console.warn('Failed to set notification handler:', handlerError);
 }
 
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
-  const notif = Notifications;
-  if (!notif) {
+  try {
+    const notif = Notifications;
+    if (!notif) {
+      return undefined;
+    }
+
+    let token: string | undefined;
+
+    // Android Notification Channel Setup
+    if (Platform.OS === 'android') {
+      try {
+        await notif.setNotificationChannelAsync('default', {
+          name: 'Default Channel',
+          importance: notif.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#F6163C',
+        });
+      } catch (channelError) {
+        console.warn('Failed to set notification channel:', channelError);
+      }
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await notif.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await notif.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.warn('Push notification permissions denied.');
+        return undefined;
+      }
+
+      // Retrieve EAS Project ID from Expo Constants
+      const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ??
+        Constants?.easConfig?.projectId;
+
+      if (!projectId) {
+        console.error('Project ID not found in app.json extra.eas.projectId');
+        return undefined;
+      }
+
+      try {
+        const pushTokenData = await notif.getExpoPushTokenAsync({
+          projectId,
+        });
+        token = pushTokenData.data;
+        console.log('✅ Registered Expo Push Token:', token);
+      } catch (error) {
+        console.error('❌ Error getting Expo Push Token:', error);
+      }
+    } else {
+      console.log('Must use a physical device for Push Notifications');
+    }
+
+    return token;
+  } catch (err) {
+    console.warn('Push notification registration skipped or failed:', err);
     return undefined;
   }
-
-  let token: string | undefined;
-
-  // Android Notification Channel Setup
-  if (Platform.OS === 'android') {
-    await notif.setNotificationChannelAsync('default', {
-      name: 'Default Channel',
-      importance: notif.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#F6163C',
-    });
-  }
-
-  if (Device.isDevice) {
-    const { status: existingStatus } = await notif.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const { status } = await notif.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
-      console.warn('Push notification permissions denied.');
-      return undefined;
-    }
-
-    // Retrieve EAS Project ID from Expo Constants
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
-
-    if (!projectId) {
-      console.error('Project ID not found in app.json extra.eas.projectId');
-      return undefined;
-    }
-
-    try {
-      const pushTokenData = await notif.getExpoPushTokenAsync({
-        projectId,
-      });
-      token = pushTokenData.data;
-      console.log('✅ Registered Expo Push Token:', token);
-    } catch (error) {
-      console.error('❌ Error getting Expo Push Token:', error);
-    }
-  } else {
-    console.log('Must use a physical device for Push Notifications');
-  }
-
-  return token;
 }
 
 export async function registerDeviceTokenWithBackend(expoPushToken?: string) {

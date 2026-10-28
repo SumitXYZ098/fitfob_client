@@ -439,3 +439,113 @@ export const getMyCheckins = async (): Promise<MyCheckinsResponse> => {
   }
 };
 
+// ─── Outdoor Membership Plans API ───────────────────────────────────────────
+
+export interface OutdoorPlanItem {
+  id?: number | string;
+  documentId?: string;
+  planName: string;
+  price: number;
+  monthDuration?: number;
+  visitAllowed?: number;
+  description?: string | null;
+  isActive?: boolean;
+  validUpto?: string;
+}
+
+export interface OutdoorMembershipClub {
+  id: number | string;
+  documentId: string;
+  clubName: string;
+  clubId?: string;
+  city?: string;
+  address?: string;
+  latitude?: string | number;
+  longitude?: string | number;
+  distance?: number | string;
+  distanceUnit?: string;
+  club_photos?: { url: string; imageInfo?: string }[];
+  services?: string[];
+  facilities?: string[];
+  holidays?: any[];
+  membershipPlans?: OutdoorPlanItem[];
+  rating?: number | string;
+}
+
+export interface OutdoorMembershipPlansResponse {
+  data: OutdoorMembershipClub[];
+}
+
+// Fetch outdoor membership plans / partner outdoor clubs: GET /api/outdoor-membership-plans
+export const getOutdoorMembershipPlans = async (params?: {
+  latitude?: number | string;
+  longitude?: number | string;
+  city?: string;
+  radius?: number | string;
+  search?: string;
+}): Promise<OutdoorMembershipClub[]> => {
+  try {
+    const queryParts: string[] = [];
+    if (params?.city && params.city.trim()) {
+      queryParts.push(`city=${encodeURIComponent(params.city.trim())}`);
+    } else {
+      if (params?.latitude !== undefined && params?.latitude !== null && params?.latitude !== '') {
+        queryParts.push(`latitude=${encodeURIComponent(params.latitude.toString())}`);
+      }
+      if (params?.longitude !== undefined && params?.longitude !== null && params?.longitude !== '') {
+        queryParts.push(`longitude=${encodeURIComponent(params.longitude.toString())}`);
+      }
+    }
+    if (params?.radius) queryParts.push(`radius=${encodeURIComponent(params.radius.toString())}`);
+    if (params?.search && params.search.trim()) {
+      queryParts.push(`search=${encodeURIComponent(params.search.trim())}`);
+    }
+
+    const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    const url = `${ENDPOINTS.OUTDOOR_MEMBERSHIP_PLANS}${queryString}`;
+    console.log('📡 Fetching outdoor membership plans from:', url);
+
+    const response = await apiInstance.get(url);
+    console.log('✅ Outdoor membership plans fetched successfully from:', url);
+    console.log('📦 [clientApi] Raw response.data:', JSON.stringify(response.data, null, 2));
+    const result = response.data;
+    if (Array.isArray(result)) return result;
+    if (Array.isArray(result?.data)) return result.data;
+    return [];
+  } catch (error: any) {
+    if (error?.response?.status === 404 || error?.response?.status === 400) {
+      console.log('ℹ️ No outdoor membership plans found (404/400), returning empty list');
+      return [];
+    }
+    console.error('❌ Error fetching outdoor membership plans:', error?.response?.data || error.message);
+    return [];
+  }
+};
+
+// ─── Membership Checkout & Buy ──────────────────────────────────────────────
+export interface MembershipCheckoutBuyPayload {
+  local_membership_plan: string;
+  outdoor_membership_plan?: string | null;
+}
+
+export interface MembershipCheckoutBuyResponse {
+  razorpayOrderId: string;
+  razorpayKeyId: string;
+  totalAmountInPaise: number;
+  currency: string;
+}
+
+export const createMembershipCheckoutBuy = async (
+  payload: MembershipCheckoutBuyPayload
+): Promise<MembershipCheckoutBuyResponse> => {
+  try {
+    console.log('💳 Initiating membership checkout buy with payload:', JSON.stringify(payload, null, 2));
+    const response = await apiInstance.post(ENDPOINTS.MEMBERSHIP_CHECKOUT_BUY, payload);
+    console.log('✅ Checkout buy response:', JSON.stringify(response.data, null, 2));
+    return response.data?.data || response.data;
+  } catch (error: any) {
+    console.error('❌ Error creating membership checkout order:', error?.response?.data || error.message);
+    throw error;
+  }
+};
+
