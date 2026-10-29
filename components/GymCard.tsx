@@ -613,6 +613,7 @@ const GymCard = React.memo(function GymCard({
     const clubDocumentId = gym.documentId || gym.id;
     const nextState = !localFav;
     userToggledRef.current = true;
+
     setLocalFav(nextState);
 
     // Trigger haptic asynchronously so it never stalls Android UI thread
