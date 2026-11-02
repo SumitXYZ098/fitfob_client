@@ -435,7 +435,7 @@ export default function HomeScreen() {
       });
     }
 
-    // 2. Filter by Search Range / Radius (up to searchRadius km, max 30km)
+    // 2. Filter by Search Range / Radius (up to searchRadius km, min 2km, max 20km)
     let radiusFiltered = searchFiltered.filter((gym) => {
       if (gym.distance) {
         const distNum = parseFloat(gym.distance);
@@ -739,15 +739,15 @@ export default function HomeScreen() {
                   color: '#64748B',
                 }}>
                 {formattedCityName
-                  ? `We couldn't find any fitness clubs registered within ${searchRadius} km of ${formattedCityName}. Try expanding your search range up to 30 km or search in another city.`
-                  : `We couldn't find any fitness clubs registered within ${searchRadius} km of this location. Try expanding your search range up to 30 km or search in another city.`}
+                  ? `We couldn't find any fitness clubs registered within ${searchRadius} km of ${formattedCityName}. Try expanding your search range up to 20 km or search in another city.`
+                  : `We couldn't find any fitness clubs registered within ${searchRadius} km of this location. Try expanding your search range up to 20 km or search in another city.`}
               </Text>
 
               {/* Action Buttons */}
               <View style={{ marginTop: 20, width: '100%', gap: 10 }}>
-                {searchRadius < 30 && (
+                {searchRadius < 20 && (
                   <TouchableOpacity
-                    onPress={() => setSearchRadius(30)}
+                    onPress={() => setSearchRadius(20)}
                     activeOpacity={0.85}
                     style={{
                       width: '100%',
@@ -760,7 +760,7 @@ export default function HomeScreen() {
                     }}>
                     <Ionicons name="expand-outline" size={17} color="#FFF" />
                     <Text style={{ marginLeft: 8, fontWeight: '700', fontSize: 14, color: '#FFF' }}>
-                      Expand Search to 30 km Radius
+                      Expand Search to 20 km Radius
                     </Text>
                   </TouchableOpacity>
                 )}

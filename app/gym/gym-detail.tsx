@@ -14,6 +14,7 @@ import {
   StatusBar,
   Modal,
   FlatList,
+  LayoutAnimation,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -813,10 +814,15 @@ export default function GymDetailScreen() {
   const insets = useSafeAreaInsets();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
+  // Key Features / Amenities Show More Toggle State (default 10 items)
+  const [showAllAmenities, setShowAllAmenities] = useState<boolean>(false);
+
   // Exercise Zones Photo Lightbox Modal State
   const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
   const zoneListRef = useRef<FlatList>(null);
   const thumbnailScrollRef = useRef<ScrollViewInstance>(null);
+  const isClosingZoneViewerRef = useRef<boolean>(false);
+  const lastClosedZoneViewerTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (selectedZoneIndex !== null && thumbnailScrollRef.current) {
@@ -828,6 +834,11 @@ export default function GymDetailScreen() {
   }, [selectedZoneIndex, screenWidth]);
 
   const handleOpenZoneViewer = (index: number) => {
+    // Prevent iOS tap-through / touch ghosting right after closing
+    if (Date.now() - lastClosedZoneViewerTimeRef.current < 450) {
+      return;
+    }
+    isClosingZoneViewerRef.current = false;
     setSelectedZoneIndex(index);
     setTimeout(() => {
       try {
@@ -837,11 +848,18 @@ export default function GymDetailScreen() {
   };
 
   const handleCloseZoneViewer = () => {
+    isClosingZoneViewerRef.current = true;
+    lastClosedZoneViewerTimeRef.current = Date.now();
     setSelectedZoneIndex(null);
   };
 
   const handleNextZone = () => {
-    if (selectedZoneIndex !== null && gym?.exerciseZones && selectedZoneIndex < gym.exerciseZones.length - 1) {
+    if (
+      !isClosingZoneViewerRef.current &&
+      selectedZoneIndex !== null &&
+      gym?.exerciseZones &&
+      selectedZoneIndex < gym.exerciseZones.length - 1
+    ) {
       const next = selectedZoneIndex + 1;
       setSelectedZoneIndex(next);
       try {
@@ -851,7 +869,11 @@ export default function GymDetailScreen() {
   };
 
   const handlePrevZone = () => {
-    if (selectedZoneIndex !== null && selectedZoneIndex > 0) {
+    if (
+      !isClosingZoneViewerRef.current &&
+      selectedZoneIndex !== null &&
+      selectedZoneIndex > 0
+    ) {
       const prev = selectedZoneIndex - 1;
       setSelectedZoneIndex(prev);
       try {
@@ -1699,18 +1721,45 @@ export default function GymDetailScreen() {
           {/* 4. Key Features / Amenities (Only if amenities exist, skeleton while loading) */}
           {gym.amenities.length > 0 ? ( 
             <View className="mt-6">
-              <Text className="font-bold text-base text-slate-900">Key Features</Text>
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="font-bold text-base text-slate-900">Key Features</Text>
+                
+              </View>
 
-              <View className="mt-3 flex-row flex-wrap gap-2.5">
-                {gym.amenities.map((item, idx) => (
+              <View className="flex-row flex-wrap gap-2.5">
+                {(showAllAmenities ? gym.amenities : gym.amenities.slice(0, 10)).map((item, idx) => (
                   <View
                     key={idx}
                     className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
                     <Ionicons name={item.icon as any} size={18} color="#E23744" />
-                    <Text className="font-semibold text-xs text-slate-800">{item.name}</Text>
+                    <Text className="font-semibold text-xs text-slate-800 flex-1" numberOfLines={1}>{item.name}</Text>
                   </View>
                 ))}
               </View>
+
+              {/* Show More / Show Less Toggle Button */}
+              {gym.amenities.length > 10 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    try {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    } catch {}
+                    setShowAllAmenities((prev) => !prev);
+                  }}
+                  activeOpacity={0.75}
+                  className="mt-3.5 flex-row items-center justify-center gap-1.5 rounded-2xl border border-rose-100 bg-rose-50/70 py-3 shadow-sm">
+                  <Text className="text-xs font-bold text-[#E23744]">
+                    {showAllAmenities
+                      ? 'Show Less'
+                      : `View All ${gym.amenities.length} Features (+${gym.amenities.length - 10} more)`}
+                  </Text>
+                  <Ionicons
+                    name={showAllAmenities ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color="#E23744"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           ) : isDetailFetching ? (
             <View className="mt-6">
@@ -2141,7 +2190,10 @@ export default function GymDetailScreen() {
         statusBarTranslucent={true}
         hardwareAccelerated={true}
         presentationStyle="fullScreen"
-        onRequestClose={handleCloseZoneViewer}>
+        onRequestClose={handleCloseZoneViewer}
+        onDismiss={() => {
+          isClosingZoneViewerRef.current = false;
+        }}>
         <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} className="justify-between">
           <StatusBar barStyle="dark-content" />
 
@@ -2170,6 +2222,7 @@ export default function GymDetailScreen() {
               {/* Right: Close Button */}
               <TouchableOpacity
                 onPress={handleCloseZoneViewer}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 activeOpacity={0.7}
                 className="h-10 w-10 items-center justify-center rounded-full bg-slate-100 border border-slate-200 active:bg-slate-200">
                 <Ionicons name="close" size={22} color="#0F172A" />
@@ -2193,6 +2246,7 @@ export default function GymDetailScreen() {
                 index,
               })}
               onScrollToIndexFailed={(info) => {
+                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
                 setTimeout(() => {
                   try {
                     zoneListRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -2201,6 +2255,7 @@ export default function GymDetailScreen() {
               }}
               scrollEventThrottle={16}
               onScroll={(e) => {
+                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
                 const offsetX = e.nativeEvent.contentOffset.x;
                 const newIndex = Math.round(offsetX / screenWidth);
                 if (
@@ -2212,8 +2267,13 @@ export default function GymDetailScreen() {
                 }
               }}
               onMomentumScrollEnd={(e) => {
+                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
                 const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-                if (idx >= 0 && idx < gym.exerciseZones.length) {
+                if (
+                  idx >= 0 &&
+                  idx < gym.exerciseZones.length &&
+                  idx !== selectedZoneIndex
+                ) {
                   setSelectedZoneIndex(idx);
                 }
               }}
@@ -2308,6 +2368,7 @@ export default function GymDetailScreen() {
                       key={idx}
                       activeOpacity={0.8}
                       onPress={() => {
+                        if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
                         setSelectedZoneIndex(idx);
                         try {
                           zoneListRef.current?.scrollToIndex({ index: idx, animated: true });

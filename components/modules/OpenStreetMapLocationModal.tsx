@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  PanResponder,
+  LayoutAnimation,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import LocationMapPicker, {
   LocationMapPickerHandle,
   Region,
@@ -35,6 +38,11 @@ export interface SelectedLocationData {
   formattedAddress: string;
   radius: number;
 }
+
+const MIN_RADIUS = 2;
+const MAX_RADIUS = 20;
+const THUMB_SIZE = 28;
+const clampRadius = (r: number) => Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, Math.round(r)));
 
 interface OpenStreetMapLocationModalProps {
   visible: boolean;
@@ -56,10 +64,61 @@ export default function OpenStreetMapLocationModal({
   const insets = useSafeAreaInsets();
   const mapRef = useRef<LocationMapPickerHandle>(null);
   const reverseGeocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedRadius, setSelectedRadius] = useState<number>(
-    initialRadius && initialRadius >= 10 ? initialRadius : 10
-  );
+
+  const [selectedRadius, setSelectedRadius] = useState<number>(() => {
+    if (typeof initialRadius === 'number' && !isNaN(initialRadius)) {
+      return clampRadius(initialRadius);
+    }
+    return 10;
+  });
+
+  const [trackWidth, setTrackWidth] = useState<number>(220);
+  const trackWidthRef = useRef<number>(220);
+  trackWidthRef.current = trackWidth;
+
+  const touchStartXRef = useRef<number>(0);
+  const lastRadiusRef = useRef<number>(selectedRadius);
+  lastRadiusRef.current = selectedRadius;
+
   const [bottomSheetHeight, setBottomSheetHeight] = useState<number>(Platform.OS === 'ios' ? 360 : 330);
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (visible) {
+      setIsSheetCollapsed(false);
+    }
+  }, [visible]);
+
+  const toggleSheet = useCallback(() => {
+    try {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    } catch {}
+    setIsSheetCollapsed((prev) => !prev);
+  }, []);
+
+  const handlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 18) {
+            try {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            } catch {}
+            setIsSheetCollapsed(true);
+          } else if (gestureState.dy < -18) {
+            try {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            } catch {}
+            setIsSheetCollapsed(false);
+          } else {
+            toggleSheet();
+          }
+        },
+      }),
+    [toggleSheet]
+  );
 
   // Safe area insets: modern iOS devices (Dynamic Island / notch) require >= 52pt
   const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 52 : 16);
@@ -81,6 +140,25 @@ export default function OpenStreetMapLocationModal({
   const [isAddressLoading, setIsAddressLoading] = useState<boolean>(false);
   const [isGpsLoading, setIsGpsLoading] = useState<boolean>(false);
 
+  const currentRegionRef = useRef<Region>(currentRegion);
+  currentRegionRef.current = currentRegion;
+
+  const updateRadius = useCallback((newRadius: number) => {
+    const clamped = clampRadius(newRadius);
+    if (clamped !== lastRadiusRef.current) {
+      lastRadiusRef.current = clamped;
+      setSelectedRadius(clamped);
+      Haptics.selectionAsync().catch(() => {});
+      mapRef.current?.setRadiusCircle?.(clamped, {
+        latitude: currentRegionRef.current.latitude,
+        longitude: currentRegionRef.current.longitude,
+      });
+    }
+  }, []);
+
+  const updateRadiusRef = useRef(updateRadius);
+  updateRadiusRef.current = updateRadius;
+
   // Sync region when modal opens
   useEffect(() => {
     if (visible && initialCoords?.latitude && initialCoords?.longitude) {
@@ -94,24 +172,66 @@ export default function OpenStreetMapLocationModal({
       if (initialCity) {
         setCityTitle(initialCity);
       }
+      const validRadius = clampRadius(
+        typeof initialRadius === 'number' && !isNaN(initialRadius) ? initialRadius : selectedRadius
+      );
+      setSelectedRadius(validRadius);
+      lastRadiusRef.current = validRadius;
       setTimeout(() => {
         mapRef.current?.animateToRegion(newRegion, 600);
-        mapRef.current?.setRadiusCircle?.(selectedRadius, {
+        mapRef.current?.setRadiusCircle?.(validRadius, {
           latitude: newRegion.latitude,
           longitude: newRegion.longitude,
         });
         reverseGeocode(newRegion.latitude, newRegion.longitude);
       }, 350);
     }
-  }, [visible, initialCoords?.latitude, initialCoords?.longitude, initialCity, selectedRadius]);
+  }, [visible, initialCoords?.latitude, initialCoords?.longitude, initialCity, initialRadius]);
 
-  const handleSelectRadius = (r: number) => {
-    setSelectedRadius(r);
-    mapRef.current?.setRadiusCircle?.(r, {
-      latitude: currentRegion.latitude,
-      longitude: currentRegion.longitude,
-    });
-  };
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          const locX = evt.nativeEvent.locationX;
+          touchStartXRef.current = locX;
+          const w = trackWidthRef.current;
+          if (w > THUMB_SIZE) {
+            const travel = w - THUMB_SIZE;
+            const targetX = Math.max(0, Math.min(travel, locX - THUMB_SIZE / 2));
+            const ratio = targetX / travel;
+            const newR = Math.round(MIN_RADIUS + ratio * (MAX_RADIUS - MIN_RADIUS));
+            updateRadiusRef.current(newR);
+          }
+        },
+        onPanResponderMove: (evt, gestureState) => {
+          const w = trackWidthRef.current;
+          if (w > THUMB_SIZE) {
+            const travel = w - THUMB_SIZE;
+            const currentX = touchStartXRef.current + gestureState.dx;
+            const targetX = Math.max(0, Math.min(travel, currentX - THUMB_SIZE / 2));
+            const ratio = targetX / travel;
+            const newR = Math.round(MIN_RADIUS + ratio * (MAX_RADIUS - MIN_RADIUS));
+            updateRadiusRef.current(newR);
+          }
+        },
+        onPanResponderRelease: () => {},
+        onPanResponderTerminate: () => {},
+      }),
+    []
+  );
+
+  const sliderRatio = Math.max(
+    0,
+    Math.min(1, (selectedRadius - MIN_RADIUS) / (MAX_RADIUS - MIN_RADIUS))
+  );
+  const travelDistance = Math.max(0, trackWidth - THUMB_SIZE);
+  const thumbLeft = travelDistance > 0 ? sliderRatio * travelDistance : 0;
+  const activeTrackWidth =
+    sliderRatio >= 0.98
+      ? trackWidth
+      : Math.min(trackWidth, thumbLeft + THUMB_SIZE / 2);
 
   // Reverse Geocoding with OpenStreetMap Nominatim and Expo fallback
   const reverseGeocode = async (latitude: number, longitude: number) => {
@@ -431,92 +551,183 @@ export default function OpenStreetMapLocationModal({
               const { height } = e.nativeEvent.layout;
               if (height > 0) setBottomSheetHeight(height);
             }}>
-            {/* Sheet Handle */}
-            <View style={styles.handleBar} />
-
-            {/* Address Details */}
-            <View style={styles.addressRow}>
-              <View style={styles.addressIconWrap}>
-                <Ionicons name="navigate" size={20} color="#E23744" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                    <Text style={styles.cityText} numberOfLines={1}>
-                      {cityTitle}
-                    </Text>
-                    {isAddressLoading && (
-                      <ActivityIndicator size="small" color="#E23744" style={{ marginLeft: 8 }} />
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleGetGpsLocation}
-                    disabled={isGpsLoading}
-                    style={styles.currentLocationInlineBtn}
-                    activeOpacity={0.75}>
-                    <Ionicons name="locate" size={13} color="#E23744" style={{ marginRight: 4 }} />
-                    <Text style={styles.currentLocationInlineText}>GPS</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.fullAddressText} numberOfLines={2}>
-                  {fullAddress || 'Drag map to choose location'}
+            {/* Sheet Handle Area (Interactive Swipe & Tap Toggle) */}
+            <View
+              style={styles.handleTouchArea}
+              {...handlePanResponder.panHandlers}>
+              <View style={styles.handleBar} />
+              <View style={styles.handleToggleRow}>
+                <Ionicons
+                  name={isSheetCollapsed ? 'chevron-up' : 'chevron-down'}
+                  size={13}
+                  color="#94A3B8"
+                />
+                <Text style={styles.handleToggleText}>
+                  {isSheetCollapsed
+                    ? 'Tap or swipe up to adjust range'
+                    : 'Tap or swipe down to view full map'}
                 </Text>
               </View>
             </View>
 
-            {/* Range / Radius Filter (Up to 30km) */}
-            <View style={styles.rangeSection}>
-              <View style={styles.rangeHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="radio-outline" size={16} color="#E23744" style={{ marginRight: 6 }} />
-                  <Text style={styles.rangeTitle}>Search Range / Radius</Text>
-                </View>
-                <View style={styles.rangeBadge}>
-                  <Text style={styles.rangeBadgeText}>{selectedRadius} km</Text>
-                </View>
-              </View>
-
-              <Text style={styles.rangeSubText}>
-                Showing gyms and fitness clubs within {selectedRadius} km radius
-              </Text>
-
-              {/* Range Chips: 10, 15, 20, 25, 30 km */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rangeChipsContainer}>
-                {[10, 15, 20, 25, 30].map((r) => {
-                  const isSelected = selectedRadius === r;
-                  return (
-                    <TouchableOpacity
-                      key={r}
-                      onPress={() => handleSelectRadius(r)}
-                      activeOpacity={0.75}
-                      style={[
-                        styles.rangeChip,
-                        isSelected && styles.rangeChipActive,
-                      ]}>
-                      <Text
-                        style={[
-                          styles.rangeChipText,
-                          isSelected && styles.rangeChipTextActive,
-                        ]}>
-                        {r} km
+            {isSheetCollapsed ? (
+              /* Minimized Compact Bar (Full Map & Radius Circle Visible) */
+              <View style={styles.collapsedBar}>
+                <TouchableOpacity
+                  onPress={toggleSheet}
+                  activeOpacity={0.75}
+                  style={styles.collapsedInfoTouch}>
+                  <View style={styles.collapsedIconWrap}>
+                    <Ionicons name="navigate" size={16} color="#E23744" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.collapsedCityText} numberOfLines={1}>
+                        {cityTitle}
                       </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+                      <View style={styles.collapsedBadge}>
+                        <Text style={styles.collapsedBadgeText}>{selectedRadius} km</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.collapsedSubText} numberOfLines={1}>
+                      {fullAddress || 'Tap to expand & adjust range'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
 
-            {/* Confirm Location Button */}
-            <TouchableOpacity
-              onPress={handleConfirm}
-              style={styles.confirmButton}
-              activeOpacity={0.88}>
-              <Text style={styles.confirmButtonText}>Confirm Location ({selectedRadius} km)</Text>
-              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleConfirm}
+                  style={styles.collapsedConfirmBtn}
+                  activeOpacity={0.85}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.collapsedConfirmText}>Confirm</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Expanded Full Sheet */
+              <View>
+                {/* Address Details */}
+                <View style={styles.addressRow}>
+                  <View style={styles.addressIconWrap}>
+                    <Ionicons name="navigate" size={20} color="#E23744" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                        <Text style={styles.cityText} numberOfLines={1}>
+                          {cityTitle}
+                        </Text>
+                        {isAddressLoading && (
+                          <ActivityIndicator size="small" color="#E23744" style={{ marginLeft: 8 }} />
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleGetGpsLocation}
+                        disabled={isGpsLoading}
+                        style={styles.currentLocationInlineBtn}
+                        activeOpacity={0.75}>
+                        <Ionicons name="locate" size={13} color="#E23744" style={{ marginRight: 4 }} />
+                        <Text style={styles.currentLocationInlineText}>GPS</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.fullAddressText} numberOfLines={2}>
+                      {fullAddress || 'Drag map to choose location'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Interactive Search Range / Radius Slider (2 km to 20 km) */}
+                <View style={styles.rangeSection}>
+                  {/* Header: Title + Subtext + Live Badge */}
+                  <View style={styles.rangeHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                      <View style={styles.rangeIconCircle}>
+                        <MaterialCommunityIcons name="dumbbell" size={16} color="#E23744" />
+                      </View>
+                      <View style={{ marginLeft: 8, flex: 1 }}>
+                        <Text style={styles.rangeTitle}>Search Range / Radius</Text>
+                        <Text style={styles.rangeSubText} numberOfLines={1}>
+                          Gyms within <Text style={styles.rangeSubTextBold}>{selectedRadius} km</Text> of this pin
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.rangeBadge}>
+                      <Text style={styles.rangeBadgeText}>{selectedRadius} km</Text>
+                    </View>
+                  </View>
+
+                  {/* Hand-controlled Slider with Stepper Buttons */}
+                  <View style={styles.sliderControlRow}>
+                    <TouchableOpacity
+                      onPress={() => updateRadius(selectedRadius - 1)}
+                      disabled={selectedRadius <= MIN_RADIUS}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[
+                        styles.stepButton,
+                        selectedRadius <= MIN_RADIUS && styles.stepButtonDisabled,
+                      ]}>
+                      <Ionicons
+                        name="remove"
+                        size={16}
+                        color={selectedRadius <= MIN_RADIUS ? '#CBD5E1' : '#0F172A'}
+                      />
+                    </TouchableOpacity>
+
+                    <View
+                      style={styles.sliderTouchArea}
+                      onLayout={(e) => {
+                        const w = e.nativeEvent.layout.width;
+                        if (w > 0) setTrackWidth(w);
+                      }}
+                      {...panResponder.panHandlers}>
+                      {/* Track Background */}
+                      <View style={styles.sliderTrackBg} pointerEvents="none" />
+
+                      {/* Active Highlighted Track */}
+                      <View
+                        style={[styles.sliderTrackActive, { width: activeTrackWidth }]}
+                        pointerEvents="none"
+                      />
+
+                      {/* Touch Draggable Gym Weight Plate Handle with Dumbbell */}
+                      <View
+                        style={[styles.sliderThumb, { left: thumbLeft }]}
+                        pointerEvents="none">
+                        <View style={styles.thumbPlateRing}>
+                          <MaterialCommunityIcons name="dumbbell" size={13} color="#FFFFFF" />
+                        </View>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => updateRadius(selectedRadius + 1)}
+                      disabled={selectedRadius >= MAX_RADIUS}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[
+                        styles.stepButton,
+                        selectedRadius >= MAX_RADIUS && styles.stepButtonDisabled,
+                      ]}>
+                      <Ionicons
+                        name="add"
+                        size={16}
+                        color={selectedRadius >= MAX_RADIUS ? '#CBD5E1' : '#0F172A'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Confirm Location Button */}
+                <TouchableOpacity
+                  onPress={handleConfirm}
+                  style={styles.confirmButton}
+                  activeOpacity={0.88}>
+                  <Text style={styles.confirmButtonText}>Confirm Location ({selectedRadius} km)</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -700,13 +911,94 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 12,
   },
+  handleTouchArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 2,
+    paddingBottom: 10,
+  },
   handleBar: {
-    width: 36,
+    width: 38,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 14,
+  },
+  handleToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 5,
+  },
+  handleToggleText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  collapsedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  collapsedInfoTouch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  collapsedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFEAEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsedCityText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    textTransform: 'capitalize',
+    maxWidth: 130,
+  },
+  collapsedBadge: {
+    backgroundColor: '#FFEAEF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FFD0DC',
+    marginLeft: 6,
+  },
+  collapsedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#E23744',
+  },
+  collapsedSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  collapsedConfirmBtn: {
+    backgroundColor: '#E23744',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#E23744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  collapsedConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   addressRow: {
     flexDirection: 'row',
@@ -754,8 +1046,9 @@ const styles = StyleSheet.create({
   },
   rangeSection: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -764,63 +1057,118 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  rangeIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFEAEF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rangeTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
-  rangeBadge: {
-    backgroundColor: '#FFEAEF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFD0DC',
-  },
-  rangeBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#E23744',
-  },
   rangeSubText: {
     fontSize: 11,
     color: '#64748B',
-    marginTop: 3,
-    marginBottom: 10,
+    marginTop: 1,
   },
-  rangeChipsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 3,
-    paddingRight: 16,
+  rangeSubTextBold: {
+    fontWeight: '700',
+    color: '#E23744',
   },
-  rangeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rangeChipActive: {
+  rangeBadge: {
     backgroundColor: '#E23744',
-    borderColor: '#E23744',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     shadowColor: '#E23744',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  rangeChipText: {
+  rangeBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  rangeChipTextActive: {
+    fontWeight: '800',
     color: '#FFFFFF',
-    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sliderControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 4,
+  },
+  stepButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  stepButtonDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  sliderTouchArea: {
+    flex: 1,
+    height: 44,
+    marginHorizontal: 10,
+    justifyContent: 'center',
+  },
+  sliderTrackBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  sliderTrackActive: {
+    position: 'absolute',
+    left: 0,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E23744',
+  },
+  sliderThumb: {
+    position: 'absolute',
+    top: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E23744',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#E23744',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  thumbPlateRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
