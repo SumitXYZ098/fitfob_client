@@ -252,7 +252,7 @@ export default function HomeScreen() {
     longitude: 76.6873704048281,
   });
   const [city, setCity] = useState<string>('');
-  const [searchRadius, setSearchRadius] = useState<number>(10);
+  const [searchRadius, setSearchRadius] = useState<number>(5);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
 

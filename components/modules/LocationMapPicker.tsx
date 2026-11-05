@@ -276,7 +276,7 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
               window.updateRadiusCircle = function(radiusKm, centerLat, centerLng) {
                 var cLat = (typeof centerLat === 'number') ? centerLat : map.getCenter().lat;
                 var cLng = (typeof centerLng === 'number') ? centerLng : map.getCenter().lng;
-                var rMeters = (radiusKm || 10) * 1000;
+                var rMeters = (radiusKm || 5) * 1000;
                 if (radiusCircle) {
                   radiusCircle.setLatLng([cLat, cLng]);
                   radiusCircle.setRadius(rMeters);

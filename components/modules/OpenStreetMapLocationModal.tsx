@@ -57,7 +57,7 @@ export default function OpenStreetMapLocationModal({
   visible,
   initialCoords,
   initialCity = '',
-  initialRadius = 10,
+  initialRadius = 5,
   onClose,
   onConfirm,
 }: OpenStreetMapLocationModalProps) {
@@ -69,7 +69,7 @@ export default function OpenStreetMapLocationModal({
     if (typeof initialRadius === 'number' && !isNaN(initialRadius)) {
       return clampRadius(initialRadius);
     }
-    return 10;
+    return 5;
   });
 
   const [trackWidth, setTrackWidth] = useState<number>(220);
