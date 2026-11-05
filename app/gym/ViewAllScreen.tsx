@@ -441,7 +441,7 @@ export default function ViewAllScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]" edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
+      <StatusBar barStyle="dark-content" />
       {/* 1. Header Bar with Back Button & Search */}
       <View className="flex-row items-center px-4 pb-2 pt-2">
         <TouchableOpacity

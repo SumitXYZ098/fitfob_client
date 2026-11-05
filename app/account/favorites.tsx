@@ -107,7 +107,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]" edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
+      <StatusBar barStyle="dark-content" />
 
       {/* 1. Header Bar */}
       <View className="flex-row items-center justify-between border-b border-gray-100 bg-[#FAF7F8] px-4 pb-3 pt-2">

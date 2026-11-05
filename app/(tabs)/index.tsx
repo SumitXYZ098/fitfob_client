@@ -478,7 +478,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAF7F8]">
-      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F8" />
+      <StatusBar barStyle="dark-content" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
