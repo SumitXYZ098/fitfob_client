@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { formatPlanNameAndDuration } from '@/components/GymCard';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
 
@@ -16,8 +17,10 @@ type DurationTab = 'monthly' | '3months' | '6months' | 'annual';
 export interface ClubMembershipPlan {
   id?: number | string;
   documentId?: string;
+  plan?: string;
   planName: string;
   price: number;
+  customerPrice?: number;
   monthDuration: number;
   isActive: boolean;
   validUpto: string;
@@ -80,15 +83,22 @@ export default function BuyMembershipScreen() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed
             .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
-            .map((p: any, idx: number) => ({
-              id: String(p.documentId || p.id || idx),
-              documentId: p.documentId || String(p.id || ''),
-              planName: p.planName || p.name || 'Membership Plan',
-              price: Number(p.price || 0),
-              monthDuration: Number(p.monthDuration || 1),
-              isActive: p.isActive !== false,
-              validUpto: p.validUpto || 'unlimited',
-            }));
+            .map((p: any, idx: number) => {
+              const info = formatPlanNameAndDuration(p);
+              const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
+              return {
+                id: planKey,
+                documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
+                plan: p.plan,
+                planName: info.planName,
+                price: info.price,
+                customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
+                monthDuration: info.monthDuration,
+                isActive: p.isActive !== false,
+                validUpto: info.validUpto,
+              };
+            })
+            .sort((a, b) => a.monthDuration - b.monthDuration);
         }
       } catch { }
     }
@@ -119,7 +129,13 @@ export default function BuyMembershipScreen() {
 
   // Currently selected plan resolution
   const selectedClubPlan = hasClubPlans
-    ? clubPlans.find((p) => p.id === selectedPlanId || p.documentId === selectedPlanId) || clubPlans[0]
+    ? clubPlans.find(
+        (p, idx) =>
+          p.id === selectedPlanId ||
+          p.documentId === selectedPlanId ||
+          p.plan === selectedPlanId ||
+          String(idx) === selectedPlanId
+      ) || clubPlans[0]
     : null;
 
   const selectedFallbackPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[0];
@@ -145,7 +161,10 @@ export default function BuyMembershipScreen() {
         membershipTier: planTitle,
         membershipPrice: planPrice,
         duration: planDuration,
-        planDocumentId: selectedClubPlan?.documentId,
+        planDocumentId:
+          selectedClubPlan?.documentId ||
+          (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
+          selectedClubPlan?.plan,
       },
     });
   };
@@ -163,7 +182,10 @@ export default function BuyMembershipScreen() {
         visits: '0',
         outdoorPassPrice: '0',
         validityDays: '0',
-        planDocumentId: selectedClubPlan?.documentId,
+        planDocumentId:
+          selectedClubPlan?.documentId ||
+          (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
+          selectedClubPlan?.plan,
       },
     });
   };
@@ -239,15 +261,20 @@ export default function BuyMembershipScreen() {
         <View>
           {hasClubPlans ? (
             clubPlans.map((plan, idx) => {
-              const isSelected = selectedPlanId === plan.id || selectedPlanId === plan.documentId;
-              const isBestValue = plan.monthDuration >= 3 || idx > 0;
+              const isSelected =
+                selectedPlanId === plan.id ||
+                selectedPlanId === plan.documentId ||
+                selectedPlanId === plan.plan ||
+                selectedPlanId === String(idx);
+              const maxDuration = Math.max(...clubPlans.map((p) => p.monthDuration));
+              const isBestValue = plan.monthDuration === maxDuration && plan.monthDuration > 1;
               const monthlyEquivalent =
                 plan.monthDuration > 1 ? Math.round(plan.price / plan.monthDuration) : plan.price;
 
               return (
                 <TouchableOpacity
-                  key={plan.documentId ? `${plan.documentId}-${idx}` : idx}
-                  onPress={() => setSelectedPlanId(plan.documentId || (plan.id as string))}
+                  key={plan.documentId ? `${plan.documentId}-${idx}` : plan.plan ? `${plan.plan}-${idx}` : idx}
+                  onPress={() => setSelectedPlanId(plan.documentId || (plan.id as string) || plan.plan || String(idx))}
                   activeOpacity={0.88}
                   style={{
                     borderRadius: 16,
@@ -260,7 +287,7 @@ export default function BuyMembershipScreen() {
                   <View className="flex-row items-center justify-between pb-3">
                     <View className="flex-row items-center">
                       <Text className="font-semibold text-[16px] text-slate-900 mr-2.5">
-                        {plan.planName} Plan
+                        {plan.planName.toLowerCase().endsWith('plan') ? plan.planName : `${plan.planName} Plan`}
                       </Text>
                       {isBestValue && (
                         <View className="rounded-full bg-rose-50 px-2.5 py-0.5 border border-rose-200">

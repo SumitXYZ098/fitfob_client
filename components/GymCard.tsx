@@ -361,6 +361,118 @@ export const extractStringList = (val: any): string[] => {
   return [];
 };
 
+export interface FormattedPlanInfo {
+  planName: string;
+  monthDuration: number;
+  price: number;
+  validUpto: string;
+}
+
+export function formatPlanNameAndDuration(p: any): FormattedPlanInfo {
+  if (!p) {
+    return { planName: 'Monthly', monthDuration: 1, price: 0, validUpto: '1 Month access' };
+  }
+
+  // 1. Resolve Price (prefer customerPrice over price)
+  const rawPrice = p.customerPrice ?? p.price ?? p.amount ?? p.fee ?? 0;
+  const price = typeof rawPrice === 'number' ? rawPrice : Number(rawPrice) || 0;
+
+  // 2. Resolve Duration
+  let monthDuration = 1;
+  const rawPlanSlug = String(p.plan || '').toLowerCase().trim();
+  const rawPlanName = String(p.planName || p.name || '').toLowerCase().trim();
+
+  if (p.monthDuration && !isNaN(Number(p.monthDuration)) && Number(p.monthDuration) > 0) {
+    monthDuration = Number(p.monthDuration);
+  } else if (p.durationInMonths && !isNaN(Number(p.durationInMonths)) && Number(p.durationInMonths) > 0) {
+    monthDuration = Number(p.durationInMonths);
+  } else if (
+    rawPlanSlug.includes('twelve') ||
+    rawPlanSlug.includes('12') ||
+    rawPlanSlug.includes('year') ||
+    rawPlanSlug.includes('annual')
+  ) {
+    monthDuration = 12;
+  } else if (
+    rawPlanSlug.includes('six') ||
+    rawPlanSlug.includes('6') ||
+    rawPlanSlug.includes('half')
+  ) {
+    monthDuration = 6;
+  } else if (
+    rawPlanSlug.includes('three') ||
+    rawPlanSlug.includes('3') ||
+    rawPlanSlug.includes('quarter')
+  ) {
+    monthDuration = 3;
+  } else if (rawPlanSlug.includes('month') || rawPlanSlug.includes('1')) {
+    monthDuration = 1;
+  } else if (
+    rawPlanName.includes('12 month') ||
+    rawPlanName.includes('1 year') ||
+    rawPlanName.includes('annual') ||
+    rawPlanName.includes('yearly')
+  ) {
+    monthDuration = 12;
+  } else if (
+    rawPlanName.includes('6 month') ||
+    rawPlanName.includes('six month') ||
+    rawPlanName.includes('half year')
+  ) {
+    monthDuration = 6;
+  } else if (
+    rawPlanName.includes('3 month') ||
+    rawPlanName.includes('three month') ||
+    rawPlanName.includes('quarterly')
+  ) {
+    monthDuration = 3;
+  } else if (rawPlanName.includes('1 month') || rawPlanName.includes('monthly')) {
+    monthDuration = 1;
+  }
+
+  // 3. Resolve Clean Display Name
+  let planName = '';
+  if (p.planName && typeof p.planName === 'string' && p.planName.trim().length > 0) {
+    planName = p.planName.trim();
+  } else if (p.name && typeof p.name === 'string' && p.name.trim().length > 0) {
+    planName = p.name.trim();
+  } else if (rawPlanSlug) {
+    if (rawPlanSlug === 'monthly' || rawPlanSlug === 'one_month' || rawPlanSlug === '1_month') {
+      planName = 'Monthly';
+    } else if (rawPlanSlug === 'three_months' || rawPlanSlug === '3_months' || rawPlanSlug === 'quarterly') {
+      planName = '3 Months';
+    } else if (rawPlanSlug === 'six_months' || rawPlanSlug === '6_months' || rawPlanSlug === 'half_yearly') {
+      planName = '6 Months';
+    } else if (
+      rawPlanSlug === 'twelve_months' ||
+      rawPlanSlug === '12_months' ||
+      rawPlanSlug === 'yearly' ||
+      rawPlanSlug === 'annual'
+    ) {
+      planName = '12 Months';
+    } else {
+      planName = rawPlanSlug
+        .split('_')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+  } else {
+    planName = monthDuration === 1 ? 'Monthly' : `${monthDuration} Months`;
+  }
+
+  // 4. Resolve validUpto
+  const validUpto =
+    p.validUpto ||
+    (monthDuration === 1 ? '1 Month access' : `${monthDuration} Months access`);
+
+  return {
+    planName,
+    monthDuration,
+    price,
+    validUpto,
+  };
+}
+
 export const mapClubOwnerToGym = (item: any): GymItem => {
   if (!item) {
     return {
@@ -430,22 +542,46 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
     new Set([...rawServices, ...rawActivities, ...rawCategories, category])
   );
 
-  let price = '₹1200/Monthly';
-  if (Array.isArray(data.membershipPlans) && data.membershipPlans.length > 0) {
-    const activePlans = data.membershipPlans.filter((p: any) => p && (p.isActive === undefined || p.isActive === true));
+  const rawPlans =
+    data.membershipPlans ||
+    item.membershipPlans ||
+    clubData.membershipPlans ||
+    data.plans ||
+    item.plans ||
+    clubData.plans ||
+    [];
+
+  let price = '';
+  if (Array.isArray(rawPlans) && rawPlans.length > 0) {
+    const activePlans = rawPlans.filter((p: any) => p && (p.isActive === undefined || p.isActive === true));
     if (activePlans.length > 0) {
-      const monthlyPlan = activePlans.find((p: any) => p.monthDuration === 1 || p.planName?.toLowerCase()?.includes('month'));
+      const monthlyPlan = activePlans.find((p: any) => {
+        const slug = String(p.plan || '').toLowerCase();
+        const name = String(p.planName || p.name || '').toLowerCase();
+        return p.monthDuration === 1 || slug === 'monthly' || slug.includes('month') || name.includes('month');
+      });
       const displayPlan = monthlyPlan || activePlans[0];
-      if (displayPlan?.price) {
-        price = `₹${displayPlan.price}/Monthly`;
+      const info = formatPlanNameAndDuration(displayPlan);
+      if (info.price > 0) {
+        price = `₹${info.price.toLocaleString('en-IN')}/Monthly`;
       }
     }
-  } else if (data.price) {
-    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
-  } else if (data.monthlyPrice) {
-    price = `₹${data.monthlyPrice}/Monthly`;
-  } else if (data.startingPrice) {
-    price = `₹${data.startingPrice}/Monthly`;
+  }
+
+  if (!price) {
+    const rawFallbackPrice =
+      data.price ||
+      item.price ||
+      data.monthlyPrice ||
+      item.monthlyPrice ||
+      data.startingPrice ||
+      item.startingPrice;
+    if (rawFallbackPrice) {
+      const numPrice = Number(rawFallbackPrice);
+      price = !isNaN(numPrice) ? `₹${numPrice.toLocaleString('en-IN')}/Monthly` : String(rawFallbackPrice);
+    } else {
+      price = '₹1200/Monthly';
+    }
   }
 
   const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
@@ -521,7 +657,7 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
     },
     description: data.description || data.about || data.bio || '',
     holidays: Array.isArray(data.holidays) ? data.holidays : [],
-    membershipPlans: Array.isArray(data.membershipPlans) ? data.membershipPlans : [],
+    membershipPlans: Array.isArray(rawPlans) ? rawPlans : [],
   };
 };
 
@@ -869,8 +1005,26 @@ const GymCard = React.memo(function GymCard({
           </View>
         )}
 
-        {/* Pricing */}
-        {/* <Text className="mt-2.5 font-bold text-base text-darkText">{gym.price}</Text> */}
+        {/* Membership Pricing Section */}
+        {Boolean(gym.price) && (
+          <View className="mt-3 flex-row items-center justify-between border-t border-slate-100 pt-2.5">
+            <View>
+              <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Membership
+              </Text>
+              <View className="flex-row items-baseline gap-1 mt-0.5">
+                <Text className="font-extrabold text-base text-slate-900">
+                  {gym.price.replace(/\/monthly/i, '')}
+                </Text>
+                <Text className="text-xs font-semibold text-slate-500">/month</Text>
+              </View>
+            </View>
+            <View className="flex-row items-center gap-1 rounded-xl bg-rose-50 px-3 py-1.5 border border-rose-100">
+              <Text className="text-xs font-bold text-[#E23744]">View Plans</Text>
+              <Ionicons name="chevron-forward" size={12} color="#E23744" />
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );

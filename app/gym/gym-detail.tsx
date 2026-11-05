@@ -23,6 +23,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import GymDetailMapView from '@/components/modules/GymDetailMapView';
+import { formatPlanNameAndDuration } from '@/components/GymCard';
 import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -67,8 +68,10 @@ export interface ReviewItem {
 export interface ClubMembershipPlan {
   id?: number | string;
   documentId?: string;
+  plan?: string;
   planName: string;
   price: number;
+  customerPrice?: number;
   monthDuration: number;
   isActive: boolean;
   validUpto: string;
@@ -369,15 +372,22 @@ export default function GymDetailScreen() {
       if (Array.isArray(parsed)) {
         return parsed
           .filter((p) => p && (p.isActive === undefined || p.isActive === true))
-          .map((p, idx) => ({
-            id: p.id || p.documentId || `plan-${idx}`,
-            documentId: p.documentId || String(p.id || ''),
-            planName: p.planName || p.name || 'Membership Plan',
-            price: Number(p.price || 0),
-            monthDuration: Number(p.monthDuration || 1),
-            isActive: p.isActive !== false,
-            validUpto: p.validUpto || 'unlimited',
-          }));
+          .map((p, idx) => {
+            const info = formatPlanNameAndDuration(p);
+            const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
+            return {
+              id: planKey,
+              documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
+              plan: p.plan,
+              planName: info.planName,
+              price: info.price,
+              customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
+              monthDuration: info.monthDuration,
+              isActive: p.isActive !== false,
+              validUpto: info.validUpto,
+            };
+          })
+          .sort((a, b) => a.monthDuration - b.monthDuration);
       }
     } catch {}
     return [];
@@ -528,15 +538,24 @@ export default function GymDetailScreen() {
           initialMembershipPlans.length > 0
             ? initialMembershipPlans
             : Array.isArray(rawCachedPlans)
-            ? rawCachedPlans.map((p: any, idx: number) => ({
-                id: p.id || p.documentId || `plan-${idx}`,
-                documentId: p.documentId || String(p.id || ''),
-                planName: p.planName || p.name || 'Membership Plan',
-                price: Number(p.price || 0),
-                monthDuration: Number(p.monthDuration || 1),
-                isActive: p.isActive !== false,
-                validUpto: p.validUpto || 'unlimited',
-              }))
+            ? rawCachedPlans
+                .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
+                .map((p: any, idx: number) => {
+                  const info = formatPlanNameAndDuration(p);
+                  const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
+                  return {
+                    id: planKey,
+                    documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
+                    plan: p.plan,
+                    planName: info.planName,
+                    price: info.price,
+                    customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
+                    monthDuration: info.monthDuration,
+                    isActive: p.isActive !== false,
+                    validUpto: info.validUpto,
+                  };
+                })
+                .sort((a, b) => a.monthDuration - b.monthDuration)
             : [];
 
         return {
@@ -740,15 +759,22 @@ export default function GymDetailScreen() {
       Array.isArray(rawPlans) && rawPlans.length > 0
         ? rawPlans
             .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
-            .map((p: any, idx: number) => ({
-              id: p.id || p.documentId || `plan-${idx}`,
-              documentId: p.documentId || String(p.id || ''),
-              planName: p.planName || p.name || 'Membership Plan',
-              price: Number(p.price || 0),
-              monthDuration: Number(p.monthDuration || 1),
-              isActive: p.isActive !== false,
-              validUpto: p.validUpto || 'unlimited',
-            }))
+            .map((p: any, idx: number) => {
+              const info = formatPlanNameAndDuration(p);
+              const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
+              return {
+                id: planKey,
+                documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
+                plan: p.plan,
+                planName: info.planName,
+                price: info.price,
+                customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
+                monthDuration: info.monthDuration,
+                isActive: p.isActive !== false,
+                validUpto: info.validUpto,
+              };
+            })
+            .sort((a, b) => a.monthDuration - b.monthDuration)
         : initialMembershipPlans;
 
     const phoneNumber: string = String(d.phoneNumber || d.phone || d.contactNumber || '');
@@ -1803,13 +1829,20 @@ export default function GymDetailScreen() {
               <View className="gap-3">
                 {gym.membershipPlans.map((plan: ClubMembershipPlan, idx: number) => {
                   const isMonthly = plan.monthDuration === 1;
-                  const isBestValue = plan.monthDuration >= 3 || (!isMonthly && idx > 0);
+                  const maxDuration = Math.max(...gym.membershipPlans.map((p) => p.monthDuration));
+                  const isBestValue = plan.monthDuration === maxDuration && plan.monthDuration > 1;
                   const monthlyEquivalent =
                     plan.monthDuration > 1 ? Math.round(plan.price / plan.monthDuration) : plan.price;
+                  const displayTitle = plan.planName.toLowerCase().endsWith('plan')
+                    ? plan.planName
+                    : `${plan.planName} Plan`;
+                  const cleanValidUpto = plan.validUpto.toLowerCase().endsWith('access')
+                    ? plan.validUpto
+                    : `${plan.validUpto} access`;
 
                   return (
                     <TouchableOpacity
-                      key={plan.documentId ? `${plan.documentId}-${idx}` : idx}
+                      key={plan.documentId ? `${plan.documentId}-${idx}` : plan.plan ? `${plan.plan}-${idx}` : idx}
                       activeOpacity={0.9}
                       onPress={() =>
                         router.push({
@@ -1817,8 +1850,8 @@ export default function GymDetailScreen() {
                           params: {
                             gymName: gym.title,
                             gymId: gym.id,
-                            selectedPlanId: plan.documentId || String(idx),
-                            selectedPlanName: plan.planName,
+                            selectedPlanId: plan.documentId || (plan.id ? String(plan.id) : '') || plan.plan || String(idx),
+                            selectedPlanName: displayTitle,
                             selectedPlanPrice: plan.price.toString(),
                             selectedPlanDuration: plan.monthDuration.toString(),
                             plans: JSON.stringify(gym.membershipPlans),
@@ -1839,7 +1872,7 @@ export default function GymDetailScreen() {
                           <View>
                             <View className="flex-row items-center gap-2">
                               <Text className="font-bold text-base text-slate-900">
-                                {plan.planName} Plan
+                                {displayTitle}
                               </Text>
                               {isBestValue && (
                                 <View className="rounded-full bg-rose-50 px-2 py-0.5 border border-rose-200">
@@ -1881,7 +1914,7 @@ export default function GymDetailScreen() {
                         <View className="flex-row items-center gap-2">
                           <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
                           <Text className="text-xs text-slate-600 font-medium">
-                            Unlimited check-ins ({plan.validUpto} access)
+                            Unlimited check-ins ({cleanValidUpto})
                           </Text>
                         </View>
                         <View className="flex-row items-center gap-2">
@@ -2170,14 +2203,6 @@ export default function GymDetailScreen() {
             activeOpacity={0.85}
             className="flex-1 items-center justify-center rounded-2xl bg-[#E23744] py-3.5 shadow-md shadow-[#E23744]/25">
             <Text className="font-bold text-sm text-white">Buy Membership</Text>
-          </TouchableOpacity>
-
-          {/* Use Outdoor Pass Button */}
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/outdoor-pass')}
-            activeOpacity={0.85}
-            className="items-center justify-center rounded-2xl border-2 border-[#E23744] bg-white px-4 py-3.5">
-            <Text className="font-bold text-sm text-[#E23744]">Outdoor Pass</Text>
           </TouchableOpacity>
         </View>
       )}

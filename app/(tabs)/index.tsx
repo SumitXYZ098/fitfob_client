@@ -24,6 +24,7 @@ import OpenStreetMapLocationModal, {
 import { useNearbyGyms, useGetFavorites, extractFavoriteIds } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import GymCard, {
+  formatPlanNameAndDuration,
   GymCardSkeleton,
   GymItem,
   HolidayItem,
@@ -134,15 +135,46 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     new Set([...rawServices, ...rawActivities, ...rawCategories, category])
   );
 
-  let price = '₹1200/Monthly';
-  if (data.price) {
-    price = typeof data.price === 'number' ? `₹${data.price}/Monthly` : String(data.price);
-  } else if (data.monthlyPrice) {
-    price = `₹${data.monthlyPrice}/Monthly`;
-  } else if (data.startingPrice) {
-    price = `₹${data.startingPrice}/Monthly`;
-  } else if (Array.isArray(data.membershipPlans) && data.membershipPlans[0]?.price) {
-    price = `₹${data.membershipPlans[0].price}/Monthly`;
+  const rawPlans =
+    data.membershipPlans ||
+    item.membershipPlans ||
+    (item.club && item.club.membershipPlans) ||
+    (item.clubOwner && item.clubOwner.membershipPlans) ||
+    data.plans ||
+    item.plans ||
+    [];
+
+  let price = '';
+  if (Array.isArray(rawPlans) && rawPlans.length > 0) {
+    const activePlans = rawPlans.filter((p: any) => p && (p.isActive === undefined || p.isActive === true));
+    if (activePlans.length > 0) {
+      const monthlyPlan = activePlans.find((p: any) => {
+        const slug = String(p.plan || '').toLowerCase();
+        const name = String(p.planName || p.name || '').toLowerCase();
+        return p.monthDuration === 1 || slug === 'monthly' || slug.includes('month') || name.includes('month');
+      });
+      const displayPlan = monthlyPlan || activePlans[0];
+      const info = formatPlanNameAndDuration(displayPlan);
+      if (info.price > 0) {
+        price = `₹${info.price.toLocaleString('en-IN')}/Monthly`;
+      }
+    }
+  }
+
+  if (!price) {
+    const rawFallbackPrice =
+      data.price ||
+      item.price ||
+      data.monthlyPrice ||
+      item.monthlyPrice ||
+      data.startingPrice ||
+      item.startingPrice;
+    if (rawFallbackPrice) {
+      const numPrice = Number(rawFallbackPrice);
+      price = !isNaN(numPrice) ? `₹${numPrice.toLocaleString('en-IN')}/Monthly` : String(rawFallbackPrice);
+    } else {
+      price = '₹1200/Monthly';
+    }
   }
 
   const isOpen = data.isOpen !== undefined ? Boolean(data.isOpen) : true;
@@ -214,7 +246,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     },
     description: data.description || data.about || data.bio || '',
     holidays: Array.isArray(data.holidays) ? data.holidays : [],
-    membershipPlans: Array.isArray(data.membershipPlans) ? data.membershipPlans : [],
+    membershipPlans: Array.isArray(rawPlans) ? rawPlans : [],
   };
 };
 
