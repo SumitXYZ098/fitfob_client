@@ -56,7 +56,7 @@ export default function Layout() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <StatusBar style="dark" />
+        <StatusBar style="auto" />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />

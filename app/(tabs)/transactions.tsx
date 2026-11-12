@@ -433,22 +433,20 @@ export default function TransactionsScreen() {
     }
   }, [refetchCheckins, playRefreshFeedback]);
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.navigate('/(tabs)');
+    }
+  }, [router]);
+
   return (
     <SafeAreaView className="flex-1 bg-white px-4" edges={['top']}>
       {/* 1. Header Bar */}
-      <View className="flex-row items-center justify-between pb-2 pt-2">
+      <View className="flex-row items-center justify-between py-2">
         <TouchableOpacity
-          onPress={() => {
-            try {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)' as any);
-              }
-            } catch {
-              router.replace('/(tabs)' as any);
-            }
-          }}
+          onPress={handleBack}
           className="h-10 w-10 items-center justify-center rounded-full"
           activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color="#1C1C1C" />

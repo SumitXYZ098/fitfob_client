@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
@@ -143,7 +144,7 @@ export default function OnBoardingStep() {
         } else {
           // 1. Submit Gov ID (this uploads it to strapi temp-media)
           const uploadSuccess = await govIdRef.current?.submit();
-          console.log('Gov ID Upload Success:', uploadSuccess);
+          // console.log('Gov ID Upload Success:', uploadSuccess);
           if (uploadSuccess) {
             // 2. Call final client verification endpoint
             const verifyResult = await verifyClient.mutateAsync();
@@ -195,7 +196,7 @@ export default function OnBoardingStep() {
         }
       }
     } catch (error) {
-      console.log('Error advancing step:', error);
+      console.error('Error advancing step:', error);
     } finally {
       setLoading(false);
     }

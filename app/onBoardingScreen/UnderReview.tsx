@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -18,7 +20,7 @@ import { useCheckUserStep } from '@/hook/useClient';
 export default function UnderReview() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: string; reason?: string }>();
-  const { user, setUser, logOut } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const checkStatusMutation = useCheckUserStep();
@@ -111,7 +113,7 @@ export default function UnderReview() {
       }
       return false;
     } catch (error) {
-      console.log('Error checking status:', error);
+      console.error('Error checking status:', error);
       if (showToast) {
         Toast.show({
           type: 'error',

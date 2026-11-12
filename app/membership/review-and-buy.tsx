@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,11 +15,16 @@ import { createMembershipCheckoutBuy } from '@/api/clientApi';
 import { openRazorpayPayment } from '@/services/razorpayService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
+import {
+  getOrGenerateIdempotencyKey,
+  removeIdempotencyKey,
+} from '@/utility/idempotency';
 
 export default function ReviewAndBuyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
+  console.log("Params", params.gymContract)
   const { user } = useAuthStore();
   const { setActivePass } = useOutdoorPassStore();
 
@@ -28,7 +32,7 @@ export default function ReviewAndBuyScreen() {
 
   const gymName = (params.gymName as string) || 'ANY Fitness gym Sector 71';
   const membershipTier = (params.membershipTier as string) || 'Premium Membership';
-  const duration = (params.duration as string) || 'Monthly';
+  const duration = `Valid for ${(params.duration as string) || 'Monthly'}`;
   const membershipPrice = parseFloat((params.membershipPrice as string) || '1899');
 
   const passTitle = (params.passTitle as string) || 'Premium Pass';
@@ -38,6 +42,7 @@ export default function ReviewAndBuyScreen() {
 
   const localPlanDocumentId = (params.planDocumentId as string) || '';
   const outdoorPlanDocumentId = (params.outdoorPlanDocumentId as string) || '';
+  const gymContractPlanRate = (params.gymContract as string) || '';
 
   const hasOutdoorPass = outdoorPassPrice > 0;
   const totalAmount = membershipPrice + outdoorPassPrice;
@@ -48,10 +53,15 @@ export default function ReviewAndBuyScreen() {
     try {
       setIsProcessing(true);
 
-      // 1. Create order via /api/membership-checkout/buy
+      // 1. Get or generate 5-minute idempotency key from local storage
+      const idempotencyKey = await getOrGenerateIdempotencyKey(gymContractPlanRate);
+
+      // 2. Create order via /api/membership-checkout/buy
       const payload = {
-        local_membership_plan: localPlanDocumentId,
-        ...(outdoorPlanDocumentId ? { outdoor_membership_plan: outdoorPlanDocumentId } : {}),
+        data: {
+          gym_contract_plan_rate: gymContractPlanRate,
+          idempotencyKey,
+        }
       };
 
       console.log('💳 Initiating /api/membership-checkout/buy with payload:', payload);
@@ -59,9 +69,9 @@ export default function ReviewAndBuyScreen() {
       console.log('📦 Received checkout response:', checkoutResponse);
 
       const razorpayOrderId = checkoutResponse.razorpayOrderId;
-      const razorpayKeyId = checkoutResponse.razorpayKeyId;
+      const razorpayKeyId = checkoutResponse.keyId;
       const totalAmountInPaise =
-        checkoutResponse.totalAmountInPaise || Math.round(totalAmount * 100);
+        checkoutResponse.amount || Math.round(totalAmount * 100);
       const currency = checkoutResponse.currency || 'INR';
 
       // 2. Configure Razorpay checkout options
@@ -96,6 +106,9 @@ export default function ReviewAndBuyScreen() {
         // 3. Open Razorpay native modal
         const paymentResult = await openRazorpayPayment(options);
         console.log('🎉 Razorpay payment succeeded:', paymentResult);
+
+        // Remove idempotency key from local storage after successful payment
+        await removeIdempotencyKey(gymContractPlanRate);
 
         // Store active pass if outdoor pass was included
         const generatedPassId = paymentResult.razorpay_payment_id || `FF-${Date.now()}`;
@@ -151,6 +164,7 @@ export default function ReviewAndBuyScreen() {
               currency,
               planDocumentId: localPlanDocumentId,
               outdoorPlanDocumentId,
+              gymContractPlanRate,
             },
           });
           return;
@@ -214,15 +228,21 @@ export default function ReviewAndBuyScreen() {
           paddingBottom: 120,
         }}>
         {/* 2. Regular Membership Card */}
-        <View className="rounded-[22px] bg-[#F8FAFC] p-5 border border-slate-100 shadow-xs mb-4">
+        <View className="rounded-[22px] bg-[#F8FAFC] py-5 px-2 border border-slate-100 shadow-xs mb-4">
           <Text className="font-bold text-[15px] text-slate-800 pb-3">
-            Regular Membership
+            Regular Membership of {gymName}
           </Text>
 
           <GradientDivider />
 
           <View className="pt-3.5 space-y-2.5">
-            {[gymName, membershipTier, duration].map((item, idx) => (
+            {[
+              "Full access to all workout zones and gym equipment",
+              `Membership plan: ${membershipTier}`,
+              `Membership validity: ${duration}`,
+              "Standard locker and shower facilities included",
+              "Access to gym facilities during operating hours"
+            ].map((item, idx) => (
               <View key={idx} className="flex-row items-center mb-2.5">
                 <View className="h-4 w-4 items-center justify-center rounded-[4px] bg-[#DCFCE7] mr-2.5">
                   <Ionicons name="checkmark-done" size={11} color="#16A34A" />
@@ -307,9 +327,8 @@ export default function ReviewAndBuyScreen() {
             activeOpacity={0.88}
             disabled={isProcessing}
             style={{ borderRadius: 14 }}
-            className={`w-full items-center justify-center py-3.5 flex-row gap-2 ${
-              isProcessing ? 'bg-rose-400' : 'bg-[#E23744]'
-            }`}>
+            className={`w-full items-center justify-center py-3.5 flex-row gap-2 ${isProcessing ? 'bg-rose-400' : 'bg-[#E23744]'
+              }`}>
             {isProcessing ? (
               <>
                 <ActivityIndicator size="small" color="#FFFFFF" />

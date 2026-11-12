@@ -15,6 +15,7 @@ import GradientDivider from '@/components/GradientDivider';
 type DurationTab = 'monthly' | '3months' | '6months' | 'annual';
 
 export interface ClubMembershipPlan {
+  [key: string]: any;
   id?: number | string;
   documentId?: string;
   plan?: string;
@@ -96,6 +97,8 @@ export default function BuyMembershipScreen() {
                 monthDuration: info.monthDuration,
                 isActive: p.isActive !== false,
                 validUpto: info.validUpto,
+                gymContract: p.gymContract
+
               };
             })
             .sort((a, b) => a.monthDuration - b.monthDuration);
@@ -130,12 +133,12 @@ export default function BuyMembershipScreen() {
   // Currently selected plan resolution
   const selectedClubPlan = hasClubPlans
     ? clubPlans.find(
-        (p, idx) =>
-          p.id === selectedPlanId ||
-          p.documentId === selectedPlanId ||
-          p.plan === selectedPlanId ||
-          String(idx) === selectedPlanId
-      ) || clubPlans[0]
+      (p, idx) =>
+        p.id === selectedPlanId ||
+        p.documentId === selectedPlanId ||
+        p.plan === selectedPlanId ||
+        String(idx) === selectedPlanId
+    ) || clubPlans[0]
     : null;
 
   const selectedFallbackPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[0];
@@ -147,6 +150,7 @@ export default function BuyMembershipScreen() {
   const planDuration = selectedClubPlan
     ? `${selectedClubPlan.monthDuration} Month${selectedClubPlan.monthDuration > 1 ? 's' : ''}`
     : selectedDuration;
+  const selectedContract = selectedClubPlan ? selectedClubPlan?.gymContract : null
 
   const handleContinue = () => {
     setIsAddOnModalOpen(true);
@@ -165,6 +169,7 @@ export default function BuyMembershipScreen() {
           selectedClubPlan?.documentId ||
           (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
           selectedClubPlan?.plan,
+        gymContract: selectedContract
       },
     });
   };
@@ -186,6 +191,8 @@ export default function BuyMembershipScreen() {
           selectedClubPlan?.documentId ||
           (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
           selectedClubPlan?.plan,
+        gymContract: selectedContract
+
       },
     });
   };
@@ -246,8 +253,8 @@ export default function BuyMembershipScreen() {
                     }`}>
                   <Text
                     className={`text-[12.5px] ${isActive
-                        ? 'font-semibold text-slate-800'
-                        : 'font-medium text-slate-500'
+                      ? 'font-semibold text-slate-800'
+                      : 'font-medium text-slate-500'
                       }`}>
                     {tab.label}
                   </Text>

@@ -1,11 +1,12 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/purity */
+import React, { useState, useCallback, useEffect, useMemo,} from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Image,
   Platform,
   RefreshControl,
   ActivityIndicator,
@@ -22,17 +23,12 @@ import OpenStreetMapLocationModal, {
   SelectedLocationData,
 } from '@/components/modules/OpenStreetMapLocationModal';
 import { useNearbyGyms, useGetFavorites, extractFavoriteIds } from '@/hook/useClient';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useLocationStore } from '@/store/useLocationStore';
 import GymCard, {
   formatPlanNameAndDuration,
   GymCardSkeleton,
   GymItem,
-  HolidayItem,
-  HolidayInfo,
   gymMatchesCategory,
-  getDisplayFeatures,
-  getFeatureIcon,
-  getHolidayInfo,
 } from '@/components/GymCard';
 
 
@@ -278,15 +274,24 @@ export default function HomeScreen() {
   const { data: favoritesData } = useGetFavorites();
   const favoriteIds = useMemo(() => extractFavoriteIds(favoritesData), [favoritesData]);
 
-  // Default coordinates from endpoint provided by user
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
-    latitude: 30.832111611338167,
-    longitude: 76.6873704048281,
-  });
-  const [city, setCity] = useState<string>('');
-  const [searchRadius, setSearchRadius] = useState<number>(5);
+  const {
+    coords,
+    city,
+    searchRadius,
+    isLocationSet,
+    setLocation,
+    setCity,
+    setSearchRadius,
+    setIsLocationSet,
+    initializeLocation,
+  } = useLocationStore();
+
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    initializeLocation();
+  }, [initializeLocation]);
 
   const formattedCityName = useMemo(() => {
     if (!city || typeof city !== 'string' || !city.trim()) return '';
@@ -296,15 +301,13 @@ export default function HomeScreen() {
 
   const handleLocationConfirmed = (locData: SelectedLocationData) => {
     if (!locData) return;
+    let selectedLat = coords.latitude;
+    let selectedLng = coords.longitude;
     if (typeof locData.latitude === 'number' && typeof locData.longitude === 'number') {
-      setCoords({
-        latitude: locData.latitude,
-        longitude: locData.longitude,
-      });
+      selectedLat = locData.latitude;
+      selectedLng = locData.longitude;
     }
-    if (locData.radius) {
-      setSearchRadius(locData.radius);
-    }
+    const selectedRadius = locData.radius || searchRadius;
     let selectedCity = typeof locData.city === 'string' ? locData.city.trim() : '';
     if (
       selectedCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
@@ -312,11 +315,16 @@ export default function HomeScreen() {
     ) {
       selectedCity = 'Mohali';
     }
-    setCity(selectedCity ? selectedCity.toLowerCase() : '');
+    setLocation({
+      latitude: selectedLat,
+      longitude: selectedLng,
+      city: selectedCity ? selectedCity.toLowerCase() : '',
+      searchRadius: selectedRadius,
+    });
     setSearchQuery('');
   };
 
-  // Auto-detect current device location
+  // Auto-detect current device location (runs on manual reload, when user requests it, or on first launch if not set)
   const detectLocation = useCallback(async () => {
     try {
       setIsLocating(true);
@@ -326,11 +334,7 @@ export default function HomeScreen() {
           accuracy: Location.Accuracy.Balanced,
         });
         if (loc?.coords) {
-          setCoords({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          });
-
+          let detectedCity = 'mohali';
           try {
             const addresses = await Location.reverseGeocodeAsync({
               latitude: loc.coords.latitude,
@@ -338,31 +342,44 @@ export default function HomeScreen() {
             });
             if (addresses && addresses.length > 0) {
               const addr = addresses[0];
-              let detectedCity =
-                addr.city || addr.subregion || addr.district || addr.region || 'malikpur';
+              const rawCity =
+                addr.city || addr.subregion || addr.district || addr.region || 'Mohali';
               if (
-                detectedCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
-                detectedCity.toLowerCase().includes('sas nagar')
+                rawCity.toLowerCase().includes('sahibzada ajit singh nagar') ||
+                rawCity.toLowerCase().includes('sas nagar')
               ) {
                 detectedCity = 'Mohali';
+              } else {
+                detectedCity = rawCity;
               }
-              setCity(detectedCity.toLowerCase());
             }
           } catch (geoErr) {
             console.log('Reverse geocoding error:', geoErr);
           }
+
+          setLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            city: detectedCity.toLowerCase(),
+          });
         }
+      } else {
+        setIsLocationSet(true);
       }
     } catch (err) {
       console.log('Location detection error:', err);
+      setIsLocationSet(true);
     } finally {
       setIsLocating(false);
     }
-  }, []);
+  }, [setLocation, setIsLocationSet]);
 
+  // Only auto-detect if location has never been set / detected yet
   useEffect(() => {
-    detectLocation();
-  }, [detectLocation]);
+    if (!isLocationSet) {
+      detectLocation();
+    }
+  }, [isLocationSet, detectLocation]);
 
   // Hook to fetch nearby gyms from backend endpoint: /api/club-owners/search
   const {

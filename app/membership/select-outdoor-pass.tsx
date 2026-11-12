@@ -1,10 +1,10 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,7 +37,7 @@ export default function SelectOutdoorPassScreen() {
   const { data: plansData, isLoading, isError, refetch } = useOutdoorMembershipPlans();
 
   useEffect(() => {
-    console.log('📡 [select-outdoor-pass] Status => isLoading:', isLoading, '| isError:', isError);
+    // console.log('📡 [select-outdoor-pass] Status => isLoading:', isLoading, '| isError:', isError);
     if (plansData !== undefined) {
       console.log('📦 [select-outdoor-pass] plansData from useOutdoorMembershipPlans():', JSON.stringify(plansData, null, 2));
     }
@@ -156,8 +156,8 @@ export default function SelectOutdoorPassScreen() {
 
   // Automatically select the popular pass or the first available pass once loaded
   useEffect(() => {
-    console.log('🎯 [select-outdoor-pass] Final mapped passOptions count:', passOptions.length);
-    console.log('🎯 [select-outdoor-pass] Final mapped passOptions:', JSON.stringify(passOptions, null, 2));
+    // console.log('🎯 [select-outdoor-pass] Final mapped passOptions count:', passOptions.length);
+    // console.log('🎯 [select-outdoor-pass] Final mapped passOptions:', JSON.stringify(passOptions, null, 2));
 
     if (passOptions.length > 0 && !passOptions.some((p) => p.id === selectedPassId)) {
       const defaultPass = passOptions.find((p) => p.popular) || passOptions[0];

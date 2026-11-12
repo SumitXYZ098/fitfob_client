@@ -77,7 +77,7 @@ export default function MembershipScreen() {
             if (router.canGoBack()) {
               router.back();
             } else {
-              router.push('/(tabs)');
+              router.navigate('/(tabs)');
             }
           }}
           className="h-10 w-10 items-center justify-center -ml-2"

@@ -59,7 +59,7 @@ export default function ProfileScreen() {
       }
     };
     fetchLatestProfile();
-  }, [user?.clientDetail?.name, user?.name]);
+  }, [setUser, user, user?.clientDetail?.name, user?.name]);
 
   const isDummyPhoneEmail = Boolean(
     user?.email && (
@@ -153,7 +153,11 @@ export default function ProfileScreen() {
 
   const handleItemPress = (item: MenuItem) => {
     if (item.route) {
-      router.push(item.route as any);
+      if (item.route.startsWith('/(tabs)')) {
+        router.navigate(item.route as any);
+      } else {
+        router.push(item.route as any);
+      }
     } else {
       Toast.show({
         type: 'info',
@@ -203,11 +207,11 @@ export default function ProfileScreen() {
                     resizeMode="cover"
                   />
                 </View>
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   activeOpacity={0.8}
                   className="absolute bottom-0 right-0 h-6 w-6 items-center justify-center rounded-full border border-[#FFEAEF] bg-white shadow-sm">
                   <Ionicons name="pencil" size={12} color="#F6163C" />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
 
               {/* Name & Email / Phone */}

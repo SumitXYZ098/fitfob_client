@@ -1,3 +1,9 @@
+/* eslint-disable import/no-named-as-default */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/purity */
+/* eslint-disable react-hooks/preserve-manual-memoization */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
@@ -9,7 +15,6 @@ import {
   Platform,
   useWindowDimensions,
   Linking,
-  Share,
   Animated,
   StatusBar,
   Modal,
@@ -75,6 +80,7 @@ export interface ClubMembershipPlan {
   monthDuration: number;
   isActive: boolean;
   validUpto: string;
+  [key: string]: any
 }
 
 // Kept for backward compatibility with external imports (empty record - no dummy data)
@@ -314,21 +320,21 @@ function GymDetailSkeletonScreen({ onBack }: { onBack: () => void }) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const getAmenityIcon = (name: string): string => {
-  const n = name.toLowerCase();
-  if (n.includes('ac') || n.includes('air')) return 'snow-outline';
-  if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
-  if (n.includes('park')) return 'car-outline';
-  if (n.includes('train')) return 'barbell-outline';
-  if (n.includes('shower') || n.includes('bath')) return 'water-outline';
-  if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
-  if (n.includes('box')) return 'flame-outline';
-  if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
-  if (n.includes('pool') || n.includes('swim')) return 'water-outline';
-  if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
-  if (n.includes('lock')) return 'lock-closed-outline';
-  return 'checkmark-circle-outline';
-};
+// const getAmenityIcon = (name: string): string => {
+//   const n = name.toLowerCase();
+//   if (n.includes('ac') || n.includes('air')) return 'snow-outline';
+//   if (n.includes('wifi') || n.includes('wi-fi')) return 'wifi-outline';
+//   if (n.includes('park')) return 'car-outline';
+//   if (n.includes('train')) return 'barbell-outline';
+//   if (n.includes('shower') || n.includes('bath')) return 'water-outline';
+//   if (n.includes('yoga') || n.includes('meditat')) return 'body-outline';
+//   if (n.includes('box')) return 'flame-outline';
+//   if (n.includes('dance') || n.includes('zumba')) return 'musical-notes-outline';
+//   if (n.includes('pool') || n.includes('swim')) return 'water-outline';
+//   if (n.includes('sauna') || n.includes('steam')) return 'thermometer-outline';
+//   if (n.includes('lock')) return 'lock-closed-outline';
+//   return 'checkmark-circle-outline';
+// };
 
 export default function GymDetailScreen() {
   const router = useRouter();
@@ -360,7 +366,7 @@ export default function GymDetailScreen() {
           .filter(Boolean)
           .map((url: string) => ({ url: String(url) }));
       }
-    } catch {}
+    } catch { }
     return [];
   }, [params.initialImages]);
 
@@ -385,11 +391,12 @@ export default function GymDetailScreen() {
               monthDuration: info.monthDuration,
               isActive: p.isActive !== false,
               validUpto: info.validUpto,
+
             };
           })
           .sort((a, b) => a.monthDuration - b.monthDuration);
       }
-    } catch {}
+    } catch { }
     return [];
   }, [params.initialMembershipPlans]);
 
@@ -402,12 +409,12 @@ export default function GymDetailScreen() {
         const list = Array.isArray(data)
           ? data
           : Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data?.clubs)
-          ? data.clubs
-          : Array.isArray(data?.results)
-          ? data.results
-          : [];
+            ? data.data
+            : Array.isArray(data?.clubs)
+              ? data.clubs
+              : Array.isArray(data?.results)
+                ? data.results
+                : [];
         const found = list.find(
           (item: any) =>
             String(item.id) === gymId ||
@@ -417,7 +424,7 @@ export default function GymDetailScreen() {
         );
         if (found) return found?.attributes ? { id: found.id, ...found.attributes } : found;
       }
-    } catch {}
+    } catch { }
     return null;
   }, [gymId, queryClient]);
 
@@ -425,12 +432,7 @@ export default function GymDetailScreen() {
   const { data: apiData, isLoading: isDetailLoading, isPending } = useGymDetail(gymId || undefined);
   const isDetailFetching = Boolean((isDetailLoading || isPending) && !apiData);
 
-  useEffect(() => {
-    if (apiData) {
-      console.log('📋 [GymDetail Screen] Received apiData for gymId:', gymId);
-      console.log('📦 [GymDetail Screen Data]:', JSON.stringify(apiData, null, 2));
-    }
-  }, [apiData, gymId]);
+
 
   // ── Favorites management ──────────────────────────────────────────────────
   const { data: favoritesData } = useGetFavorites();
@@ -499,8 +501,8 @@ export default function GymDetailScreen() {
         const rating = params.initialRating
           ? String(params.initialRating).split('/')[0]
           : sourceData.rating
-          ? String(sourceData.rating).split('/')[0]
-          : '0';
+            ? String(sourceData.rating).split('/')[0]
+            : '0';
         const lat = Number(params.initialLat || sourceData.latitude || sourceData.lat || 0);
         const lng = Number(params.initialLng || sourceData.longitude || sourceData.lng || 0);
 
@@ -518,7 +520,7 @@ export default function GymDetailScreen() {
                 };
               });
             }
-          } catch {}
+          } catch { }
         } else if (Array.isArray(sourceData.amenities)) {
           initialAmenitiesList = sourceData.amenities.map((item: any) => {
             const name = typeof item === 'string' ? item : String(item?.name || '');
@@ -534,11 +536,12 @@ export default function GymDetailScreen() {
           (sourceData as any)?.membershipPlans ||
           (sourceData as any)?.plans ||
           [];
+        console.log("MemberShip Plan: ", rawCachedPlans)
         const cachedMembershipPlans: ClubMembershipPlan[] =
           initialMembershipPlans.length > 0
             ? initialMembershipPlans
             : Array.isArray(rawCachedPlans)
-            ? rawCachedPlans
+              ? rawCachedPlans
                 .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
                 .map((p: any, idx: number) => {
                   const info = formatPlanNameAndDuration(p);
@@ -553,10 +556,11 @@ export default function GymDetailScreen() {
                     monthDuration: info.monthDuration,
                     isActive: p.isActive !== false,
                     validUpto: info.validUpto,
+                    gymContract: p.gymContractPlanRateDocumentId
                   };
                 })
                 .sort((a, b) => a.monthDuration - b.monthDuration)
-            : [];
+              : [];
 
         return {
           id: gymId,
@@ -601,21 +605,21 @@ export default function GymDetailScreen() {
       [];
     let photos: GymPhotoItem[] = Array.isArray(rawPhotos)
       ? (rawPhotos
-          .map((p: any) => {
-            const url =
-              p?.url ||
-              p?.formats?.large?.url ||
-              p?.formats?.medium?.url ||
-              p?.formats?.small?.url ||
-              (typeof p === 'string' ? p : null);
-            if (!url) return null;
-            const fullUrl = url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
-            return {
-              url: fullUrl,
-              imageInfo: p?.imageInfo || p?.title || p?.caption || undefined,
-            };
-          })
-          .filter(Boolean) as GymPhotoItem[])
+        .map((p: any) => {
+          const url =
+            p?.url ||
+            p?.formats?.large?.url ||
+            p?.formats?.medium?.url ||
+            p?.formats?.small?.url ||
+            (typeof p === 'string' ? p : null);
+          if (!url) return null;
+          const fullUrl = url.startsWith('http') ? url : `${process.env.EXPO_PUBLIC_API_URL}${url}`;
+          return {
+            url: fullUrl,
+            imageInfo: p?.imageInfo || p?.title || p?.caption || undefined,
+          };
+        })
+        .filter(Boolean) as GymPhotoItem[])
       : [];
 
     // If API returned empty photos, preserve the photos already displayed from the GymCard
@@ -633,8 +637,8 @@ export default function GymDetailScreen() {
           ? rawLogo
           : `${process.env.EXPO_PUBLIC_API_URL}${rawLogo}`
         : rawLogo?.url
-        ? (rawLogo.url.startsWith('http') ? rawLogo.url : `${process.env.EXPO_PUBLIC_API_URL}${rawLogo.url}`)
-        : '';
+          ? (rawLogo.url.startsWith('http') ? rawLogo.url : `${process.env.EXPO_PUBLIC_API_URL}${rawLogo.url}`)
+          : '';
 
     const clubId: string = String(d.clubId || d.club_id || '');
     const ownerName: string = String(d.ownerName || d.owner || d.manager || '');
@@ -734,11 +738,11 @@ export default function GymDetailScreen() {
       Array.isArray(d.exerciseZones) && d.exerciseZones.length > 0
         ? d.exerciseZones
         : photos
-            .filter((p) => Boolean(p.imageInfo))
-            .map((p) => ({
-              title: p.imageInfo!,
-              image: p.url,
-            }));
+          .filter((p) => Boolean(p.imageInfo))
+          .map((p) => ({
+            title: p.imageInfo!,
+            image: p.url,
+          }));
 
     const coordinate = {
       latitude: Number(d.latitude || d.lat || d.location?.latitude || d.coordinate?.latitude || 0),
@@ -758,23 +762,24 @@ export default function GymDetailScreen() {
     let membershipPlans: ClubMembershipPlan[] =
       Array.isArray(rawPlans) && rawPlans.length > 0
         ? rawPlans
-            .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
-            .map((p: any, idx: number) => {
-              const info = formatPlanNameAndDuration(p);
-              const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
-              return {
-                id: planKey,
-                documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
-                plan: p.plan,
-                planName: info.planName,
-                price: info.price,
-                customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
-                monthDuration: info.monthDuration,
-                isActive: p.isActive !== false,
-                validUpto: info.validUpto,
-              };
-            })
-            .sort((a, b) => a.monthDuration - b.monthDuration)
+          .filter((p: any) => p && (p.isActive === undefined || p.isActive === true))
+          .map((p: any, idx: number) => {
+            const info = formatPlanNameAndDuration(p);
+            const planKey = p.plan || (p.documentId ? String(p.documentId) : (p.id ? String(p.id) : `plan-${idx}`));
+            return {
+              id: planKey,
+              documentId: p.documentId ? String(p.documentId) : (p.id ? String(p.id) : planKey),
+              plan: p.plan,
+              planName: info.planName,
+              price: info.price,
+              customerPrice: p.customerPrice !== undefined ? Number(p.customerPrice) : info.price,
+              monthDuration: info.monthDuration,
+              isActive: p.isActive !== false,
+              validUpto: info.validUpto,
+              gymContract: p.gymContractPlanRateDocumentId
+            };
+          })
+          .sort((a, b) => a.monthDuration - b.monthDuration)
         : initialMembershipPlans;
 
     const phoneNumber: string = String(d.phoneNumber || d.phone || d.contactNumber || '');
@@ -822,7 +827,6 @@ export default function GymDetailScreen() {
     params.initialDescription,
     params.initialLat,
     params.initialLng,
-    params.initialIsFav,
     cachedFromNearby,
     isFavorite,
   ]);
@@ -869,7 +873,7 @@ export default function GymDetailScreen() {
     setTimeout(() => {
       try {
         zoneListRef.current?.scrollToIndex({ index, animated: false });
-      } catch {}
+      } catch { }
     }, 60);
   };
 
@@ -890,7 +894,7 @@ export default function GymDetailScreen() {
       setSelectedZoneIndex(next);
       try {
         zoneListRef.current?.scrollToIndex({ index: next, animated: true });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -904,7 +908,7 @@ export default function GymDetailScreen() {
       setSelectedZoneIndex(prev);
       try {
         zoneListRef.current?.scrollToIndex({ index: prev, animated: true });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -930,10 +934,10 @@ export default function GymDetailScreen() {
         await toggleFavApi(String(targetDocId), currentFav);
       } catch (err) {
         setIsFavorite(currentFav); // Revert on failure
+        console.error("Error Fav", err)
       }
     }
   };
-  const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<GymBranchItem | null>(null);
   const mapInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -972,10 +976,11 @@ export default function GymDetailScreen() {
                 });
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         }
-      } catch (e) {
+      } catch (e: any) {
         // ignore location error
+        console.error("Location Error", e)
       }
     })();
     return () => {
@@ -986,28 +991,28 @@ export default function GymDetailScreen() {
     };
   }, []);
 
-  const handleMapTouchStart = () => {
-    if (mapInteractionTimerRef.current) {
-      clearTimeout(mapInteractionTimerRef.current);
-    }
-    setIsMapInteracting(true);
-  };
+  // const handleMapTouchStart = () => {
+  //   if (mapInteractionTimerRef.current) {
+  //     clearTimeout(mapInteractionTimerRef.current);
+  //   }
+  //   setIsMapInteracting(true);
+  // };
 
-  const handleMapTouchEnd = () => {
-    if (mapInteractionTimerRef.current) {
-      clearTimeout(mapInteractionTimerRef.current);
-    }
-    setIsMapInteracting(false);
-  };
+  // const handleMapTouchEnd = () => {
+  //   if (mapInteractionTimerRef.current) {
+  //     clearTimeout(mapInteractionTimerRef.current);
+  //   }
+  //   setIsMapInteracting(false);
+  // };
 
-  const handleSelectGym = (selectedId: string) => {
-    if (selectedId && selectedId !== gym?.id) {
-      router.push({
-        pathname: '/gym/gym-detail' as any,
-        params: { id: selectedId },
-      });
-    }
-  };
+  // const handleSelectGym = (selectedId: string) => {
+  //   if (selectedId && selectedId !== gym?.id) {
+  //     router.push({
+  //       pathname: '/gym/gym-detail' as any,
+  //       params: { id: selectedId },
+  //     });
+  //   }
+  // };
 
   const slides: GymPhotoItem[] =
     gym?.photos && gym.photos.length > 1
@@ -1110,17 +1115,6 @@ export default function GymDetailScreen() {
     };
   }, [reviewCount, reviewCardStep, reviewCardWidth]);
 
-  const handleShare = async () => {
-    if (!gym) return;
-    try {
-      await Share.share({
-        message: `Check out ${gym.title} on FitFob! Located at ${gym.address}. Join today!`,
-      });
-    } catch (e) {
-      console.log('Error sharing:', e);
-    }
-  };
-
   const handleGetDirections = (targetBranch?: GymBranchItem) => {
     if (!gym) return;
     const branchToUse = targetBranch || selectedBranch;
@@ -1147,14 +1141,14 @@ export default function GymDetailScreen() {
           await Linking.openURL(googleMapsAppUrl);
           return;
         }
-      } catch {}
+      } catch { }
 
       try {
         if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {
           await Linking.openURL(nativeMapScheme);
           return;
         }
-      } catch {}
+      } catch { }
 
       Linking.openURL(webGoogleMapsUrl).catch(() => {
         Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
@@ -1675,7 +1669,7 @@ export default function GymDetailScreen() {
           {gym.exerciseZones.length > 0 ? (
             <View className="mt-6">
               <View className="flex-row items-center justify-between">
-                <Text className="font-bold text-base text-slate-900">Where you'll exercise</Text>
+                <Text className="font-bold text-base text-slate-900">Where you&apos;ll exercise</Text>
                 <View className="flex-row items-center gap-1">
                   <Ionicons name="expand-outline" size={12} color="#94A3B8" />
                   <Text className="text-xs font-medium text-slate-400">Tap to expand</Text>
@@ -1745,11 +1739,11 @@ export default function GymDetailScreen() {
           ) : null}
 
           {/* 4. Key Features / Amenities (Only if amenities exist, skeleton while loading) */}
-          {gym.amenities.length > 0 ? ( 
+          {gym.amenities.length > 0 ? (
             <View className="mt-6">
               <View className="flex-row items-center justify-between mb-3">
                 <Text className="font-bold text-base text-slate-900">Key Features</Text>
-                
+
               </View>
 
               <View className="flex-row flex-wrap gap-2.5">
@@ -1769,7 +1763,7 @@ export default function GymDetailScreen() {
                   onPress={() => {
                     try {
                       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    } catch {}
+                    } catch { }
                     setShowAllAmenities((prev) => !prev);
                   }}
                   activeOpacity={0.75}
@@ -1839,6 +1833,7 @@ export default function GymDetailScreen() {
                   const cleanValidUpto = plan.validUpto.toLowerCase().endsWith('access')
                     ? plan.validUpto
                     : `${plan.validUpto} access`;
+                  const gymContractPlanRateDocumentId = plan.gymContractPlanRateDocumentId
 
                   return (
                     <TouchableOpacity
@@ -1855,14 +1850,14 @@ export default function GymDetailScreen() {
                             selectedPlanPrice: plan.price.toString(),
                             selectedPlanDuration: plan.monthDuration.toString(),
                             plans: JSON.stringify(gym.membershipPlans),
+                            gymContract: gymContractPlanRateDocumentId
                           },
                         })
                       }
-                      className={`overflow-hidden rounded-2xl border ${
-                        isBestValue
-                          ? 'border-red-200 bg-red-50/20'
-                          : 'border-slate-200 bg-white'
-                      } p-4 shadow-xs`}>
+                      className={`overflow-hidden rounded-2xl border ${isBestValue
+                        ? 'border-red-200 bg-red-50/20'
+                        : 'border-slate-200 bg-white'
+                        } p-4 shadow-xs`}>
                       {/* Top row: Plan Name + Duration badge + Price */}
                       <View className="flex-row items-start justify-between">
                         <View className="flex-row items-center gap-2.5">
@@ -1991,7 +1986,7 @@ export default function GymDetailScreen() {
             <View className="mt-6">
               <View className="flex-row items-center justify-between">
                 <View className="flex-1 mr-3">
-                  <Text className="font-bold text-base text-slate-900">Where you'll be</Text>
+                  <Text className="font-bold text-base text-slate-900">Where you&apos;ll be</Text>
                   {Boolean(gym.address) && (
                     <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
                       {gym.address}
@@ -2150,7 +2145,7 @@ export default function GymDetailScreen() {
             </View>
           )}
 
-          
+
         </View>
       </Animated.ScrollView>
 
@@ -2187,7 +2182,8 @@ export default function GymDetailScreen() {
 
           {/* Buy Membership Button */}
           <TouchableOpacity
-            onPress={() =>
+            onPress={() => {
+              console.log(gym.membershipPlans);
               router.push({
                 pathname: '/membership/buy-membership' as any,
                 params: {
@@ -2199,6 +2195,7 @@ export default function GymDetailScreen() {
                       : undefined,
                 },
               })
+            }
             }
             activeOpacity={0.85}
             className="flex-1 items-center justify-center rounded-2xl bg-[#E23744] py-3.5 shadow-md shadow-[#E23744]/25">
@@ -2275,7 +2272,7 @@ export default function GymDetailScreen() {
                 setTimeout(() => {
                   try {
                     zoneListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                  } catch {}
+                  } catch { }
                 }, 100);
               }}
               scrollEventThrottle={16}
@@ -2397,7 +2394,7 @@ export default function GymDetailScreen() {
                         setSelectedZoneIndex(idx);
                         try {
                           zoneListRef.current?.scrollToIndex({ index: idx, animated: true });
-                        } catch {}
+                        } catch { }
                       }}
                       style={{
                         height: 56,

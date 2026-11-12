@@ -26,7 +26,7 @@ interface LocationMapPickerProps {
 
 export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMapPickerProps>(
   ({ initialRegion, onRegionChangeComplete, onRequestLocation, onMapTouchStart, onMapTouchEnd, controlsPosition = 'top-right', style }, ref) => {
-    const webViewRef = useRef<WebView>(null);
+    const webViewRef = useRef<any>(null);
     const mapReadyRef = useRef<boolean>(false);
     const pendingRegionRef = useRef<Region | null>(null);
 
@@ -84,8 +84,18 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossOrigin="" />
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossOrigin=""></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+            <script>
+              if (typeof L === 'undefined') {
+                document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"><\\/script>');
+              }
+            </script>
+            <script>
+              if (typeof L === 'undefined') {
+                document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\\/script>');
+              }
+            </script>
             <style>
               * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
               html, body, #map {
@@ -291,14 +301,7 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
                   }).addTo(map);
                 }
 
-                // Smoothly adjust zoom to keep the radius circle nicely in view
-                var targetZoom = 13;
-                if (radiusKm <= 5) targetZoom = 13;
-                else if (radiusKm <= 10) targetZoom = 12;
-                else if (radiusKm <= 15) targetZoom = 11;
-                else if (radiusKm <= 20) targetZoom = 11;
-                else targetZoom = 10;
-                map.setZoom(targetZoom);
+                // Update radius without forcibly resetting user zoom
               };
 
               map.on('move', function() {

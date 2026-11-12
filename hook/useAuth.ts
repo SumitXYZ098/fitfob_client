@@ -25,7 +25,7 @@ export const useResendOtp = () => {
   return useMutation({
     mutationFn: resendOtpApi,
     onSuccess: (data) => {
-      console.log('✅ OTP Resent Successfully:', data);
+      // console.log('✅ OTP Resent Successfully:', data);
       Toast.show({
         type: 'success',
         text1: 'OTP Sent! 📩',
@@ -61,8 +61,8 @@ export const useLoginRequest = () => {
 export const useForgotSendOtp = () => {
   return useMutation({
     mutationFn: forgotSendOtpApi,
-    onSuccess: (data) => {
-      console.log('✅ Forgot Password OTP Sent:', data);
+    onSuccess: () => {
+      // console.log('✅ Forgot Password OTP Sent:', data);
       Toast.show({
         type: 'success',
         text1: 'OTP Sent! 📩',
@@ -79,8 +79,8 @@ export const useForgotSendOtp = () => {
 export const useForgotResendOtp = () => {
   return useMutation({
     mutationFn: forgotResendOtpApi,
-    onSuccess: (data) => {
-      console.log('✅ Forgot Password OTP Resent:', data);
+    onSuccess: () => {
+      // console.log('✅ Forgot Password OTP Resent:', data);
       Toast.show({
         type: 'success',
         text1: 'OTP Sent! 📩',
@@ -98,8 +98,8 @@ export const useForgotResendOtp = () => {
 export const useForgotVerifyOtp = () => {
   return useMutation<any, any, { identifier: string; otp: string }>({
     mutationFn: forgotVerifyOtpApi,
-    onSuccess: (data) => {
-      console.log('✅ Forgot OTP Verified:', data);
+    onSuccess: () => {
+      // console.log('✅ Forgot OTP Verified:', data);
       Toast.show({
         type: 'success',
         text1: 'OTP Verified! ✅',
@@ -117,13 +117,13 @@ export const useResetPassword = () => {
   const router = useRouter();
   return useMutation({
     mutationFn: resetPasswordApi,
-    onSuccess: (data) => {
-      console.log('✅ Password Reset Success:', data);
+    onSuccess: () => {
+      // console.log('✅ Password Reset Success:', data);
       Toast.show({ type: 'success', text1: 'Password Changed Successfully!' });
       router.replace('/auth/Login');
     },
     onError: (error: any) => {
-      console.log('❌ BACKEND FULL ERROR:', JSON.stringify(error.response?.data, null, 2));
+      console.error('❌ BACKEND FULL ERROR:', JSON.stringify(error.response?.data, null, 2));
 
       const msg = error.response?.data?.error?.message || 'Unable to reset password.';
       Toast.show({ type: 'error', text1: 'Error', text2: msg });
@@ -156,7 +156,7 @@ export const useGoogleLogin = () => {
 
       const token = data?.jwt || data?.token || user?.token;
       if (token && user) {
-        console.log('✅ Google Login Success:', user.username);
+        // console.log('✅ Google Login Success:', user.username);
 
         const userWithToken = {
           ...user,
@@ -164,7 +164,7 @@ export const useGoogleLogin = () => {
         };
 
         setUser(userWithToken, true);
-        console.log(userWithToken, 'usr Data');
+        // console.log(userWithToken, 'usr Data');
 
         if (router.canDismiss()) {
           router.dismissAll();
@@ -218,7 +218,7 @@ export const useFacebookLogin = () => {
 
       const token = data?.jwt || data?.token || user?.token;
       if (token && user) {
-        console.log('✅ Facebook Login Success:', user.username);
+        // console.log('✅ Facebook Login Success:', user.username);
 
         const userWithToken = {
           ...user,
@@ -226,7 +226,7 @@ export const useFacebookLogin = () => {
         };
 
         setUser(userWithToken, true);
-        console.log(userWithToken, 'usr Data');
+        // console.log(userWithToken, 'usr Data');
 
         if (router.canDismiss()) {
           router.dismissAll();

@@ -16,6 +16,7 @@ import GradientDivider from '@/components/GradientDivider';
 import { createMembershipCheckoutBuy } from '@/api/clientApi';
 import { openRazorpayPayment } from '@/services/razorpayService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { removeIdempotencyKey } from '@/utility/idempotency';
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -54,8 +55,8 @@ export default function PaymentScreen() {
         console.log('💳 Creating Razorpay Order for method:', methodName, payload);
         const checkoutRes = await createMembershipCheckoutBuy(payload);
         orderId = checkoutRes.razorpayOrderId;
-        keyId = checkoutRes.razorpayKeyId;
-        amountInPaise = checkoutRes.totalAmountInPaise || Math.round(totalAmount * 100);
+        keyId = checkoutRes.keyId || (checkoutRes as any).razorpayKeyId;
+        amountInPaise = checkoutRes.amount || (checkoutRes as any).totalAmountInPaise || Math.round(totalAmount * 100);
         currency = checkoutRes.currency || 'INR';
       }
 
@@ -92,6 +93,9 @@ export default function PaymentScreen() {
         const paymentResult = await openRazorpayPayment(options);
         console.log('🎉 Razorpay payment succeeded via', methodName, paymentResult);
 
+        // Remove idempotency key from local storage after successful payment
+        await removeIdempotencyKey(params.gymContractPlanRate as string);
+
         const generatedPassId = paymentResult.razorpay_payment_id || `FF-${Date.now()}`;
         setActivePass({
           id: generatedPassId,
@@ -125,6 +129,7 @@ export default function PaymentScreen() {
         if (nativeErr?.message === 'NATIVE_MODULE_NOT_LINKED') {
           // Fallback simulation in Expo Go
           console.log('Simulating payment success in Expo Go dev mode');
+          await removeIdempotencyKey(params.gymContractPlanRate as string);
           const generatedPassId = `DEV-${Date.now()}`;
           setActivePass({
             id: generatedPassId,

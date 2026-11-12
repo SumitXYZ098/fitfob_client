@@ -36,18 +36,18 @@ export const resendOtpApi = async (payload: { identifier: string; signupToken: s
 // 3. Verify OTP
 export const verifyOtpApi = async (payload: any) => {
   try {
-    console.log('📡 Sending OTP Request:', {
-      identifier: payload.identifier.toLowerCase().trim(),
-      otp: payload.otp.toString(),
-      signupToken: payload.signupToken,
-    });
+    // console.log('📡 Sending OTP Request:', {
+    //   identifier: payload.identifier.toLowerCase().trim(),
+    //   otp: payload.otp.toString(),
+    //   signupToken: payload.signupToken,
+    // });
 
     const response = await api.post(ENDPOINTS.VERIFY_OTP, {
       identifier: payload.identifier.toLowerCase().trim(),
       otp: payload.otp.toString(),
       signupToken: payload.signupToken,
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error: any) {
     throw error;
@@ -57,7 +57,7 @@ export const verifyOtpApi = async (payload: any) => {
 // 4. Login
 export const loginUserApi = async (payload: any) => {
   try {
-    console.log('📡 Login Update Payload:', payload);
+    // console.log('📡 Login Update Payload:', payload);
     const response = await api.post(ENDPOINTS.LOGIN, payload);
     return response.data;
   } catch (error: any) {
@@ -85,10 +85,10 @@ export const forgotResendOtpApi = async (payload: { identifier: string }) => {
 
 // 3. Verify OTP (Forgot Password)
 export const forgotVerifyOtpApi = async (payload: { identifier: string; otp: string }) => {
-  console.log('🚀 Payload being sent to Backend:', {
-    identifier: payload.identifier.toLowerCase().trim(),
-    otp: String(payload.otp).trim(),
-  });
+  // console.log('🚀 Payload being sent to Backend:', {
+  //   identifier: payload.identifier.toLowerCase().trim(),
+  //   otp: String(payload.otp).trim(),
+  // });
 
   const response = await api.post(ENDPOINTS.FORGOT_VERIFY_OTP, {
     identifier: payload.identifier.toLowerCase().trim(),

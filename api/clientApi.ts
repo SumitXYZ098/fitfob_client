@@ -14,7 +14,7 @@ export const clientBasicDetails = async (
       phoneNumber,
       gender,
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -28,7 +28,7 @@ export const clientBodyInfo = async (height: string, weight: string, date_of_bir
       weight,
       date_of_birth,
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -41,7 +41,7 @@ export const clientLocation = async (latitude: string, longitude: string) => {
       latitude,
       longitude,
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -66,7 +66,7 @@ export const clientSelfie = async (image: string) => {
         'Content-Type': 'multipart/form-data',
       },
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -91,7 +91,7 @@ export const clientGovId = async (image: string) => {
         'Content-Type': 'multipart/form-data',
       },
     });
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -101,7 +101,7 @@ export const clientGovId = async (image: string) => {
 export const clientSubmit = async () => {
   try {
     const response = await apiInstance.post(ENDPOINTS.VERIFY_PENDING_CLIENT);
-    console.log(response.data);
+    // console.log(response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -111,7 +111,7 @@ export const clientSubmit = async () => {
 export const checkUserStep = async () => {
   try {
     const response = await apiInstance.get(ENDPOINTS.CHECK_STEP);
-    console.log(response.data, new Date().toISOString());
+    // console.log(response.data, new Date().toISOString());
     return response.data;
   } catch (error) {
     throw error;
@@ -134,7 +134,7 @@ export const clientSendOtp = async (identifier?: string) => {
   const url = ENDPOINTS.CLIENT_SEND_OTP;
   try {
     const response = await apiInstance.post(url, { identifier });
-    console.log('✅ Send OTP Success:', response.data);
+    // console.log('✅ Send OTP Success:', response.data);
     return response.data;
   } catch (error) {
     throw error;
@@ -145,30 +145,30 @@ export const clientVerifyOtp = async (otp: string, identifier?: string) => {
   const otpStr = otp.toString().trim();
   const url = ENDPOINTS.CLIENT_VERIFY_OTP;
 
-  console.log(`📡 Trying verify OTP on ${url} with { otp: "${otpStr}" }...`);
+  // console.log(`📡 Trying verify OTP on ${url} with { otp: "${otpStr}" }...`);
 
   // 1. Try clean { otp } payload
   try {
     const response = await apiInstance.post(url, { otp: otpStr });
-    console.log('✅ Verify OTP Success (clean otp):', response.data);
+    // console.log('✅ Verify OTP Success (clean otp):', response.data);
     return response.data;
   } catch (err: any) {
-    console.log(
-      '⚠️ Error on client verify-otp ({ otp }):',
-      err?.response?.status,
-      JSON.stringify(err?.response?.data || err?.message)
-    );
+    // console.log(
+    //   '⚠️ Error on client verify-otp ({ otp }):',
+    //   err?.response?.status,
+    //   JSON.stringify(err?.response?.data || err?.message)
+    // );
 
     // 2. If clean { otp } failed and identifier was provided, try with { otp, identifier }
     if (identifier) {
       try {
         const bodyWithId = { otp: otpStr, identifier };
-        console.log('📡 Retrying verify OTP with identifier:', JSON.stringify(bodyWithId));
+        // console.log('📡 Retrying verify OTP with identifier:', JSON.stringify(bodyWithId));
         const response = await apiInstance.post(url, bodyWithId);
-        console.log('✅ Verify OTP Success (with identifier):', response.data);
+        // console.log('✅ Verify OTP Success (with identifier):', response.data);
         return response.data;
       } catch (retryErr: any) {
-        console.log(
+        console.error(
           '⚠️ Error on client verify-otp (with identifier):',
           retryErr?.response?.status,
           JSON.stringify(retryErr?.response?.data || retryErr?.message)
@@ -180,12 +180,12 @@ export const clientVerifyOtp = async (otp: string, identifier?: string) => {
     const numericOtp = Number(otpStr);
     if (!isNaN(numericOtp)) {
       try {
-        console.log('📡 Retrying verify OTP with numeric otp:', JSON.stringify({ otp: numericOtp }));
+        // console.log('📡 Retrying verify OTP with numeric otp:', JSON.stringify({ otp: numericOtp }));
         const response = await apiInstance.post(url, { otp: numericOtp });
-        console.log('✅ Verify OTP Success (numeric):', response.data);
+        // console.log('✅ Verify OTP Success (numeric):', response.data);
         return response.data;
       } catch (numErr: any) {
-        console.log(
+        console.error(
           '⚠️ Error on client verify-otp (numeric):',
           numErr?.response?.status,
           JSON.stringify(numErr?.response?.data || numErr?.message)
@@ -206,7 +206,7 @@ export const clientResendOtp = async (payload?: {
   const targetIdentifier =
     payload?.identifier || payload?.phoneNumber || payload?.email || '';
 
-  console.log('📡 clientResendOtp called with identifier:', targetIdentifier);
+  // console.log('📡 clientResendOtp called with identifier:', targetIdentifier);
 
   const url = ENDPOINTS.CLIENT_RESEND_OTP;
 
@@ -218,12 +218,12 @@ export const clientResendOtp = async (payload?: {
         phoneNumber: payload?.phoneNumber,
         email: payload?.email,
       };
-      console.log(`📡 Trying POST ${url} with:`, JSON.stringify(body));
+      // console.log(`📡 Trying POST ${url} with:`, JSON.stringify(body));
       const response = await apiInstance.post(url, body);
-      console.log('✅ Resend OTP Success (with identifier):', response.data);
+      // console.log('✅ Resend OTP Success (with identifier):', response.data);
       return response.data;
     } catch (err: any) {
-      console.log(
+      console.error(
         '⚠️ Error on client resend-otp (with identifier):',
         err?.response?.status,
         JSON.stringify(err?.response?.data)
@@ -233,12 +233,12 @@ export const clientResendOtp = async (payload?: {
       if (targetIdentifier.startsWith('+')) {
         const rawDigits = targetIdentifier.replace(/\D/g, '').slice(-10);
         try {
-          console.log(`📡 Retrying POST ${url} with raw 10 digits:`, rawDigits);
+          // console.log(`📡 Retrying POST ${url} with raw 10 digits:`, rawDigits);
           const retryResp = await apiInstance.post(url, { identifier: rawDigits });
-          console.log('✅ Resend OTP Success (raw digits):', retryResp.data);
+          // console.log('✅ Resend OTP Success (raw digits):', retryResp.data);
           return retryResp.data;
         } catch (retryErr: any) {
-          console.log(
+          console.error(
             '⚠️ Error on client resend-otp (raw digits):',
             retryErr?.response?.status,
             JSON.stringify(retryErr?.response?.data)
@@ -250,12 +250,12 @@ export const clientResendOtp = async (payload?: {
 
   // 2. Fallback attempt: empty body {}
   try {
-    console.log(`📡 Trying POST ${url} with empty body {}...`);
+    // console.log(`📡 Trying POST ${url} with empty body {}...`);
     const response = await apiInstance.post(url, {});
-    console.log('✅ Resend OTP Success (empty body):', response.data);
+    // console.log('✅ Resend OTP Success (empty body):', response.data);
     return response.data;
   } catch (err: any) {
-    console.log(
+    console.error(
       '❌ Resend OTP Error Detail:',
       err?.response?.status,
       JSON.stringify(err?.response?.data)
@@ -298,14 +298,14 @@ export const searchNearbyGyms = async (params: {
 
     const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
     const url = `${ENDPOINTS.SEARCH_CLUBS}${queryString}`;
-    console.log('📡 Fetching nearby gyms from:', url);
+    // console.log('📡 Fetching nearby gyms from:', url);
 
     const response = await apiInstance.get(url);
-    console.log('✅ Nearby gyms fetched successfully from:', url);
+    // console.log('✅ Nearby gyms fetched successfully from:', url);
     return response?.data ?? [];
   } catch (error: any) {
     if (error?.response?.status === 404 || error?.response?.status === 400) {
-      console.log('ℹ️ No clubs found for search criteria (404/400), returning empty list');
+      console.error('ℹ️ No clubs found for search criteria (404/400), returning empty list');
       return [];
     }
     console.error('❌ Error fetching nearby gyms:', error?.response?.data || error.message);
@@ -317,10 +317,10 @@ export const searchNearbyGyms = async (params: {
 export const getGymDetail = async (id: string) => {
   try {
     const url = `${ENDPOINTS.GET_CLUB_DETAIL}/${id}`;
-    console.log('📡 Fetching gym detail from:', url);
+    // console.log('📡 Fetching gym detail from:', url);
     const response = await apiInstance.get(url);
-    console.log('✅ Gym detail fetched successfully for ID:', id);
-    console.log('📋 [GYM DETAIL RESPONSE]:', JSON.stringify(response.data, null, 2));
+    // console.log('✅ Gym detail fetched successfully for ID:', id);
+    // console.log('📋 [GYM DETAIL RESPONSE]:', JSON.stringify(response.data, null, 2));
     return response.data;
   } catch (error) {
     console.error('❌ Error fetching gym detail:', error);
@@ -333,9 +333,7 @@ export const getGymDetail = async (id: string) => {
 // 1. Get all client favorites: GET /api/client-detail/favorites
 export const getFavorites = async () => {
   try {
-    console.log('📡 Fetching favorites from:', ENDPOINTS.FAVORITES);
     const response = await apiInstance.get(ENDPOINTS.FAVORITES);
-    console.log('✅ Favorites fetched successfully:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error fetching favorites:', error?.response?.data || error.message);
@@ -416,10 +414,10 @@ export interface MyCheckinsResponse {
 // Get user visits / check-ins history: GET /api/client/my-checkins
 export const getMyCheckins = async (): Promise<MyCheckinsResponse> => {
   const url = ENDPOINTS.MY_CHECKINS;
-  console.log('📡 Fetching my checkins from:', url);
+  // console.log('📡 Fetching my checkins from:', url);
   try {
     const response = await apiInstance.get(url);
-    console.log('✅ Checkins fetched successfully:', response.data);
+    // console.log('✅ Checkins fetched successfully:', response.data);
     return response.data;
   } catch (error: any) {
     // If /api/client/my-checkins returns 404, fallback to /client/my-checkins
@@ -503,11 +501,11 @@ export const getOutdoorMembershipPlans = async (params?: {
 
     const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
     const url = `${ENDPOINTS.OUTDOOR_MEMBERSHIP_PLANS}${queryString}`;
-    console.log('📡 Fetching outdoor membership plans from:', url);
+    // console.log('📡 Fetching outdoor membership plans from:', url);
 
     const response = await apiInstance.get(url);
-    console.log('✅ Outdoor membership plans fetched successfully from:', url);
-    console.log('📦 [clientApi] Raw response.data:', JSON.stringify(response.data, null, 2));
+    // console.log('✅ Outdoor membership plans fetched successfully from:', url);
+    // console.log('📦 [clientApi] Raw response.data:', JSON.stringify(response.data, null, 2));
     const result = response.data;
     if (Array.isArray(result)) return result;
     if (Array.isArray(result?.data)) return result.data;
@@ -524,14 +522,15 @@ export const getOutdoorMembershipPlans = async (params?: {
 
 // ─── Membership Checkout & Buy ──────────────────────────────────────────────
 export interface MembershipCheckoutBuyPayload {
-  local_membership_plan: string;
-  outdoor_membership_plan?: string | null;
+  data:{
+    [key:string]: any
+  }
 }
 
 export interface MembershipCheckoutBuyResponse {
   razorpayOrderId: string;
-  razorpayKeyId: string;
-  totalAmountInPaise: number;
+  keyId: string;
+  amount: number;
   currency: string;
 }
 

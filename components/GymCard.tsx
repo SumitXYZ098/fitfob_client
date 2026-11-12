@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   type ScrollViewInstance,
-  Image,
   Animated,
   useWindowDimensions,
 } from 'react-native';
@@ -821,7 +821,7 @@ const GymCard = React.memo(function GymCard({
         },
       });
     } catch (e) {
-      console.log('Navigation push error:', e);
+      console.error('Navigation push error:', e);
     }
   };
 

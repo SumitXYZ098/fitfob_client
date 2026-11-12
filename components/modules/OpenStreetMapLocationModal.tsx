@@ -1,3 +1,7 @@
+/* eslint-disable import/no-named-as-default */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/preserve-manual-memoization */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -13,6 +17,7 @@ import {
   KeyboardAvoidingView,
   PanResponder,
   LayoutAnimation,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +49,16 @@ const MAX_RADIUS = 20;
 const THUMB_SIZE = 28;
 const clampRadius = (r: number) => Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, Math.round(r)));
 
+export const normalizeCity = (rawName: string): string => {
+  if (!rawName) return '';
+  const trimmed = rawName.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('sahibzada ajit singh nagar') || lower.includes('sas nagar')) {
+    return 'Mohali';
+  }
+  return trimmed;
+};
+
 interface OpenStreetMapLocationModalProps {
   visible: boolean;
   initialCoords: { latitude: number; longitude: number };
@@ -64,6 +79,16 @@ export default function OpenStreetMapLocationModal({
   const insets = useSafeAreaInsets();
   const mapRef = useRef<LocationMapPickerHandle>(null);
   const reverseGeocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (reverseGeocodeTimerRef.current) clearTimeout(reverseGeocodeTimerRef.current);
+      if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
+      if (searchAbortControllerRef.current) searchAbortControllerRef.current.abort();
+    };
+  }, []);
 
   const [selectedRadius, setSelectedRadius] = useState<number>(() => {
     if (typeof initialRadius === 'number' && !isNaN(initialRadius)) {
@@ -170,7 +195,7 @@ export default function OpenStreetMapLocationModal({
       };
       setCurrentRegion(newRegion);
       if (initialCity) {
-        setCityTitle(initialCity);
+        setCityTitle(normalizeCity(initialCity));
       }
       const validRadius = clampRadius(
         typeof initialRadius === 'number' && !isNaN(initialRadius) ? initialRadius : selectedRadius
@@ -183,7 +208,9 @@ export default function OpenStreetMapLocationModal({
           latitude: newRegion.latitude,
           longitude: newRegion.longitude,
         });
-        reverseGeocode(newRegion.latitude, newRegion.longitude);
+        if (!fullAddress) {
+          reverseGeocode(newRegion.latitude, newRegion.longitude);
+        }
       }, 350);
     }
   }, [visible, initialCoords?.latitude, initialCoords?.longitude, initialCity, initialRadius]);
@@ -205,7 +232,7 @@ export default function OpenStreetMapLocationModal({
             updateRadiusRef.current(newR);
           }
         },
-        onPanResponderMove: (evt, gestureState) => {
+        onPanResponderMove: (_evt, gestureState) => {
           const w = trackWidthRef.current;
           if (w > THUMB_SIZE) {
             const travel = w - THUMB_SIZE;
@@ -236,8 +263,14 @@ export default function OpenStreetMapLocationModal({
   // Reverse Geocoding with OpenStreetMap Nominatim and Expo fallback
   const reverseGeocode = async (latitude: number, longitude: number) => {
     setIsAddressLoading(true);
+    let resolvedCity = '';
+    let resolvedFullAddress = '';
+
+    // 1. Nominatim OpenStreetMap reverse geocode with AbortController timeout (4s)
     try {
-      // 1. Nominatim OpenStreetMap reverse geocode
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
         {
@@ -245,8 +278,11 @@ export default function OpenStreetMapLocationModal({
             'User-Agent': 'FitFobApp/1.0 (contact@fitfob.com)',
             'Accept-Language': 'en',
           },
+          signal: controller.signal,
         }
       );
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const data = await response.json();
         if (data && data.address) {
@@ -262,39 +298,45 @@ export default function OpenStreetMapLocationModal({
             addr.state ||
             'Custom Location';
 
-          setCityTitle(detectedCity);
-          setFullAddress(data.display_name || `${detectedCity}, India`);
-          setIsAddressLoading(false);
-          return;
+          resolvedCity = normalizeCity(detectedCity);
+          resolvedFullAddress = data.display_name || `${resolvedCity}, India`;
         }
       }
-    } catch (e) {
-      console.log('OSM reverse geocoding failed, trying native:', e);
+    } catch {
+      // OSM reverse geocoding timed out or failed, will fall back to native Expo Location
     }
 
-    // 2. Native Expo reverseGeocode fallback
-    try {
-      const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (addresses && addresses.length > 0) {
-        const addr = addresses[0];
-        const detectedCity =
-          addr.city || addr.subregion || addr.district || addr.region || 'Custom Location';
-        const parts = [
-          addr.name,
-          addr.street,
-          addr.subregion || addr.district,
-          addr.city,
-          addr.region,
-        ].filter(Boolean);
+    // 2. Native Expo reverseGeocode fallback if needed
+    if (!resolvedCity || !resolvedFullAddress) {
+      try {
+        const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (addresses && addresses.length > 0) {
+          const addr = addresses[0];
+          const detectedCity =
+            addr.city || addr.subregion || addr.district || addr.region || 'Custom Location';
+          const parts = [
+            addr.name,
+            addr.street,
+            addr.subregion || addr.district,
+            addr.city,
+            addr.region,
+          ].filter(Boolean);
 
-        setCityTitle(detectedCity);
-        setFullAddress(parts.join(', '));
+          resolvedCity = normalizeCity(detectedCity);
+          resolvedFullAddress = parts.join(', ');
+        }
+      } catch (fallbackError) {
+        console.error('Native reverse geocode error:', fallbackError);
       }
-    } catch (fallbackError) {
-      console.log('Native reverse geocode error:', fallbackError);
-    } finally {
-      setIsAddressLoading(false);
     }
+
+    if (resolvedCity) {
+      setCityTitle(resolvedCity);
+    }
+    if (resolvedFullAddress) {
+      setFullAddress(resolvedFullAddress);
+    }
+    setIsAddressLoading(false);
   };
 
   const debouncedReverseGeocode = useCallback((latitude: number, longitude: number) => {
@@ -311,44 +353,127 @@ export default function OpenStreetMapLocationModal({
     debouncedReverseGeocode(newRegion.latitude, newRegion.longitude);
   };
 
-  // Search Address using Nominatim
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  // Search Address using Nominatim with Native Expo fallback
+  const executeSearch = async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed || trimmed.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    if (searchAbortControllerRef.current) {
+      searchAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    searchAbortControllerRef.current = controller;
+
     Keyboard.dismiss();
     setIsSearching(true);
-    setSuggestions([]);
+    let foundResults: Suggestion[] = [];
 
+    // 1. Try Nominatim search with 4s timeout
     try {
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-          searchQuery.trim()
-        )}&format=json&limit=5&addressdetails=1`,
+          trimmed
+        )}&format=json&limit=6&addressdetails=1`,
         {
           headers: {
             'User-Agent': 'FitFobApp/1.0 (contact@fitfob.com)',
             'Accept-Language': 'en',
           },
+          signal: controller.signal,
         }
       );
-      const data = await response.json();
-      if (data && data.length > 0) {
-        if (data.length === 1) {
-          const item = data[0];
-          handleSelectSuggestion(item);
-        } else {
-          setSuggestions(data);
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          foundResults = data.map((item: any) => ({
+            place_id: item.place_id,
+            display_name: item.display_name,
+            lat: String(item.lat),
+            lon: String(item.lon),
+          }));
         }
       }
-    } catch (err) {
-      console.log('Nominatim search error:', err);
-    } finally {
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.log('OSM search error, falling back to Expo Location:', err);
+      }
+    }
+
+    // 2. Native Location.geocodeAsync fallback if Nominatim returned 0 results or failed
+    if (foundResults.length === 0 && !controller.signal.aborted) {
+      try {
+        const geocoded = await Location.geocodeAsync(trimmed);
+        if (Array.isArray(geocoded) && geocoded.length > 0) {
+          const nativeList: Suggestion[] = [];
+          for (let i = 0; i < Math.min(geocoded.length, 4); i++) {
+            const g = geocoded[i];
+            let displayName = trimmed;
+            try {
+              const rev = await Location.reverseGeocodeAsync({
+                latitude: g.latitude,
+                longitude: g.longitude,
+              });
+              if (rev && rev[0]) {
+                const r = rev[0];
+                const parts = [
+                  r.name,
+                  r.street,
+                  r.subregion || r.district,
+                  r.city,
+                  r.region,
+                ].filter(Boolean);
+                if (parts.length > 0) displayName = parts.join(', ');
+              }
+            } catch {}
+            nativeList.push({
+              place_id: 900000 + i,
+              display_name: displayName,
+              lat: String(g.latitude),
+              lon: String(g.longitude),
+            });
+          }
+          foundResults = nativeList;
+        }
+      } catch (nativeErr) {
+        console.log('Native geocoding fallback error:', nativeErr);
+      }
+    }
+
+    if (!controller.signal.aborted) {
+      setSuggestions(foundResults);
       setIsSearching(false);
+    }
+  };
+
+  const handleSearchTextChange = (text: string) => {
+    setSearchQuery(text);
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
+    if (!text.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    if (text.trim().length >= 3) {
+      searchDebounceTimerRef.current = setTimeout(() => {
+        executeSearch(text);
+      }, 500);
+    } else {
+      setSuggestions([]);
     }
   };
 
   const handleSelectSuggestion = (item: Suggestion) => {
     const lat = parseFloat(item.lat);
     const lon = parseFloat(item.lon);
+    if (isNaN(lat) || isNaN(lon)) return;
+
     const newCoords: Region = {
       latitude: lat,
       longitude: lon,
@@ -357,11 +482,17 @@ export default function OpenStreetMapLocationModal({
     };
     setCurrentRegion(newCoords);
     mapRef.current?.animateToRegion(newCoords, 700);
+    mapRef.current?.setRadiusCircle?.(selectedRadius, {
+      latitude: lat,
+      longitude: lon,
+    });
 
     const parts = item.display_name.split(',');
-    setCityTitle(parts[0]?.trim() || 'Selected Location');
+    const primaryName = parts[0]?.trim() || 'Selected Location';
+    setCityTitle(normalizeCity(primaryName));
     setFullAddress(item.display_name);
     setSuggestions([]);
+    setSearchQuery('');
     Keyboard.dismiss();
   };
 
@@ -369,17 +500,37 @@ export default function OpenStreetMapLocationModal({
   const handleGetGpsLocation = async () => {
     try {
       setIsGpsLoading(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Permission to access location was denied');
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          'Location Services Disabled',
+          'Please enable GPS / Location Services on your device to auto-detect your location.'
+        );
+        setIsGpsLoading(false);
         return;
       }
+
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+      }
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Permission to access device location was denied. Please allow location permissions in device settings.'
+        );
+        setIsGpsLoading(false);
+        return;
+      }
+
       let loc = await Location.getLastKnownPositionAsync({});
       if (!loc) {
         loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
       }
+
       if (loc?.coords) {
         const newRegion: Region = {
           latitude: loc.coords.latitude,
@@ -394,31 +545,15 @@ export default function OpenStreetMapLocationModal({
           longitude: newRegion.longitude,
         });
         reverseGeocode(loc.coords.latitude, loc.coords.longitude);
+      } else {
+        Alert.alert('GPS Location', 'Unable to pinpoint current location. Please select on map.');
       }
     } catch (err) {
-      console.log('GPS detection error:', err);
-      try {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (loc?.coords) {
-          const newRegion: Region = {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            latitudeDelta: 0.008,
-            longitudeDelta: 0.008,
-          };
-          setCurrentRegion(newRegion);
-          mapRef.current?.animateToRegion(newRegion, 700);
-          mapRef.current?.setRadiusCircle?.(selectedRadius, {
-            latitude: newRegion.latitude,
-            longitude: newRegion.longitude,
-          });
-          reverseGeocode(loc.coords.latitude, loc.coords.longitude);
-        }
-      } catch (innerErr) {
-        console.log('Fallback GPS error:', innerErr);
-      }
+      console.error('GPS detection error:', err);
+      Alert.alert(
+        'Location Error',
+        'Unable to retrieve your current location. Please try moving the map pin manually.'
+      );
     } finally {
       setIsGpsLoading(false);
     }
@@ -479,25 +614,36 @@ export default function OpenStreetMapLocationModal({
 
             {/* Search Input */}
             <View style={styles.searchBar}>
-              {isSearching ? (
-                <ActivityIndicator size="small" color="#E23744" style={{ marginRight: 6 }} />
-              ) : (
-                <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 6 }} />
-              )}
+              <TouchableOpacity
+                onPress={() => executeSearch(searchQuery)}
+                disabled={isSearching}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginRight: 6 }}>
+                {isSearching ? (
+                  <ActivityIndicator size="small" color="#E23744" />
+                ) : (
+                  <Ionicons name="search" size={18} color="#94A3B8" />
+                )}
+              </TouchableOpacity>
               <TextInput
                 placeholder="Search area, landmark or city..."
                 placeholderTextColor="#94A3B8"
                 value={searchQuery}
-                onChangeText={(text) => {
-                  setSearchQuery(text);
-                  if (!text.trim()) setSuggestions([]);
-                }}
-                onSubmitEditing={handleSearch}
+                onChangeText={handleSearchTextChange}
+                onSubmitEditing={() => executeSearch(searchQuery)}
                 returnKeyType="search"
                 style={styles.searchInput}
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearchQuery(''); setSuggestions([]); }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSuggestions([]);
+                    if (searchDebounceTimerRef.current) {
+                      clearTimeout(searchDebounceTimerRef.current);
+                    }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close-circle" size={18} color="#94A3B8" />
                 </TouchableOpacity>
               )}

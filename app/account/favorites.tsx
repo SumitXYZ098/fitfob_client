@@ -217,7 +217,7 @@ export default function FavoritesScreen() {
 
             <TouchableOpacity
               activeOpacity={0.88}
-              onPress={() => router.push('/(tabs)' as any)}
+              onPress={() => router.navigate('/(tabs)' as any)}
               className="mt-6 flex-row items-center space-x-2 rounded-full bg-[#E23744] px-6 py-3.5 shadow-md shadow-[#E23744]/25">
               <Ionicons name="compass-outline" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text className="font-bold text-sm text-white">Explore Nearby Gyms</Text>

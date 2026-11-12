@@ -1,3 +1,4 @@
+/* eslint-disable import/no-named-as-default */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
@@ -89,7 +90,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
         }
       }
     } catch (error) {
-      console.log('Nominatim reverse geocode error, attempting native fallback:', error);
+      console.error('Nominatim reverse geocode error, attempting native fallback:', error);
     }
 
     // 2. Fallback: Native device reverse geocoding via expo-location
@@ -114,7 +115,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
         }
       }
     } catch (fallbackError) {
-      console.log('Native reverse geocode error:', fallbackError);
+      console.error('Native reverse geocode error:', fallbackError);
     } finally {
       setAddressLoading(false);
     }
@@ -163,7 +164,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
       try {
         userLocation = await Location.getLastKnownPositionAsync();
       } catch (e) {
-        console.log('Error getting last known position:', e);
+        console.error('Error getting last known position:', e);
       }
 
       // 2. If no last known position exists, request fresh position with timeout
@@ -180,7 +181,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
             timeoutPromise,
           ])) as Location.LocationObject;
         } catch (err) {
-          console.log('getCurrentPosition timed out or failed:', err);
+          console.error('getCurrentPosition timed out or failed:', err);
         }
       }
 
@@ -201,7 +202,7 @@ const LocationScreen = forwardRef<LocationScreenRef, LocationScreenProps>(({ pre
         throw new Error('Could not retrieve location.');
       }
     } catch (error) {
-      console.log('Error getting current location:', error);
+      console.error('Error getting current location:', error);
       Alert.alert(
         'Location Error',
         'Could not retrieve your location. Please check your GPS/network signal or search manually.'
