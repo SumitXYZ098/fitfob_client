@@ -7,9 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "android": {
         "buildType": "apk",
-        "channel": "development",
         "gradleCommand": ":app:assembleDebug"
       },
       "env": {
@@ -19,6 +19,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -28,6 +29,7 @@
       }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://backend.fitfob.com",

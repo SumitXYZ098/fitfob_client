@@ -522,9 +522,7 @@ export const getOutdoorMembershipPlans = async (params?: {
 
 // ─── Membership Checkout & Buy ──────────────────────────────────────────────
 export interface MembershipCheckoutBuyPayload {
-  data:{
-    [key:string]: any
-  }
+  [key: string]: any;
 }
 
 export interface MembershipCheckoutBuyResponse {

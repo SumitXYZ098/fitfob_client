@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "680279365844",
+    "project_id": "fitfob-e6910",
+    "storage_bucket": "fitfob-e6910.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:680279365844:android:43a74aa3c6c1102d240341",
+        "android_client_info": {
+          "package_name": "com.xyzstudio.fitfob.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALtDoQIP7Gag2LufinMZ6DZ5uMj-blvSU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

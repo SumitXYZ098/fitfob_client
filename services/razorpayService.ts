@@ -1,4 +1,6 @@
-import { Platform } from 'react-native';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-require-imports */
+import { NativeModules, Platform } from 'react-native';
 
 export interface RazorpayOptions {
   description: string;
@@ -41,15 +43,47 @@ export interface RazorpayPaymentSuccess {
 export const openRazorpayPayment = async (
   options: RazorpayOptions
 ): Promise<RazorpayPaymentSuccess> => {
+  // 1. Verify if native module is present in the native binary (e.g. Expo Dev Client / Standalone APK)
+  const isNativeLinked = !!(
+    NativeModules?.RNRazorpayCheckout ||
+    (globalThis as any)?.__turboModuleProxy?.('RNRazorpayCheckout')
+  );
+
+  if (!isNativeLinked) {
+    console.warn(
+      '⚠️ Razorpay native binary is not compiled into this APK/Expo Go. Falling back to payment options flow.'
+    );
+    const customErr = new Error('NATIVE_MODULE_NOT_LINKED');
+    (customErr as any).description =
+      'Razorpay Native Checkout requires an Android build containing react-native-razorpay.';
+    throw customErr;
+  }
+
+  let RazorpayCheckout: any = null;
   try {
-    // Dynamic require so unlinked environments (like Expo Go) don't crash on bundle load
     const RazorpayModule = require('react-native-razorpay');
-    const RazorpayCheckout = RazorpayModule?.default || RazorpayModule;
+    RazorpayCheckout = RazorpayModule?.default || RazorpayModule;
+  } catch (requireError: any) {
+    console.warn(
+      '⚠️ react-native-razorpay module not linked or unlinked in Expo Go. Falling back to Dev Build flow.'
+    );
+    const customErr = new Error('NATIVE_MODULE_NOT_LINKED');
+    (customErr as any).description =
+      'Razorpay Native Checkout requires Android Dev Build (`npx expo run:android`).';
+    throw customErr;
+  }
 
-    if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
-      throw new Error('NATIVE_MODULE_NOT_LINKED');
-    }
+  if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+    console.warn(
+      '⚠️ Razorpay native checkout method unavailable. Falling back to payment options.'
+    );
+    const customErr = new Error('NATIVE_MODULE_NOT_LINKED');
+    (customErr as any).description =
+      'Razorpay Native Checkout requires Android Dev Build (`npx expo run:android`).';
+    throw customErr;
+  }
 
+  try {
     // Ensure white backdrop and navigation bar backgrounds so no red line leaks underneath
     const checkoutPayload = {
       ...options,
@@ -78,7 +112,11 @@ export const openRazorpayPayment = async (
     if (
       error?.message === 'NATIVE_MODULE_NOT_LINKED' ||
       error?.message?.includes('NativeModules') ||
-      error?.message?.includes('RNRazorpayCheckout')
+      error?.message?.includes('RNRazorpayCheckout') ||
+      error?.message?.includes('Cannot find module') ||
+      error?.message?.includes('not linked') ||
+      error?.message?.includes('NativeEventEmitter') ||
+      error?.code === 'MODULE_NOT_FOUND'
     ) {
       console.warn(
         '⚠️ Razorpay native module requires Expo Android Dev Build (`npx expo run:android`).'
@@ -88,7 +126,14 @@ export const openRazorpayPayment = async (
         'Razorpay Native Checkout requires Android Dev Build (`npx expo run:android`).';
       throw customErr;
     }
-    console.error('❌ Razorpay checkout error:', error);
+    const isCancelled =
+      error?.code === 2 ||
+      error?.code === 0 ||
+      error?.description?.toLowerCase()?.includes('cancelled');
+
+    if (!isCancelled) {
+      console.error('❌ Razorpay checkout error:', error);
+    }
     throw error;
   }
 };

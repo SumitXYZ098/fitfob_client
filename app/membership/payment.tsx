@@ -126,7 +126,14 @@ export default function PaymentScreen() {
           },
         });
       } catch (nativeErr: any) {
-        if (nativeErr?.message === 'NATIVE_MODULE_NOT_LINKED') {
+        const isUnlinked =
+          nativeErr?.message === 'NATIVE_MODULE_NOT_LINKED' ||
+          nativeErr?.message?.includes('Cannot find module') ||
+          nativeErr?.message?.includes('not linked') ||
+          nativeErr?.message?.includes('react-native-razorpay') ||
+          nativeErr?.message?.includes('RNRazorpayCheckout');
+
+        if (isUnlinked) {
           // Fallback simulation in Expo Go
           console.log('Simulating payment success in Expo Go dev mode');
           await removeIdempotencyKey(params.gymContractPlanRate as string);

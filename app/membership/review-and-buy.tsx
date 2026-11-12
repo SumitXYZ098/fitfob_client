@@ -143,7 +143,14 @@ export default function ReviewAndBuyScreen() {
           },
         });
       } catch (nativeError: any) {
-        if (nativeError?.message === 'NATIVE_MODULE_NOT_LINKED') {
+        const isUnlinked =
+          nativeError?.message === 'NATIVE_MODULE_NOT_LINKED' ||
+          nativeError?.message?.includes('Cannot find module') ||
+          nativeError?.message?.includes('not linked') ||
+          nativeError?.message?.includes('react-native-razorpay') ||
+          nativeError?.message?.includes('RNRazorpayCheckout');
+
+        if (isUnlinked) {
           // If testing in standard Expo Go, navigate to payment screen with order data
           Toast.show({
             type: 'info',

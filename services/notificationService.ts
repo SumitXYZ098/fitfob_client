@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
@@ -16,6 +15,11 @@ try {
 
 // Fallback EAS project ID from app.json
 const FALLBACK_PROJECT_ID = 'dfb97cd0-979d-4d1c-9682-2564ae05896b';
+
+// Helper to determine if running in standard Expo Go app
+const isExpoGoClient = () => {
+  return isRunningInExpoGo() || (Constants as any)?.appOwnership === 'expo';
+};
 
 // Configure notification behavior when app is in foreground
 try {
@@ -41,6 +45,11 @@ try {
 export async function setupNotificationChannelsAsync() {
   if (Platform.OS !== 'android' || !Notifications) return;
 
+  // In Expo Go on Android (SDK 53+), ExpoNotificationChannelManager has no provider and throws NullPointerException
+  if (isExpoGoClient()) {
+    return;
+  }
+
   try {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Default',
@@ -53,13 +62,16 @@ export async function setupNotificationChannelsAsync() {
       sound: 'default',
     });
     console.log('🔔 Android notification channel "default" ready');
-  } catch (channelError) {
-    console.warn('⚠️ Failed to set Android notification channel:', channelError);
+  } catch (channelError: any) {
+    console.warn(
+      '⚠️ Failed to set Android notification channel:',
+      channelError?.message || channelError
+    );
   }
 }
 
-// Ensure channel is registered on module load for Android
-if (Platform.OS === 'android') {
+// Ensure channel is registered on module load for Android (in Dev Build / Standalone)
+if (Platform.OS === 'android' && !isExpoGoClient()) {
   setupNotificationChannelsAsync().catch(() => {});
 }
 
@@ -74,7 +86,16 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       return undefined;
     }
 
-    // Always ensure Android channel exists before requesting permissions or tokens
+    // Remote push notifications were removed from Expo Go on Android in SDK 53+.
+    // A development build (`npx expo run:android`) or standalone build is required for real push tokens.
+    if (isExpoGoClient() && Platform.OS === 'android') {
+      console.log(
+        'ℹ️ Android push notifications require a Development Build (npx expo run:android). Push tokens are unavailable in Expo Go.'
+      );
+      return undefined;
+    }
+
+    // Always ensure Android channel exists in dev build / standalone
     if (Platform.OS === 'android') {
       await setupNotificationChannelsAsync();
     }
@@ -129,16 +150,11 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
           console.log('✅ Registered Native Device Push Token:', token);
         }
       } catch (deviceError: any) {
-        console.warn('⚠️ getDevicePushTokenAsync also failed:', deviceError?.message || deviceError);
+        console.warn(
+          '⚠️ getDevicePushTokenAsync also failed:',
+          deviceError?.message || deviceError
+        );
       }
-    }
-
-    // 5. In Expo Go or development environment on Android where FCM is not bundled into Expo Go,
-    // generate a stable dev token so backend registration and app testing flow work seamlessly.
-    if (!token && (isRunningInExpoGo() || __DEV__)) {
-      const deviceId = Device.modelName ? Device.modelName.replace(/\s+/g, '_') : 'android_device';
-      token = `ExponentPushToken[DEV_${Platform.OS.toUpperCase()}_${deviceId}]`;
-      console.log('ℹ️ Using development fallback push token for Android:', token);
     }
 
     return token;
@@ -163,7 +179,7 @@ export async function registerDeviceTokenWithBackend(expoPushToken?: string) {
       });
       console.log('✅ Device token successfully registered with backend:', response.data);
       return response.data;
-    } else {
+    } else if (!isExpoGoClient() || Platform.OS !== 'android') {
       console.warn('⚠️ No device push token available to register with backend');
     }
   } catch (error: any) {
@@ -201,7 +217,11 @@ export async function unregisterDeviceTokenWithBackend(expoPushToken?: string) {
 /**
  * Helper to display an immediate local notification (useful for in-app alerts and testing)
  */
-export async function sendLocalNotification(title: string, body: string, data: Record<string, any> = {}) {
+export async function sendLocalNotification(
+  title: string,
+  body: string,
+  data: Record<string, any> = {}
+) {
   try {
     if (!Notifications) return;
     await setupNotificationChannelsAsync();
