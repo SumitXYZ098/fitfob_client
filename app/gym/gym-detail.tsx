@@ -536,7 +536,6 @@ export default function GymDetailScreen() {
           (sourceData as any)?.membershipPlans ||
           (sourceData as any)?.plans ||
           [];
-        console.log("MemberShip Plan: ", rawCachedPlans)
         const cachedMembershipPlans: ClubMembershipPlan[] =
           initialMembershipPlans.length > 0
             ? initialMembershipPlans
@@ -2183,7 +2182,6 @@ export default function GymDetailScreen() {
           {/* Buy Membership Button */}
           <TouchableOpacity
             onPress={() => {
-              console.log(gym.membershipPlans);
               router.push({
                 pathname: '/membership/buy-membership' as any,
                 params: {

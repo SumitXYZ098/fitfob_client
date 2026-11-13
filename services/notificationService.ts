@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/array-type */
 /* eslint-disable @typescript-eslint/no-require-imports */
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -74,6 +76,7 @@ export async function setupNotificationChannelsAsync() {
       enableVibrate: true,
       showBadge: true,
       sound: 'default',
+      
     });
     console.log('🔔 Android notification channel "default" ready');
   } catch (channelError: any) {
@@ -277,7 +280,8 @@ export async function unregisterDeviceTokenWithBackend(deviceToken?: string) {
 export async function sendLocalNotification(
   title: string,
   body: string,
-  data: Record<string, any> = {}
+  data: Record<string, any> = {},
+  imageUrl?: string
 ) {
   try {
     if (!Notifications) return;
@@ -289,6 +293,17 @@ export async function sendLocalNotification(
         data,
         sound: 'default',
         color: '#F6163C',
+        ...(imageUrl
+          ? {
+              attachments: [
+                {
+                  identifier: 'fitfob-image',
+                  url: imageUrl,
+                  type: 'image',
+                },
+              ],
+            }
+          : {}),
       },
       trigger: null, // show immediately
     });
@@ -317,10 +332,17 @@ export function setupFirebaseNotificationListeners(
 
         // Display local banner if notification payload is included
         if (remoteMessage?.notification) {
+          const imageUrl =
+            remoteMessage.notification.imageUrl ||
+            (remoteMessage.notification as any).android?.imageUrl ||
+            remoteMessage.data?.imageUrl ||
+            remoteMessage.data?.image;
+
           await sendLocalNotification(
             remoteMessage.notification.title || 'FitFob',
             remoteMessage.notification.body || '',
-            remoteMessage.data || {}
+            remoteMessage.data || {},
+            typeof imageUrl === 'string' ? imageUrl : undefined
           );
         }
 

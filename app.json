@@ -138,7 +138,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png"
+          "icon": "./assets/notification-icon.png",
+          "largeIcon": "./assets/icon.png"
         }
       ],
       [

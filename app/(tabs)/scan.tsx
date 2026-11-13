@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,15 @@ import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
 import { useGetQr } from '@/hook/useClient';
+
+export interface GymMembership {
+  customerPrice?: number;
+  duration?: number;
+  endDate?: string;
+  membershipStatus?: string;
+  plan?: string;
+  startDate?: string;
+}
 
 export interface LocalSubscription {
   startDate?: string;
@@ -43,15 +52,38 @@ export default function ScanScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'all' | 'local' | 'outdoor'>('all');
 
+  console.log('🚀 ~ ScanScreen ~ data:', data?.data)
+
   const USER_ID = data?.data?.clientId || 'N/A';
   const isLoading = isPending || refreshing;
 
-  const localSub: LocalSubscription | undefined = data?.data?.subscription?.local_subscription;
-  const outdoorSub: OutdoorSubscription | undefined = data?.data?.subscription?.outdoor_subscription;
+  const gymMembership: GymMembership | undefined =
+    data?.data?.gymMembership ||
+    (data?.data?.subscription?.local_subscription
+      ? {
+          customerPrice: data.data.subscription.local_subscription.price,
+          duration: data.data.subscription.local_subscription.monthDuration,
+          endDate: data.data.subscription.local_subscription.endDate,
+          membershipStatus: data.data.subscription.local_subscription.subscriptionStatus,
+          plan: data.data.subscription.local_subscription.planName,
+          startDate: data.data.subscription.local_subscription.startDate,
+        }
+      : undefined);
 
-  const hasLocal = Boolean(localSub && (localSub.subscriptionStatus === 'active' || localSub.planName));
-  const hasOutdoor = Boolean(outdoorSub && (outdoorSub.subscriptionStatus === 'active' || outdoorSub.planName));
-  const activeCount = (hasLocal ? 1 : 0) + (hasOutdoor ? 1 : 0);
+  const outdoorSub: OutdoorSubscription | undefined =
+    data?.data?.outdoorMembership ||
+    data?.data?.outdoorPass ||
+    data?.data?.subscription?.outdoor_subscription;
+
+  const hasGym = Boolean(
+    gymMembership &&
+      (gymMembership.membershipStatus === 'active' || Boolean(gymMembership.plan))
+  );
+  const hasOutdoor = Boolean(
+    outdoorSub &&
+      (outdoorSub.subscriptionStatus === 'active' || Boolean(outdoorSub.planName))
+  );
+  const activeCount = (hasGym ? 1 : 0) + (hasOutdoor ? 1 : 0);
 
   const handleReload = useCallback(async () => {
     try {
@@ -232,13 +264,11 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('all')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'all' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'all' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'all' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'all' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 All Passes
               </Text>
             </TouchableOpacity>
@@ -246,13 +276,11 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('local')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'local' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'local' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'local' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'local' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 Local Gym
               </Text>
             </TouchableOpacity>
@@ -260,22 +288,20 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('outdoor')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'outdoor' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'outdoor' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'outdoor' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'outdoor' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 Outdoor Pass
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* ── CARD 1: Local Subscription ───────────────────────────────── */}
+          {/* ── CARD 1: Gym Membership ──────────────────────────────────── */}
           {(selectedTab === 'all' || selectedTab === 'local') && (
             <>
-              {localSub ? (
+              {gymMembership ? (
                 <View className="mb-4 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-xs">
                   {/* Card Header */}
                   <View className="flex-row items-start justify-between">
@@ -285,10 +311,10 @@ export default function ScanScreen() {
                       </View>
                       <View>
                         <Text className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                          Local Gym Plan
+                          Gym Membership
                         </Text>
                         <Text className="font-bold text-base text-slate-900">
-                          {capitalize(localSub.planName)} Plan
+                          {capitalize(gymMembership.plan)} Plan
                         </Text>
                       </View>
                     </View>
@@ -296,20 +322,24 @@ export default function ScanScreen() {
                     {/* Status Badge */}
                     <View
                       className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border ${
-                        localSub.subscriptionStatus === 'active'
+                        gymMembership.membershipStatus === 'active'
                           ? 'border-emerald-200 bg-emerald-50'
                           : 'border-slate-200 bg-slate-50'
                       }`}>
                       <View
                         className={`h-2 w-2 rounded-full ${
-                          localSub.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
+                          gymMembership.membershipStatus === 'active'
+                            ? 'bg-emerald-500'
+                            : 'bg-slate-400'
                         }`}
                       />
                       <Text
                         className={`text-[11px] font-bold uppercase ${
-                          localSub.subscriptionStatus === 'active' ? 'text-emerald-700' : 'text-slate-600'
+                          gymMembership.membershipStatus === 'active'
+                            ? 'text-emerald-700'
+                            : 'text-slate-600'
                         }`}>
-                        {localSub.subscriptionStatus || 'Inactive'}
+                        {gymMembership.membershipStatus || 'Inactive'}
                       </Text>
                     </View>
                   </View>
@@ -317,30 +347,30 @@ export default function ScanScreen() {
                   {/* Details Grid */}
                   <View className="mt-4 flex-row flex-wrap gap-2.5 rounded-2xl bg-slate-50/80 p-3.5 border border-slate-100">
                     <View className="w-[47%]">
+                      <Text className="text-[11px] font-medium text-slate-400">Start Date</Text>
+                      <Text className="mt-0.5 font-bold text-xs text-slate-800">
+                        {formatDate(gymMembership.startDate)}
+                      </Text>
+                    </View>
+
+                    <View className="w-[47%]">
                       <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
                       <Text className="mt-0.5 font-bold text-xs text-slate-800">
-                        {formatDate(localSub.endDate)}
+                        {formatDate(gymMembership.endDate)}
                       </Text>
                     </View>
 
                     <View className="w-[47%]">
                       <Text className="text-[11px] font-medium text-slate-400">Duration</Text>
                       <Text className="mt-0.5 font-bold text-xs text-slate-800">
-                        {localSub.monthDuration} {localSub.monthDuration === 1 ? 'Month' : 'Months'}
+                        {gymMembership.duration} {gymMembership.duration === 1 ? 'Month' : 'Months'}
                       </Text>
                     </View>
 
                     <View className="w-[47%]">
                       <Text className="text-[11px] font-medium text-slate-400">Plan Amount</Text>
                       <Text className="mt-0.5 font-bold text-xs text-slate-800">
-                        {formatPrice(localSub.price)}
-                      </Text>
-                    </View>
-
-                    <View className="w-[47%]">
-                      <Text className="text-[11px] font-medium text-slate-400">Access Mode</Text>
-                      <Text className="mt-0.5 font-bold text-xs text-slate-800">
-                        {capitalize(localSub.membershipType || 'App')} Pass
+                        {formatPrice(gymMembership.customerPrice)}
                       </Text>
                     </View>
                   </View>
@@ -357,7 +387,7 @@ export default function ScanScreen() {
               ) : selectedTab === 'local' ? (
                 <View className="mb-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 items-center">
                   <Ionicons name="barbell-outline" size={36} color="#94A3B8" />
-                  <Text className="mt-2 font-bold text-sm text-slate-800">No Local Gym Membership</Text>
+                  <Text className="mt-2 font-bold text-sm text-slate-800">No Gym Membership</Text>
                   <Text className="mt-1 text-center text-xs text-slate-400">
                     Get an unlimited monthly or annual membership to work out at partner gyms.
                   </Text>
@@ -395,20 +425,17 @@ export default function ScanScreen() {
 
                     {/* Status Badge */}
                     <View
-                      className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border ${
-                        outdoorSub.subscriptionStatus === 'active'
-                          ? 'border-emerald-200 bg-emerald-50'
-                          : 'border-slate-200 bg-slate-50'
-                      }`}>
+                      className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border ${outdoorSub.subscriptionStatus === 'active'
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-slate-200 bg-slate-50'
+                        }`}>
                       <View
-                        className={`h-2 w-2 rounded-full ${
-                          outdoorSub.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
-                        }`}
+                        className={`h-2 w-2 rounded-full ${outdoorSub.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
                       />
                       <Text
-                        className={`text-[11px] font-bold uppercase ${
-                          outdoorSub.subscriptionStatus === 'active' ? 'text-emerald-700' : 'text-slate-600'
-                        }`}>
+                        className={`text-[11px] font-bold uppercase ${outdoorSub.subscriptionStatus === 'active' ? 'text-emerald-700' : 'text-slate-600'
+                          }`}>
                         {outdoorSub.subscriptionStatus || 'Inactive'}
                       </Text>
                     </View>
@@ -438,7 +465,7 @@ export default function ScanScreen() {
                               0,
                               ((outdoorSub.remainingVisits ?? 0) /
                                 Math.max(1, outdoorSub.totalVisitsAllowed ?? 1)) *
-                                100
+                              100
                             )
                           )}%`,
                         }}
@@ -485,16 +512,16 @@ export default function ScanScreen() {
           )}
 
           {/* ── Empty State if No Subscriptions at all ──────────────────── */}
-          {!localSub && !outdoorSub && (
+          {!gymMembership && !outdoorSub && (
             <View className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 items-center">
               <Ionicons name="card-outline" size={38} color="#94A3B8" />
               <Text className="mt-2.5 font-bold text-sm text-slate-800">No Active Subscriptions</Text>
               <Text className="mt-1 text-center text-xs text-slate-500">
-                You don't have any active gym memberships or outdoor passes right now.
+                You don&apos;t have any active gym memberships or outdoor passes right now.
               </Text>
               <View className="mt-4 flex-row gap-2.5">
                 <TouchableOpacity
-                  onPress={() => router.push('/membership/buy-membership' as any)}
+                  onPress={() => router.push('/(tabs)' as any)}
                   activeOpacity={0.8}
                   className="rounded-xl bg-[#F6163C] px-4 py-2.5">
                   <Text className="font-bold text-xs text-white">Buy Membership</Text>

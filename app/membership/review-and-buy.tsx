@@ -24,7 +24,6 @@ export default function ReviewAndBuyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
-  console.log("Params", params.gymContract)
   const { user } = useAuthStore();
   const { setActivePass } = useOutdoorPassStore();
 

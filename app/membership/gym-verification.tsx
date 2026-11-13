@@ -18,7 +18,6 @@ export default function GymVerificationScreen() {
   const params = useLocalSearchParams();
 
   const gymName = (params.gymName as string) || 'Anytime Fitness Gym';
-  const location = (params.location as string) || 'Sector 71';
   const passId = (params.passId as string) || 'FF-7829-X';
 
   const handleCopyId = async () => {
@@ -98,14 +97,14 @@ export default function GymVerificationScreen() {
                 {gymName}
               </Text>
             </View>
-            <View className="items-end">
+            {/* <View className="items-end">
               <Text className="text-[11.5px] font-medium text-slate-400 uppercase tracking-wider">
                 Location
               </Text>
               <Text className="font-medium text-[13.5px] text-slate-700 mt-0.5">
                 {location}
               </Text>
-            </View>
+            </View> */}
           </View>
 
           {/* Pass ID with Copy Button */}
