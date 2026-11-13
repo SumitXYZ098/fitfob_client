@@ -288,6 +288,7 @@ export async function sendLocalNotification(
         body,
         data,
         sound: 'default',
+        color: '#F6163C',
       },
       trigger: null, // show immediately
     });
