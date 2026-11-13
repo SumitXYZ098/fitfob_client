@@ -138,9 +138,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#F6163C",
-          "defaultChannel": "default"
+          "icon": "./assets/icon.png"
         }
       ],
       [
