@@ -5,8 +5,8 @@ import { isRunningInExpoGo } from 'expo';
 import apiInstance from '@/api/apiInstance';
 import { ENDPOINTS } from '@/api/endpoint';
 
+// Optional expo-notifications import for channels and foreground local presentation
 let Notifications: typeof import('expo-notifications') | null = null;
-
 try {
   Notifications = require('expo-notifications');
 } catch (error) {
@@ -19,6 +19,20 @@ const FALLBACK_PROJECT_ID = 'dfb97cd0-979d-4d1c-9682-2564ae05896b';
 // Helper to determine if running in standard Expo Go app
 const isExpoGoClient = () => {
   return isRunningInExpoGo() || (Constants as any)?.appOwnership === 'expo';
+};
+
+// Safe getter for @react-native-firebase/messaging
+export const getFirebaseMessaging = () => {
+  try {
+    const messagingModule = require('@react-native-firebase/messaging');
+    const messaging = messagingModule?.default || messagingModule;
+    if (typeof messaging === 'function') {
+      return messaging;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
 };
 
 // Configure notification behavior when app is in foreground
@@ -75,22 +89,28 @@ if (Platform.OS === 'android' && !isExpoGoClient()) {
   setupNotificationChannelsAsync().catch(() => {});
 }
 
+// Register background message handler as early as possible
+try {
+  const messaging = getFirebaseMessaging();
+  if (messaging && typeof messaging().setBackgroundMessageHandler === 'function') {
+    messaging().setBackgroundMessageHandler(async (remoteMessage: any) => {
+      console.log('📩 [Firebase FCM] Background Message handled:', remoteMessage);
+    });
+  }
+} catch (bgError) {
+  // Ignored in unsupported environments (e.g. Expo Go)
+}
+
 /**
- * Registers device for push notifications and returns Expo or Device Push Token.
+ * Registers device for push notifications using Firebase SDK (FCM) first,
+ * with graceful fallback to Expo push token when running in Expo Go or non-Firebase runtimes.
  */
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
   try {
-    const notif = Notifications;
-    if (!notif) {
-      console.warn('⚠️ Notifications module is not available');
-      return undefined;
-    }
-
     // Remote push notifications were removed from Expo Go on Android in SDK 53+.
-    // A development build (`npx expo run:android`) or standalone build is required for real push tokens.
     if (isExpoGoClient() && Platform.OS === 'android') {
       console.log(
-        'ℹ️ Android push notifications require a Development Build (npx expo run:android). Push tokens are unavailable in Expo Go.'
+        'ℹ️ Android push notifications require a Development Build (npx expo run:android) or Standalone Build. Push tokens are unavailable in Expo Go.'
       );
       return undefined;
     }
@@ -100,7 +120,49 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       await setupNotificationChannelsAsync();
     }
 
-    // 1. Check & Request Permissions (Required on Android 13+ / API 33+)
+    // 1. Try Firebase Cloud Messaging (FCM) via Firebase SDK
+    try {
+      const messaging = getFirebaseMessaging();
+      if (messaging) {
+        // Request FCM Permissions (Handles POST_NOTIFICATIONS on Android 13+)
+        const authStatus = await messaging().requestPermission();
+        const isAuthorized =
+          authStatus === 1 || // AuthorizationStatus.AUTHORIZED
+          authStatus === 2 || // AuthorizationStatus.PROVISIONAL
+          authStatus === true;
+
+        if (isAuthorized) {
+          // If iOS, ensure device is registered for remote messages
+          if (
+            Platform.OS === 'ios' &&
+            typeof messaging().registerDeviceForRemoteMessages === 'function'
+          ) {
+            await messaging().registerDeviceForRemoteMessages();
+          }
+
+          const fcmToken = await messaging().getToken();
+          if (fcmToken) {
+            console.log('🔥 [Firebase FCM] Retrieved authentic device token:', fcmToken);
+            return fcmToken;
+          }
+        } else {
+          console.warn('⚠️ Push notification permission not authorized in Firebase SDK.');
+        }
+      }
+    } catch (firebaseErr: any) {
+      console.warn(
+        '⚠️ Firebase Messaging getToken failed, falling back to Expo notifications:',
+        firebaseErr?.message || firebaseErr
+      );
+    }
+
+    // 2. Fallback to Expo Notifications if Firebase native module is not linked
+    const notif = Notifications;
+    if (!notif) {
+      console.warn('⚠️ Neither Firebase nor expo-notifications module is available.');
+      return undefined;
+    }
+
     let finalStatus = 'undetermined';
     try {
       const { status: existingStatus } = await notif.getPermissionsAsync();
@@ -119,7 +181,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       return undefined;
     }
 
-    // 2. Resolve EAS Project ID with multiple fallbacks
+    // Attempt to fetch Expo Push Token
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
       Constants?.easConfig?.projectId ??
@@ -128,12 +190,8 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       FALLBACK_PROJECT_ID;
 
     let token: string | undefined;
-
-    // 3. Attempt to fetch Expo Push Token
     try {
-      const pushTokenData = await notif.getExpoPushTokenAsync({
-        projectId,
-      });
+      const pushTokenData = await notif.getExpoPushTokenAsync({ projectId });
       token = pushTokenData.data;
       console.log('✅ Registered Expo Push Token:', token);
     } catch (expoPushError: any) {
@@ -142,7 +200,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
         expoPushError?.message || expoPushError
       );
 
-      // 4. Fallback to native Device Push Token (FCM on Android / APNs on iOS)
       try {
         const deviceTokenData = await notif.getDevicePushTokenAsync();
         if (deviceTokenData?.data) {
@@ -167,9 +224,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
 /**
  * Register device push token with the FitFob backend
  */
-export async function registerDeviceTokenWithBackend(expoPushToken?: string) {
+export async function registerDeviceTokenWithBackend(deviceToken?: string) {
   try {
-    const token = expoPushToken || (await registerForPushNotificationsAsync());
+    const token = deviceToken || (await registerForPushNotificationsAsync());
 
     if (token) {
       console.log('📡 Registering device token with backend:', { token, platform: Platform.OS });
@@ -193,9 +250,9 @@ export async function registerDeviceTokenWithBackend(expoPushToken?: string) {
 /**
  * Unregister device push token from backend upon logout
  */
-export async function unregisterDeviceTokenWithBackend(expoPushToken?: string) {
+export async function unregisterDeviceTokenWithBackend(deviceToken?: string) {
   try {
-    const token = expoPushToken || (await registerForPushNotificationsAsync());
+    const token = deviceToken || (await registerForPushNotificationsAsync());
 
     if (token) {
       console.log('📡 Unregistering device token from backend:', { token, platform: Platform.OS });
@@ -237,4 +294,81 @@ export async function sendLocalNotification(
   } catch (error) {
     console.warn('⚠️ Failed to display local notification:', error);
   }
+}
+
+/**
+ * Attaches Firebase foreground notification and token refresh listeners.
+ * Returns a cleanup function.
+ */
+export function setupFirebaseNotificationListeners(
+  onNotificationReceived?: (message: any) => void
+) {
+  const unsubscribers: Array<() => void> = [];
+
+  try {
+    const messaging = getFirebaseMessaging();
+    if (!messaging) return () => {};
+
+    // 1. Foreground message handler
+    if (typeof messaging().onMessage === 'function') {
+      const unsubMessage = messaging().onMessage(async (remoteMessage: any) => {
+        console.log('🔔 [Firebase FCM] Foreground notification received:', remoteMessage);
+
+        // Display local banner if notification payload is included
+        if (remoteMessage?.notification) {
+          await sendLocalNotification(
+            remoteMessage.notification.title || 'FitFob',
+            remoteMessage.notification.body || '',
+            remoteMessage.data || {}
+          );
+        }
+
+        if (onNotificationReceived) {
+          onNotificationReceived(remoteMessage);
+        }
+      });
+      unsubscribers.push(unsubMessage);
+    }
+
+    // 2. Token refresh listener
+    if (typeof messaging().onTokenRefresh === 'function') {
+      const unsubRefresh = messaging().onTokenRefresh(async (newToken: string) => {
+        console.log('🔄 [Firebase FCM] Device token refreshed:', newToken);
+        await registerDeviceTokenWithBackend(newToken);
+      });
+      unsubscribers.push(unsubRefresh);
+    }
+
+    // 3. User clicked notification when app was in background
+    if (typeof messaging().onNotificationOpenedApp === 'function') {
+      const unsubOpen = messaging().onNotificationOpenedApp((remoteMessage: any) => {
+        console.log('📲 [Firebase FCM] Notification opened app from background:', remoteMessage);
+      });
+      unsubscribers.push(unsubOpen);
+    }
+
+    // 4. User clicked notification when app was quit/killed
+    if (typeof messaging().getInitialNotification === 'function') {
+      messaging()
+        .getInitialNotification()
+        .then((remoteMessage: any) => {
+          if (remoteMessage) {
+            console.log(
+              '📲 [Firebase FCM] Notification opened app from quit state:',
+              remoteMessage
+            );
+          }
+        });
+    }
+  } catch (error) {
+    console.warn('⚠️ Could not setup Firebase notification listeners:', error);
+  }
+
+  return () => {
+    unsubscribers.forEach((unsub) => {
+      try {
+        unsub();
+      } catch (e) {}
+    });
+  };
 }

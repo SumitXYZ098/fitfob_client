@@ -9,7 +9,10 @@ import Toast from 'react-native-toast-message';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
-import { registerDeviceTokenWithBackend } from '@/services/notificationService';
+import {
+  registerDeviceTokenWithBackend,
+  setupFirebaseNotificationListeners,
+} from '@/services/notificationService';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,6 +33,15 @@ export default function Layout() {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
+
+  useEffect(() => {
+    const unsubscribe = setupFirebaseNotificationListeners();
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.token) {
