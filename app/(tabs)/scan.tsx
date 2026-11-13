@@ -52,8 +52,6 @@ export default function ScanScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'all' | 'local' | 'outdoor'>('all');
 
-  console.log('🚀 ~ ScanScreen ~ data:', data?.data)
-
   const USER_ID = data?.data?.clientId || 'N/A';
   const isLoading = isPending || refreshing;
 
