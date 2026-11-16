@@ -27,7 +27,11 @@ import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
-import GymDetailMapView from '@/components/modules/GymDetailMapView';
+import GymFreeTrialSection from '@/components/modules/GymFreeTrialSection';
+import GymWhereYouExercise from '@/components/modules/GymWhereYouExercise';
+import GymKeyFeaturesSection from '@/components/modules/GymKeyFeaturesSection';
+import GymMembershipPlansSection from '@/components/modules/GymMembershipPlansSection';
+import GymWhereYouWillBeSection from '@/components/modules/GymWhereYouWillBeSection';
 import { formatPlanNameAndDuration } from '@/components/GymCard';
 import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -874,76 +878,8 @@ export default function GymDetailScreen() {
   const insets = useSafeAreaInsets();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-  // Key Features / Amenities Show More Toggle State (default 10 items)
-  const [showAllAmenities, setShowAllAmenities] = useState<boolean>(false);
-
-  // Exercise Zones Photo Lightbox Modal State
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
-  const zoneListRef = useRef<FlatList>(null);
-  const thumbnailScrollRef = useRef<ScrollViewInstance>(null);
-  const isClosingZoneViewerRef = useRef<boolean>(false);
-  const lastClosedZoneViewerTimeRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (selectedZoneIndex !== null && thumbnailScrollRef.current) {
-      thumbnailScrollRef.current.scrollTo({
-        x: Math.max(0, selectedZoneIndex * 64 - screenWidth / 2 + 32),
-        animated: true,
-      });
-    }
-  }, [selectedZoneIndex, screenWidth]);
-
-  const handleOpenZoneViewer = (index: number) => {
-    // Prevent iOS tap-through / touch ghosting right after closing
-    if (Date.now() - lastClosedZoneViewerTimeRef.current < 450) {
-      return;
-    }
-    isClosingZoneViewerRef.current = false;
-    setSelectedZoneIndex(index);
-    setTimeout(() => {
-      try {
-        zoneListRef.current?.scrollToIndex({ index, animated: false });
-      } catch { }
-    }, 60);
-  };
-
-  const handleCloseZoneViewer = () => {
-    isClosingZoneViewerRef.current = true;
-    lastClosedZoneViewerTimeRef.current = Date.now();
-    setSelectedZoneIndex(null);
-  };
-
-  const handleNextZone = () => {
-    if (
-      !isClosingZoneViewerRef.current &&
-      selectedZoneIndex !== null &&
-      gym?.exerciseZones &&
-      selectedZoneIndex < gym.exerciseZones.length - 1
-    ) {
-      const next = selectedZoneIndex + 1;
-      setSelectedZoneIndex(next);
-      try {
-        zoneListRef.current?.scrollToIndex({ index: next, animated: true });
-      } catch { }
-    }
-  };
-
-  const handlePrevZone = () => {
-    if (
-      !isClosingZoneViewerRef.current &&
-      selectedZoneIndex !== null &&
-      selectedZoneIndex > 0
-    ) {
-      const prev = selectedZoneIndex - 1;
-      setSelectedZoneIndex(prev);
-      try {
-        zoneListRef.current?.scrollToIndex({ index: prev, animated: true });
-      } catch { }
-    }
-  };
-
-  const currentZone =
-    selectedZoneIndex !== null && gym?.exerciseZones ? gym.exerciseZones[selectedZoneIndex] : null;
+  // Exercise Zones Photo Lightbox Modal Visibility (controls sticky bottom bar)
+  const [isZoneViewerOpen, setIsZoneViewerOpen] = useState<boolean>(false);
 
   const handleToggleFavorite = async () => {
     const raw = apiData?.data ?? apiData;
@@ -1646,343 +1582,36 @@ export default function GymDetailScreen() {
             </View>
           ) : null}
 
-          {/* 3. Where you'll exercise (Only if zones exist, skeleton while loading) */}
-          {gym.exerciseZones.length > 0 ? (
-            <View className="mt-6">
-              <View className="flex-row items-center justify-between">
-                <Text className="font-bold text-base text-slate-900">Where you&apos;ll exercise</Text>
-                <View className="flex-row items-center gap-1">
-                  <Ionicons name="expand-outline" size={12} color="#94A3B8" />
-                  <Text className="text-xs font-medium text-slate-400">Tap to expand</Text>
-                </View>
-              </View>
+          {/* 3. Where you'll exercise */}
+          <GymWhereYouExercise
+            exerciseZones={gym.exerciseZones}
+            gymTitle={gym.title}
+            isDetailFetching={isDetailFetching}
+            onViewerStateChange={(isOpen) => setIsZoneViewerOpen(isOpen)}
+          />
 
-              <ScrollView
-                horizontal
-                nestedScrollEnabled={true}
-                showsHorizontalScrollIndicator={false}
-                className="mt-3 -mx-5 px-5">
-                {gym.exerciseZones.map((zone: ExerciseZoneItem, idx: number) => (
-                  <TouchableOpacity
-                    key={idx}
-                    activeOpacity={0.88}
-                    onPress={() => handleOpenZoneViewer(idx)}
-                    className="mr-3 w-48 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
-                    <View className="relative h-32 w-full bg-slate-100">
-                      {Boolean(zone.image) ? (
-                        <ExpoImage
-                          source={{ uri: zone.image }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                      ) : (
-                        <View className="h-full w-full items-center justify-center bg-slate-100">
-                          <Ionicons name="barbell-outline" size={28} color="#94A3B8" />
-                        </View>
-                      )}
-                      {/* Full View Preview Badge */}
-                      <View className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 flex-row items-center gap-1 border border-white/20">
-                        <Ionicons name="scan-outline" size={11} color="#FFFFFF" />
-                        <Text className="text-[10px] font-semibold text-white">Full View</Text>
-                      </View>
-                    </View>
-                    <View className="p-3">
-                      <Text className="font-bold text-xs text-slate-800" numberOfLines={1}>
-                        {zone.title}
-                      </Text>
-                      <View className="mt-1.5 flex-row items-center gap-1">
-                        <Text className="text-[11px] font-semibold text-[#E23744]">View photo</Text>
-                        <Ionicons name="chevron-forward" size={11} color="#E23744" />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          ) : isDetailFetching ? (
-            <View className="mt-6">
-              <GymDetailSkeletonBox style={{ height: 18, width: 160, borderRadius: 4, marginBottom: 12 }} />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                className="mt-1 -mx-5 px-5">
-                {[1, 2, 3].map((_, idx) => (
-                  <View key={idx} className="mr-3 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                    <GymDetailSkeletonBox style={{ height: 112, width: '100%', borderRadius: 0 }} />
-                    <View className="p-2.5">
-                      <GymDetailSkeletonBox style={{ height: 14, width: '70%', borderRadius: 4 }} />
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
+          {/* Free Trial Section (Try Before You Buy) */}
+          <GymFreeTrialSection
+            gymName={gym.title || 'Gym'}
+            gymAddress={gym.address}
+            gymCity={params.initialCity}
+            gymId={gym.id}
+          />
 
-          {/* 4. Key Features / Amenities (Only if amenities exist, skeleton while loading) */}
-          {gym.amenities.length > 0 ? (
-            <View className="mt-6">
-              <View className="flex-row items-center justify-between mb-3">
-                <Text className="font-bold text-base text-slate-900">Key Features</Text>
-
-              </View>
-
-              <View className="flex-row flex-wrap gap-2.5">
-                {(showAllAmenities ? gym.amenities : gym.amenities.slice(0, 10)).map((item, idx) => (
-                  <View
-                    key={idx}
-                    className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
-                    <Ionicons name={item.icon as any} size={18} color="#E23744" />
-                    <Text className="font-semibold text-xs text-slate-800 flex-1" numberOfLines={1}>{item.name}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Show More / Show Less Toggle Button */}
-              {gym.amenities.length > 10 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    try {
-                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    } catch { }
-                    setShowAllAmenities((prev) => !prev);
-                  }}
-                  activeOpacity={0.75}
-                  className="mt-3.5 flex-row items-center justify-center gap-1.5 rounded-2xl border border-rose-100 bg-rose-50/70 py-3 shadow-sm">
-                  <Text className="text-xs font-bold text-[#E23744]">
-                    {showAllAmenities
-                      ? 'Show Less'
-                      : `View All ${gym.amenities.length} Features (+${gym.amenities.length - 10} more)`}
-                  </Text>
-                  <Ionicons
-                    name={showAllAmenities ? 'chevron-up' : 'chevron-down'}
-                    size={15}
-                    color="#E23744"
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : isDetailFetching ? (
-            <View className="mt-6">
-              <GymDetailSkeletonBox style={{ height: 18, width: 120, borderRadius: 4, marginBottom: 12 }} />
-              <View className="flex-row flex-wrap gap-2.5">
-                {[1, 2, 3, 4, 5, 6].map((_, idx) => (
-                  <View
-                    key={idx}
-                    className="w-[48%] flex-row items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/90 px-3.5 py-3">
-                    <GymDetailSkeletonBox style={{ height: 20, width: 20, borderRadius: 10 }} />
-                    <GymDetailSkeletonBox style={{ height: 14, width: '60%', borderRadius: 4 }} />
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
+          {/* 4. Key Features / Amenities */}
+          <GymKeyFeaturesSection
+            amenities={gym.amenities}
+            isDetailFetching={isDetailFetching}
+          />
 
           {/* 5. Official Membership Plans */}
-          {gym.membershipPlans && gym.membership && gym.membershipPlans.length > 0 ? (
-            <View className="mt-7">
-              {/* Section Header */}
-              <View className="flex-row items-center justify-between mb-3.5">
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-2">
-                    <Text className="font-extrabold text-base text-slate-900 tracking-tight">
-                      Membership Plans
-                    </Text>
-                    {gym.membership ? (
-                      <View className="flex-row items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 border border-emerald-200">
-                        <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-                        <Text className="text-[10px] font-bold text-emerald-700">
-                          Active Member
-                        </Text>
-                      </View>
-                    ) : (
-                      <View className="rounded-full bg-emerald-50 px-2 py-0.5 border border-emerald-200">
-                        <Text className="text-[10px] font-bold text-emerald-700">
-                          {gym.membershipPlans.length} Available
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text className="mt-0.5 text-xs text-slate-500 font-medium">
-                    {gym.membership
-                      ? `You already have an active membership for another`
-                      : `Official club pricing for ${gym.title}`}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Plan Cards */}
-              <View className="gap-3">
-                {gym.membershipPlans.map((plan: ClubMembershipPlan, idx: number) => {
-                  const isMonthly = plan.monthDuration === 1;
-                  const maxDuration = Math.max(...gym.membershipPlans.map((p) => p.monthDuration));
-                  const isBestValue = plan.monthDuration === maxDuration && plan.monthDuration > 1;
-                  const monthlyEquivalent =
-                    plan.monthDuration > 1 ? Math.round(plan.price / plan.monthDuration) : plan.price;
-                  const displayTitle = plan.planName.toLowerCase().endsWith('plan')
-                    ? plan.planName
-                    : `${plan.planName} Plan`;
-                  const cleanValidUpto = plan.validUpto.toLowerCase().endsWith('access')
-                    ? plan.validUpto
-                    : `${plan.validUpto} access`;
-                  const gymContractPlanRateDocumentId = plan.gymContractPlanRateDocumentId;
-
-                  return (
-                    <TouchableOpacity
-                      key={plan.documentId ? `${plan.documentId}-${idx}` : plan.plan ? `${plan.plan}-${idx}` : idx}
-                      disabled={gym.membership}
-                      activeOpacity={gym.membership ? 1 : 0.9}
-                      onPress={() => {
-                        if (gym.membership) return;
-                        router.push({
-                          pathname: '/membership/buy-membership' as any,
-                          params: {
-                            gymName: gym.title,
-                            gymId: gym.id,
-                            selectedPlanId: plan.documentId || (plan.id ? String(plan.id) : '') || plan.plan || String(idx),
-                            selectedPlanName: displayTitle,
-                            selectedPlanPrice: plan.price.toString(),
-                            selectedPlanDuration: plan.monthDuration.toString(),
-                            plans: JSON.stringify(gym.membershipPlans),
-                            gymContract: gymContractPlanRateDocumentId,
-                          },
-                        });
-                      }}
-                      className={`overflow-hidden rounded-2xl border ${
-                        gym.membership
-                          ? 'border-slate-200 bg-slate-50/70 opacity-80'
-                          : isBestValue
-                            ? 'border-red-200 bg-red-50/20'
-                            : 'border-slate-200 bg-white'
-                      } p-4 shadow-xs`}>
-                      {/* Top row: Plan Name + Duration badge + Price */}
-                      <View className="flex-row items-start justify-between">
-                        <View className="flex-row items-center gap-2.5">
-                          <View
-                            className={`h-9 w-9 items-center justify-center rounded-xl ${
-                              gym.membership ? 'bg-slate-200/80' : 'bg-red-500/10'
-                            }`}>
-                            <Ionicons
-                              name="barbell-outline"
-                              size={18}
-                              color={gym.membership ? '#64748B' : '#E23744'}
-                            />
-                          </View>
-                          <View>
-                            <View className="flex-row items-center gap-2">
-                              <Text
-                                className={`font-bold text-base ${
-                                  gym.membership ? 'text-slate-700' : 'text-slate-900'
-                                }`}>
-                                {displayTitle}
-                              </Text>
-                              {gym.membership ? (
-                                <View className="rounded-full bg-slate-200/80 px-2 py-0.5 border border-slate-300">
-                                  <Text className="text-[10px] font-bold text-slate-600">
-                                    Disabled
-                                  </Text>
-                                </View>
-                              ) : isBestValue ? (
-                                <View className="rounded-full bg-rose-50 px-2 py-0.5 border border-rose-200">
-                                  <Text className="text-[10px] font-bold text-[#E23744]">
-                                    Best Value
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </View>
-                            <View className="flex-row items-center gap-1.5 mt-0.5">
-                              <Ionicons name="calendar-outline" size={12} color="#64748B" />
-                              <Text className="text-xs font-semibold text-slate-500">
-                                {plan.monthDuration} Month{plan.monthDuration > 1 ? 's' : ''} Duration
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        {/* Price */}
-                        <View className="items-end">
-                          <Text
-                            className={`font-extrabold text-lg ${
-                              gym.membership ? 'text-slate-600' : 'text-slate-900'
-                            }`}>
-                            ₹{plan.price.toLocaleString('en-IN')}
-                          </Text>
-                          {plan.monthDuration > 1 ? (
-                            <Text
-                              className={`text-[11px] font-semibold ${
-                                gym.membership ? 'text-slate-500' : 'text-emerald-600'
-                              }`}>
-                              ₹{monthlyEquivalent.toLocaleString('en-IN')}/mo
-                            </Text>
-                          ) : (
-                            <Text className="text-[11px] font-medium text-slate-400">/month</Text>
-                          )}
-                        </View>
-                      </View>
-
-                      {/* Subtle Divider */}
-                      <View className="my-3 h-[1px] bg-slate-100" />
-
-                      {/* Plan Perks */}
-                      <View className="gap-1.5">
-                        <View className="flex-row items-center gap-2">
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={14}
-                            color={gym.membership ? '#94A3B8' : '#16A34A'}
-                          />
-                          <Text className="text-xs text-slate-600 font-medium">
-                            Unlimited check-ins ({cleanValidUpto})
-                          </Text>
-                        </View>
-                        <View className="flex-row items-center gap-2">
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={14}
-                            color={gym.membership ? '#94A3B8' : '#16A34A'}
-                          />
-                          <Text className="text-xs text-slate-600 font-medium">
-                            Full access to workout equipment & amenities
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Footer row: Button */}
-                      <View className="mt-3.5 flex-row items-center justify-between pt-2.5 border-t border-slate-100">
-                        <View className="flex-row items-center gap-1">
-                          <Ionicons
-                            name="shield-checkmark"
-                            size={13}
-                            color={gym.membership ? '#64748B' : '#16A34A'}
-                          />
-                          <Text className="text-[11px] font-medium text-slate-500">
-                            {gym.membership ? 'Membership in use' : 'Verified Partner Club'}
-                          </Text>
-                        </View>
-                        {gym.membership ? (
-                          <View className="flex-row items-center gap-1 bg-slate-200 px-3.5 py-1.5 rounded-xl border border-slate-300">
-                            <Ionicons name="lock-closed" size={11} color="#64748B" />
-                            <Text className="text-xs font-bold text-slate-600">Already Subscribed</Text>
-                          </View>
-                        ) : (
-                          <View className="flex-row items-center gap-1 bg-[#E23744] px-3.5 py-1.5 rounded-xl">
-                            <Text className="text-xs font-bold text-white">Select Plan</Text>
-                            <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          ) : isDetailFetching ? (
-            <View className="mt-7">
-              <GymDetailSkeletonBox style={{ height: 18, width: 150, borderRadius: 4, marginBottom: 12 }} />
-              <GymDetailSkeletonBox style={{ height: 110, width: '100%', borderRadius: 16, marginBottom: 10 }} />
-              <GymDetailSkeletonBox style={{ height: 110, width: '100%', borderRadius: 16 }} />
-            </View>
-          ) : null}
+          <GymMembershipPlansSection
+            membershipPlans={gym.membershipPlans}
+            isAlreadyMember={gym.membership}
+            gymTitle={gym.title}
+            gymId={gym.id}
+            isDetailFetching={isDetailFetching}
+          />
 
           {/* 6. Open Hours (Only if timings provided, skeleton while loading) */}
           {Boolean(gym.openHours) ? (
@@ -2022,47 +1651,14 @@ export default function GymDetailScreen() {
           ) : null}
 
           {/* 6. Where you'll be (Location & Map) */}
-          {Boolean(gym.coordinate?.latitude && gym.coordinate?.longitude && gym.coordinate.latitude !== 0) ? (
-            <View className="mt-6">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 mr-3">
-                  <Text className="font-bold text-base text-slate-900">Where you&apos;ll be</Text>
-                  {Boolean(gym.address) && (
-                    <Text className="mt-1 font-medium text-xs text-slate-500" numberOfLines={2}>
-                      {gym.address}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Right Side Directions Button */}
-                <TouchableOpacity
-                  onPress={() => handleGetDirections()}
-                  activeOpacity={0.85}
-                  className="flex-row items-center gap-1.5 rounded-xl border border-[#E23744]/25 bg-[#FFEAEF] px-3.5 py-2 shadow-xs">
-                  <Ionicons name="navigate" size={14} color="#E23744" />
-                  <Text className="font-bold text-xs text-[#E23744]">Directions</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Live Interactive Dedicated Gym Map */}
-              <View className="mt-3 overflow-hidden rounded-[10px] border border-slate-200 shadow-sm" style={{ height: 260 }}>
-                <GymDetailMapView
-                  title={gym.title}
-                  address={gym.address}
-                  coordinate={gym.coordinate}
-                  userLocation={userLocation}
-                  height={260}
-                  onGetDirections={() => handleGetDirections()}
-                  onOpenAllGymsMap={() => router.push('/gym/Mapviewscreen' as any)}
-                />
-              </View>
-            </View>
-          ) : isDetailFetching ? (
-            <View className="mt-6">
-              <GymDetailSkeletonBox style={{ height: 18, width: 130, borderRadius: 4, marginBottom: 12 }} />
-              <GymDetailSkeletonBox style={{ height: 260, width: '100%', borderRadius: 10 }} />
-            </View>
-          ) : null}
+          <GymWhereYouWillBeSection
+            title={gym.title}
+            address={gym.address}
+            coordinate={gym.coordinate}
+            userLocation={userLocation}
+            onGetDirections={() => handleGetDirections()}
+            isDetailFetching={isDetailFetching}
+          />
 
           {/* 7. Member Reviews (Only if real reviews exist) */}
           {gym.reviews.length > 0 && (
@@ -2190,7 +1786,7 @@ export default function GymDetailScreen() {
       </Animated.ScrollView>
 
       {/* 9. Sticky Bottom Action Bar */}
-      {selectedZoneIndex === null && (
+      {!isZoneViewerOpen && (
         <View
           style={{
             paddingBottom: Platform.OS === 'ios' ? 24 : 14,
@@ -2260,228 +1856,6 @@ export default function GymDetailScreen() {
           )}
         </View>
       )}
-
-      {/* 10. Where you'll exercise - Fullscreen Photo Lightbox Modal */}
-      <Modal
-        visible={selectedZoneIndex !== null}
-        animationType="fade"
-        transparent={false}
-        statusBarTranslucent={true}
-        hardwareAccelerated={true}
-        presentationStyle="fullScreen"
-        onRequestClose={handleCloseZoneViewer}
-        onDismiss={() => {
-          isClosingZoneViewerRef.current = false;
-        }}>
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} className="justify-between">
-          <StatusBar barStyle="dark-content" />
-
-          {/* Top Header Bar */}
-          <View
-            style={{
-              paddingTop:
-                Platform.OS === 'android'
-                  ? (StatusBar.currentHeight || 24) + 8
-                  : (insets.top > 0 ? insets.top : 44),
-              backgroundColor: '#FFFFFF',
-            }}
-            className="border-b border-slate-100 z-20">
-            <View className="flex-row items-center justify-between px-4 py-2.5">
-              {/* Photo Counter */}
-              {gym.exerciseZones.length > 0 && selectedZoneIndex !== null ? (
-                <View className="rounded-full bg-slate-100 px-3.5 py-1.5 border border-slate-200">
-                  <Text className="text-xs font-bold text-slate-700">
-                    {selectedZoneIndex + 1} / {gym.exerciseZones.length}
-                  </Text>
-                </View>
-              ) : (
-                <View />
-              )}
-
-              {/* Right: Close Button */}
-              <TouchableOpacity
-                onPress={handleCloseZoneViewer}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                activeOpacity={0.7}
-                className="h-10 w-10 items-center justify-center rounded-full bg-slate-100 border border-slate-200 active:bg-slate-200">
-                <Ionicons name="close" size={22} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Center: Fullscreen Horizontal Pager */}
-          <View className="flex-1 justify-center relative bg-slate-50">
-            <FlatList
-              ref={zoneListRef}
-              data={gym.exerciseZones}
-              keyExtractor={(_, index) => `lightbox-zone-${index}`}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              initialScrollIndex={selectedZoneIndex ?? 0}
-              getItemLayout={(_, index) => ({
-                length: screenWidth,
-                offset: screenWidth * index,
-                index,
-              })}
-              onScrollToIndexFailed={(info) => {
-                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
-                setTimeout(() => {
-                  try {
-                    zoneListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                  } catch { }
-                }, 100);
-              }}
-              scrollEventThrottle={16}
-              onScroll={(e) => {
-                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
-                const offsetX = e.nativeEvent.contentOffset.x;
-                const newIndex = Math.round(offsetX / screenWidth);
-                if (
-                  newIndex >= 0 &&
-                  newIndex < gym.exerciseZones.length &&
-                  newIndex !== selectedZoneIndex
-                ) {
-                  setSelectedZoneIndex(newIndex);
-                }
-              }}
-              onMomentumScrollEnd={(e) => {
-                if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
-                const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-                if (
-                  idx >= 0 &&
-                  idx < gym.exerciseZones.length &&
-                  idx !== selectedZoneIndex
-                ) {
-                  setSelectedZoneIndex(idx);
-                }
-              }}
-              renderItem={({ item }) => (
-                <View
-                  style={{ width: screenWidth }}
-                  className="flex-1 items-center justify-center px-4 py-2">
-                  {Boolean(item.image) ? (
-                    <View className="w-full flex-1 items-center justify-center">
-                      <ExpoImage
-                        source={{ uri: item.image }}
-                        style={{
-                          width: screenWidth - 32,
-                          height: '100%',
-                          maxHeight: 500,
-                          borderRadius: 20,
-                        }}
-                        contentFit="contain"
-                        transition={200}
-                      />
-                    </View>
-                  ) : (
-                    <View className="h-64 w-64 items-center justify-center rounded-3xl bg-white border border-slate-200 shadow-sm">
-                      <Ionicons name="image-outline" size={64} color="#94A3B8" />
-                      <Text className="mt-2 text-xs font-semibold text-slate-400">No Image Available</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            />
-
-            {/* Left Chevron Button */}
-            {selectedZoneIndex !== null && selectedZoneIndex > 0 && (
-              <TouchableOpacity
-                onPress={handlePrevZone}
-                activeOpacity={0.85}
-                className="absolute left-3 top-1/2 -mt-6 h-11 w-11 items-center justify-center rounded-full bg-white border border-slate-200 shadow-md">
-                <Ionicons name="chevron-back" size={22} color="#0F172A" />
-              </TouchableOpacity>
-            )}
-
-            {/* Right Chevron Button */}
-            {selectedZoneIndex !== null &&
-              selectedZoneIndex < gym.exerciseZones.length - 1 && (
-                <TouchableOpacity
-                  onPress={handleNextZone}
-                  activeOpacity={0.85}
-                  className="absolute right-3 top-1/2 -mt-6 h-11 w-11 items-center justify-center rounded-full bg-white border border-slate-200 shadow-md">
-                  <Ionicons name="chevron-forward" size={22} color="#0F172A" />
-                </TouchableOpacity>
-              )}
-          </View>
-
-          {/* Bottom Info & Thumbnails Bar */}
-          <View
-            style={{
-              paddingBottom:
-                Platform.OS === 'ios'
-                  ? Math.max(insets.bottom, 20)
-                  : Math.max(insets.bottom, 16) + 12,
-              backgroundColor: '#FFFFFF',
-            }}
-            className="border-t border-slate-200/80 bg-white px-5 pt-3.5 shadow-lg z-20">
-            {/* Zone Details */}
-            <View className="mb-3">
-              <View className="flex-row items-center gap-1.5">
-                <Ionicons name="fitness" size={14} color="#E23744" />
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#E23744]">
-                  Exercise Zone
-                </Text>
-              </View>
-              <Text className="mt-1 text-lg font-bold text-slate-900 leading-tight">
-                {currentZone?.title || "Exercise Area"}
-              </Text>
-              <Text className="mt-0.5 text-xs text-slate-500 font-medium">
-                {gym.title}
-              </Text>
-            </View>
-
-            {/* Horizontal Thumbnails Strip (if multiple zones) */}
-            {gym.exerciseZones.length > 1 && (
-              <ScrollView
-                ref={thumbnailScrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-                className="pt-1">
-                {gym.exerciseZones.map((zone, idx) => {
-                  const isActive = idx === selectedZoneIndex;
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        if (isClosingZoneViewerRef.current || selectedZoneIndex === null) return;
-                        setSelectedZoneIndex(idx);
-                        try {
-                          zoneListRef.current?.scrollToIndex({ index: idx, animated: true });
-                        } catch { }
-                      }}
-                      style={{
-                        height: 56,
-                        width: 56,
-                        borderRadius: 14,
-                        overflow: 'hidden',
-                        borderWidth: 2,
-                        borderColor: isActive ? '#E23744' : '#E2E8F0',
-                        opacity: isActive ? 1 : 0.6,
-                        backgroundColor: '#F1F5F9',
-                      }}>
-                      {Boolean(zone.image) ? (
-                        <ExpoImage
-                          source={{ uri: zone.image }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View className="h-full w-full items-center justify-center bg-slate-100">
-                          <Ionicons name="image-outline" size={16} color="#94A3B8" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
