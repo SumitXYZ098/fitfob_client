@@ -303,7 +303,7 @@ export const useAddFavorite = () => {
         return [...list, { documentId: clubDocumentId }];
       });
     },
-    onError: () => {},
+    onError: () => { },
   });
 };
 
@@ -322,7 +322,7 @@ export const useRemoveFavorite = () => {
         });
       });
     },
-    onError: () => {},
+    onError: () => { },
   });
 };
 

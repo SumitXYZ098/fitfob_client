@@ -756,7 +756,7 @@ const GymCard = React.memo(function GymCard({
     setTimeout(() => {
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
+      } catch { }
     }, 0);
 
     // Instant native spring punch (0ms start delay, 60fps on Android UI thread)
