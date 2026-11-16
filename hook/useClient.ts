@@ -25,6 +25,9 @@ import {
   createMembershipCheckoutBuy,
   MembershipCheckoutBuyPayload,
   MembershipCheckoutBuyResponse,
+  getClientSubscriptions,
+  ClientSubscriptionItem,
+  ClientSubscriptionsResponse,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -387,6 +390,17 @@ export const useMembershipCheckoutBuy = () => {
   });
 };
 
+// ─── Client Subscriptions Hook ─────────────────────────────────────────────
+export const useClientSubscriptions = () => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ['client-subscriptions'],
+    queryFn: getClientSubscriptions,
+    enabled: !!user?.token,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+};
+
 export type {
   CheckinItem,
   MyCheckinsResponse,
@@ -394,6 +408,9 @@ export type {
   OutdoorPlanItem,
   MembershipCheckoutBuyPayload,
   MembershipCheckoutBuyResponse,
+  ClientSubscriptionItem,
+  ClientSubscriptionsResponse,
 };
+
 
 

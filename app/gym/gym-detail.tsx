@@ -1805,7 +1805,7 @@ export default function GymDetailScreen() {
                   </View>
                   <Text className="mt-0.5 text-xs text-slate-500 font-medium">
                     {gym.membership
-                      ? `You already have an active membership for ${gym.title}`
+                      ? `You already have an active membership for another`
                       : `Official club pricing for ${gym.title}`}
                   </Text>
                 </View>

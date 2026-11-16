@@ -545,3 +545,31 @@ export const createMembershipCheckoutBuy = async (
   }
 };
 
+// ─── Client Subscriptions API ───────────────────────────────────────────────
+export interface ClientSubscriptionItem {
+  membershipId: string;
+  clubName: string;
+  startDate: string;
+  endDate: string;
+  plan: string;
+  membershipStatus: 'active' | 'expired' | 'paused' | 'cancelled' | string;
+  clubCategory?: string;
+  [key: string]: any;
+}
+
+export interface ClientSubscriptionsResponse {
+  data: ClientSubscriptionItem[];
+}
+
+// Get client's purchased memberships / subscriptions: GET /api/client-details/me/subscriptions
+export const getClientSubscriptions = async (): Promise<ClientSubscriptionsResponse> => {
+  try {
+    const response = await apiInstance.get(ENDPOINTS.CLIENT_SUBSCRIPTIONS);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching client subscriptions:', error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+
