@@ -28,6 +28,11 @@ import {
   getClientSubscriptions,
   ClientSubscriptionItem,
   ClientSubscriptionsResponse,
+  bookGymTrial,
+  BookGymTrialPayload,
+  BookGymTrialResponse,
+  GymTrialData,
+  GymTrialQuota,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -401,6 +406,18 @@ export const useClientSubscriptions = () => {
   });
 };
 
+// ─── Gym Free Trial Hook ────────────────────────────────────────────────────
+export const useBookGymTrial = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BookGymTrialPayload) => bookGymTrial(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gym-trials'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+    },
+  });
+};
+
 export type {
   CheckinItem,
   MyCheckinsResponse,
@@ -410,6 +427,10 @@ export type {
   MembershipCheckoutBuyResponse,
   ClientSubscriptionItem,
   ClientSubscriptionsResponse,
+  BookGymTrialPayload,
+  BookGymTrialResponse,
+  GymTrialData,
+  GymTrialQuota,
 };
 
 

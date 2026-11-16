@@ -32,6 +32,7 @@ export const ENDPOINTS = {
   MEMBERSHIP_CHECKOUT_BUY: `${BASE_URL}/api/membership-checkout/buy`,
   GET_QR: `${BASE_URL}/api/client-details/me/qr`,
   CLIENT_SUBSCRIPTIONS: `${BASE_URL}/api/client-details/me/subscriptions`,
+  GYM_TRIALS: `${BASE_URL}/api/gym-trials`,
 
   // Notifications
   REGISTER_DEVICE_TOKEN: `${BASE_URL}/api/device-tokens/register`,

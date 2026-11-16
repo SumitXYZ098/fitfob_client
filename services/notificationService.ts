@@ -20,19 +20,65 @@ const FALLBACK_PROJECT_ID = 'dfb97cd0-979d-4d1c-9682-2564ae05896b';
 
 // Helper to determine if running in standard Expo Go app
 const isExpoGoClient = () => {
-  return isRunningInExpoGo() || (Constants as any)?.appOwnership === 'expo';
+  return (
+    isRunningInExpoGo() ||
+    (Constants as any)?.appOwnership === 'expo' ||
+    (Constants as any)?.executionEnvironment === 'storeClient'
+  );
 };
 
-// Safe getter for @react-native-firebase/messaging
+// Safe cache and getter for @react-native-firebase/messaging
+let cachedMessaging: any = undefined;
+
 export const getFirebaseMessaging = () => {
+  if (cachedMessaging !== undefined) {
+    return cachedMessaging;
+  }
+
+  // 1. In Expo Go or Web, native Firebase TurboModules are never available
+  if (Platform.OS === 'web' || isExpoGoClient()) {
+    cachedMessaging = null;
+    return null;
+  }
+
+  // 2. Safe check if native TurboModules/NativeModules are actually registered in this binary
+  try {
+    const { TurboModuleRegistry, NativeModules } = require('react-native');
+    const hasAppModule =
+      (TurboModuleRegistry?.get && TurboModuleRegistry.get('RNFBAppModule')) ||
+      NativeModules?.RNFBAppModule;
+    const hasMessagingModule =
+      (TurboModuleRegistry?.get && TurboModuleRegistry.get('RNFBMessagingModule')) ||
+      NativeModules?.RNFBMessagingModule;
+
+    if (!hasAppModule || !hasMessagingModule) {
+      console.log('ℹ️ [Firebase FCM] Native modules not registered in this binary. Using fallback.');
+      cachedMessaging = null;
+      return null;
+    }
+  } catch (checkErr) {
+    console.warn('ℹ️ [Firebase FCM] Native module registry check failed:', checkErr);
+    cachedMessaging = null;
+    return null;
+  }
+
+  // 3. Try requiring and calling messaging() safely inside try/catch
   try {
     const messagingModule = require('@react-native-firebase/messaging');
     const messaging = messagingModule?.default || messagingModule;
     if (typeof messaging === 'function') {
-      return messaging;
+      // Test invocation to catch any internal getReactNativeModule error
+      const testInstance = messaging();
+      if (testInstance) {
+        cachedMessaging = messaging;
+        return messaging;
+      }
     }
+    cachedMessaging = null;
     return null;
-  } catch (e) {
+  } catch (err: any) {
+    console.warn('ℹ️ [Firebase FCM] Firebase Messaging initialization skipped:', err?.message || err);
+    cachedMessaging = null;
     return null;
   }
 };
@@ -95,10 +141,17 @@ if (Platform.OS === 'android' && !isExpoGoClient()) {
 // Register background message handler as early as possible
 try {
   const messaging = getFirebaseMessaging();
-  if (messaging && typeof messaging().setBackgroundMessageHandler === 'function') {
-    messaging().setBackgroundMessageHandler(async (remoteMessage: any) => {
-      console.log('📩 [Firebase FCM] Background Message handled:', remoteMessage);
-    });
+  if (messaging) {
+    try {
+      const instance = messaging();
+      if (instance && typeof instance.setBackgroundMessageHandler === 'function') {
+        instance.setBackgroundMessageHandler(async (remoteMessage: any) => {
+          console.log('📩 [Firebase FCM] Background Message handled:', remoteMessage);
+        });
+      }
+    } catch (bgError) {
+      console.warn('ℹ️ Firebase setBackgroundMessageHandler skipped:', bgError);
+    }
   }
 } catch (bgError) {
   // Ignored in unsupported environments (e.g. Expo Go)
@@ -127,29 +180,32 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     try {
       const messaging = getFirebaseMessaging();
       if (messaging) {
-        // Request FCM Permissions (Handles POST_NOTIFICATIONS on Android 13+)
-        const authStatus = await messaging().requestPermission();
-        const isAuthorized =
-          authStatus === 1 || // AuthorizationStatus.AUTHORIZED
-          authStatus === 2 || // AuthorizationStatus.PROVISIONAL
-          authStatus === true;
+        const instance = messaging();
+        if (instance && typeof instance.requestPermission === 'function') {
+          // Request FCM Permissions (Handles POST_NOTIFICATIONS on Android 13+)
+          const authStatus = await instance.requestPermission();
+          const isAuthorized =
+            authStatus === 1 || // AuthorizationStatus.AUTHORIZED
+            authStatus === 2 || // AuthorizationStatus.PROVISIONAL
+            authStatus === true;
 
-        if (isAuthorized) {
-          // If iOS, ensure device is registered for remote messages
-          if (
-            Platform.OS === 'ios' &&
-            typeof messaging().registerDeviceForRemoteMessages === 'function'
-          ) {
-            await messaging().registerDeviceForRemoteMessages();
-          }
+          if (isAuthorized) {
+            // If iOS, ensure device is registered for remote messages
+            if (
+              Platform.OS === 'ios' &&
+              typeof instance.registerDeviceForRemoteMessages === 'function'
+            ) {
+              await instance.registerDeviceForRemoteMessages();
+            }
 
-          const fcmToken = await messaging().getToken();
-          if (fcmToken) {
-            console.log('🔥 [Firebase FCM] Retrieved authentic device token:', fcmToken);
-            return fcmToken;
+            const fcmToken = await instance.getToken();
+            if (fcmToken) {
+              console.log('🔥 [Firebase FCM] Retrieved authentic device token:', fcmToken);
+              return fcmToken;
+            }
+          } else {
+            console.warn('⚠️ Push notification permission not authorized in Firebase SDK.');
           }
-        } else {
-          console.warn('⚠️ Push notification permission not authorized in Firebase SDK.');
         }
       }
     } catch (firebaseErr: any) {
@@ -325,63 +381,89 @@ export function setupFirebaseNotificationListeners(
     const messaging = getFirebaseMessaging();
     if (!messaging) return () => {};
 
+    let messagingInstance: any = null;
+    try {
+      messagingInstance = messaging();
+    } catch {
+      return () => {};
+    }
+
+    if (!messagingInstance) return () => {};
+
     // 1. Foreground message handler
-    if (typeof messaging().onMessage === 'function') {
-      const unsubMessage = messaging().onMessage(async (remoteMessage: any) => {
-        console.log('🔔 [Firebase FCM] Foreground notification received:', remoteMessage);
+    if (typeof messagingInstance.onMessage === 'function') {
+      try {
+        const unsubMessage = messagingInstance.onMessage(async (remoteMessage: any) => {
+          console.log('🔔 [Firebase FCM] Foreground notification received:', remoteMessage);
 
-        // Display local banner if notification payload is included
-        if (remoteMessage?.notification) {
-          const imageUrl =
-            remoteMessage.notification.imageUrl ||
-            (remoteMessage.notification as any).android?.imageUrl ||
-            remoteMessage.data?.imageUrl ||
-            remoteMessage.data?.image;
+          // Display local banner if notification payload is included
+          if (remoteMessage?.notification) {
+            const imageUrl =
+              remoteMessage.notification.imageUrl ||
+              (remoteMessage.notification as any).android?.imageUrl ||
+              remoteMessage.data?.imageUrl ||
+              remoteMessage.data?.image;
 
-          await sendLocalNotification(
-            remoteMessage.notification.title || 'FitFob',
-            remoteMessage.notification.body || '',
-            remoteMessage.data || {},
-            typeof imageUrl === 'string' ? imageUrl : undefined
-          );
-        }
+            await sendLocalNotification(
+              remoteMessage.notification.title || 'FitFob',
+              remoteMessage.notification.body || '',
+              remoteMessage.data || {},
+              typeof imageUrl === 'string' ? imageUrl : undefined
+            );
+          }
 
-        if (onNotificationReceived) {
-          onNotificationReceived(remoteMessage);
-        }
-      });
-      unsubscribers.push(unsubMessage);
+          if (onNotificationReceived) {
+            onNotificationReceived(remoteMessage);
+          }
+        });
+        unsubscribers.push(unsubMessage);
+      } catch (err) {
+        console.warn('⚠️ Error subscribing to FCM onMessage:', err);
+      }
     }
 
     // 2. Token refresh listener
-    if (typeof messaging().onTokenRefresh === 'function') {
-      const unsubRefresh = messaging().onTokenRefresh(async (newToken: string) => {
-        console.log('🔄 [Firebase FCM] Device token refreshed:', newToken);
-        await registerDeviceTokenWithBackend(newToken);
-      });
-      unsubscribers.push(unsubRefresh);
+    if (typeof messagingInstance.onTokenRefresh === 'function') {
+      try {
+        const unsubRefresh = messagingInstance.onTokenRefresh(async (newToken: string) => {
+          console.log('🔄 [Firebase FCM] Device token refreshed:', newToken);
+          await registerDeviceTokenWithBackend(newToken);
+        });
+        unsubscribers.push(unsubRefresh);
+      } catch (err) {
+        console.warn('⚠️ Error subscribing to FCM onTokenRefresh:', err);
+      }
     }
 
     // 3. User clicked notification when app was in background
-    if (typeof messaging().onNotificationOpenedApp === 'function') {
-      const unsubOpen = messaging().onNotificationOpenedApp((remoteMessage: any) => {
-        console.log('📲 [Firebase FCM] Notification opened app from background:', remoteMessage);
-      });
-      unsubscribers.push(unsubOpen);
+    if (typeof messagingInstance.onNotificationOpenedApp === 'function') {
+      try {
+        const unsubOpen = messagingInstance.onNotificationOpenedApp((remoteMessage: any) => {
+          console.log('📲 [Firebase FCM] Notification opened app from background:', remoteMessage);
+        });
+        unsubscribers.push(unsubOpen);
+      } catch (err) {
+        console.warn('⚠️ Error subscribing to FCM onNotificationOpenedApp:', err);
+      }
     }
 
     // 4. User clicked notification when app was quit/killed
-    if (typeof messaging().getInitialNotification === 'function') {
-      messaging()
-        .getInitialNotification()
-        .then((remoteMessage: any) => {
-          if (remoteMessage) {
-            console.log(
-              '📲 [Firebase FCM] Notification opened app from quit state:',
-              remoteMessage
-            );
-          }
-        });
+    if (typeof messagingInstance.getInitialNotification === 'function') {
+      try {
+        messagingInstance
+          .getInitialNotification()
+          .then((remoteMessage: any) => {
+            if (remoteMessage) {
+              console.log(
+                '📲 [Firebase FCM] Notification opened app from quit state:',
+                remoteMessage
+              );
+            }
+          })
+          .catch(() => {});
+      } catch (err) {
+        console.warn('⚠️ Error calling FCM getInitialNotification:', err);
+      }
     }
   } catch (error) {
     console.warn('⚠️ Could not setup Firebase notification listeners:', error);

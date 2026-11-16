@@ -572,4 +572,50 @@ export const getClientSubscriptions = async (): Promise<ClientSubscriptionsRespo
   }
 };
 
+// ─── Gym Free Trial API ─────────────────────────────────────────────────────
+export interface BookGymTrialPayload {
+  club_owner: string;
+  trialDate: string; // "YYYY-MM-DD" e.g. "2026-11-17"
+}
+
+export interface GymTrialData {
+  id: number;
+  documentId: string;
+  trialDate: string;
+  trialstatus: string;
+  createdAt: string;
+  [key: string]: any;
+}
+
+export interface GymTrialQuota {
+  trialsUsedInPeriod: number;
+  trialsRemainingInPeriod: number;
+  maxTrialsPerPeriod: number;
+  periodWeeks: number;
+  [key: string]: any;
+}
+
+export interface BookGymTrialResponse {
+  message: string;
+  data: GymTrialData;
+  quota?: GymTrialQuota;
+  [key: string]: any;
+}
+
+// Book a free trial for a club: POST /api/gym-trials
+export const bookGymTrial = async (
+  payload: BookGymTrialPayload
+): Promise<BookGymTrialResponse> => {
+  try {
+    console.log('🎟️ Booking gym trial with payload:', payload);
+    const response = await apiInstance.post(ENDPOINTS.GYM_TRIALS, payload);
+    console.log('✅ Gym trial booked successfully:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.warn('ℹ️ Gym trial booking response notice:', error?.response?.data?.message || error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+
 

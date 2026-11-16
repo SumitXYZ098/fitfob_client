@@ -26,6 +26,7 @@ export interface ClubMembershipPlan {
 interface GymMembershipPlansSectionProps {
   membershipPlans?: ClubMembershipPlan[];
   isAlreadyMember?: boolean;
+  membershipClubName?: string;
   gymTitle: string;
   gymId: string;
   isDetailFetching?: boolean;
@@ -68,6 +69,7 @@ function SkeletonBox({ style }: { style?: object }) {
 export default function GymMembershipPlansSection({
   membershipPlans,
   isAlreadyMember = false,
+  membershipClubName,
   gymTitle,
   gymId,
   isDetailFetching = false,
@@ -115,7 +117,9 @@ export default function GymMembershipPlansSection({
           </View>
           <Text className="mt-0.5 text-xs text-slate-500 font-medium">
             {isAlreadyMember
-              ? `You already have an active membership for ${gymTitle}`
+              ? membershipClubName && membershipClubName.toLowerCase().trim() !== gymTitle.toLowerCase().trim()
+                ? `You already have an active membership at ${membershipClubName}`
+                : `You already have an active membership for ${gymTitle}`
               : `Official club pricing for ${gymTitle}`}
           </Text>
         </View>
@@ -142,8 +146,8 @@ export default function GymMembershipPlansSection({
                 plan.documentId
                   ? `${plan.documentId}-${idx}`
                   : plan.plan
-                  ? `${plan.plan}-${idx}`
-                  : idx
+                    ? `${plan.plan}-${idx}`
+                    : idx
               }
               disabled={isAlreadyMember}
               activeOpacity={isAlreadyMember ? 1 : 0.9}
@@ -167,20 +171,18 @@ export default function GymMembershipPlansSection({
                   },
                 });
               }}
-              className={`overflow-hidden rounded-2xl border ${
-                isAlreadyMember
-                  ? 'border-slate-200 bg-slate-50/70 opacity-80'
-                  : isBestValue
+              className={`overflow-hidden rounded-2xl border ${isAlreadyMember
+                ? 'border-slate-200 bg-slate-50/70 opacity-80'
+                : isBestValue
                   ? 'border-red-200 bg-red-50/20'
                   : 'border-slate-200 bg-white'
-              } p-4 shadow-xs`}>
+                } p-4 shadow-xs`}>
               {/* Top row: Plan Name + Duration badge + Price */}
               <View className="flex-row items-start justify-between">
                 <View className="flex-row items-center gap-2.5">
                   <View
-                    className={`h-9 w-9 items-center justify-center rounded-xl ${
-                      isAlreadyMember ? 'bg-slate-200/80' : 'bg-red-500/10'
-                    }`}>
+                    className={`h-9 w-9 items-center justify-center rounded-xl ${isAlreadyMember ? 'bg-slate-200/80' : 'bg-red-500/10'
+                      }`}>
                     <Ionicons
                       name="barbell-outline"
                       size={18}
@@ -190,9 +192,8 @@ export default function GymMembershipPlansSection({
                   <View>
                     <View className="flex-row items-center gap-2">
                       <Text
-                        className={`font-bold text-base ${
-                          isAlreadyMember ? 'text-slate-700' : 'text-slate-900'
-                        }`}>
+                        className={`font-bold text-base ${isAlreadyMember ? 'text-slate-700' : 'text-slate-900'
+                          }`}>
                         {displayTitle}
                       </Text>
                       {isAlreadyMember ? (
@@ -221,16 +222,14 @@ export default function GymMembershipPlansSection({
                 {/* Price */}
                 <View className="items-end">
                   <Text
-                    className={`font-extrabold text-lg ${
-                      isAlreadyMember ? 'text-slate-600' : 'text-slate-900'
-                    }`}>
+                    className={`font-extrabold text-lg ${isAlreadyMember ? 'text-slate-600' : 'text-slate-900'
+                      }`}>
                     ₹{plan.price.toLocaleString('en-IN')}
                   </Text>
                   {plan.monthDuration > 1 ? (
                     <Text
-                      className={`text-[11px] font-semibold ${
-                        isAlreadyMember ? 'text-slate-500' : 'text-emerald-600'
-                      }`}>
+                      className={`text-[11px] font-semibold ${isAlreadyMember ? 'text-slate-500' : 'text-emerald-600'
+                        }`}>
                       ₹{monthlyEquivalent.toLocaleString('en-IN')}/mo
                     </Text>
                   ) : (

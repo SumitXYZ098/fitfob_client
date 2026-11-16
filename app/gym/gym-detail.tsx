@@ -33,12 +33,26 @@ import GymKeyFeaturesSection from '@/components/modules/GymKeyFeaturesSection';
 import GymMembershipPlansSection from '@/components/modules/GymMembershipPlansSection';
 import GymWhereYouWillBeSection from '@/components/modules/GymWhereYouWillBeSection';
 import { formatPlanNameAndDuration } from '@/components/GymCard';
-import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds } from '@/hook/useClient';
+import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds, useClientSubscriptions } from '@/hook/useClient';
 import { useQueryClient } from '@tanstack/react-query';
 
 export interface GymPhotoItem {
   url: string;
   imageInfo?: string;
+}
+
+export interface GymTrialSlotInfo {
+  totalBooked?: number;
+  availableSlots?: number;
+}
+
+export interface GymTrialInfo {
+  trialAvailable?: boolean;
+  dailyTrialLimit?: number;
+  description?: string;
+  today?: GymTrialSlotInfo | string;
+  tomorrow?: GymTrialSlotInfo | string;
+  [key: string]: any;
 }
 
 export interface GymBranchItem {
@@ -345,6 +359,22 @@ export default function GymDetailScreen() {
   const gymId = params.id || '';
   const queryClient = useQueryClient();
 
+  // 0. Check client's active subscriptions from server
+  const { data: subscriptionsData } = useClientSubscriptions();
+  const hasActiveSubscription = useMemo(() => {
+    if (!subscriptionsData) return false;
+    const list = Array.isArray((subscriptionsData as any)?.data)
+      ? (subscriptionsData as any).data
+      : Array.isArray(subscriptionsData)
+      ? subscriptionsData
+      : [];
+    return list.some(
+      (s: any) =>
+        (s.membershipStatus || '').toLowerCase() === 'active' ||
+        (s.membershipStatus || '').toLowerCase() === 'paused'
+    );
+  }, [subscriptionsData]);
+
   // 1. Instantly parse photos passed from the GymCard
   const initialPhotos: GymPhotoItem[] = useMemo(() => {
     if (!params.initialImages) return [];
@@ -579,7 +609,12 @@ export default function GymDetailScreen() {
           email: String(sourceData.email || ''),
           membershipPlans: cachedMembershipPlans,
           membership: (sourceData as any)?.membership,
-          isAlreadyMember: (sourceData as any)?.membership === false || params.initialIsMember === 'true',
+          membershipClubName: (sourceData as any)?.membershipClubName,
+          isAlreadyMember:
+            (sourceData as any)?.membership === true ||
+            Boolean((sourceData as any)?.membershipClubName) ||
+            hasActiveSubscription ||
+            params.initialIsMember === 'true',
         };
       }
       return null;
@@ -775,14 +810,31 @@ export default function GymDetailScreen() {
     const phoneNumber: string = String(d.phoneNumber || d.phone || d.contactNumber || '');
     const email: string = String(d.email || d.contactEmail || '');
 
-    // Backend API field: "membership": false -> user already bought membership (cannot buy again).
-    // "membership": true -> user has NOT bought membership (can buy).
+    // Backend API field: "membership": true -> user already holds an active membership.
+    // "membershipClubName" -> club where user has active membership.
     const membership = d?.membership ?? (raw as any)?.membership;
+    const membershipClubName: string = String(
+      d?.membershipClubName ||
+      d?.membership_club_name ||
+      (raw as any)?.membershipClubName ||
+      ''
+    );
+    const trial: GymTrialInfo | null = d?.trial || (raw as any)?.trial || null;
+
+    const isMemberOfThisClub = Boolean(
+      membershipClubName &&
+      title &&
+      membershipClubName.toLowerCase().trim() === title.toLowerCase().trim()
+    );
+
     const isAlreadyMember = Boolean(
-      membership === false ||
-      membership === 'false' ||
-      membership === 0 ||
-      membership === '0' ||
+      membership === true ||
+      membership === 'true' ||
+      membership === 1 ||
+      membership === '1' ||
+      Boolean(membershipClubName) ||
+      isMemberOfThisClub ||
+      hasActiveSubscription ||
       d?.isMember === true ||
       d?.hasActiveMembership === true ||
       d?.hasMembership === true ||
@@ -790,6 +842,15 @@ export default function GymDetailScreen() {
       d?.membershipStatus === 'active' ||
       params.initialIsMember === 'true'
     );
+
+    const clubOwner =
+      (typeof d.club_owner === 'string' ? d.club_owner : d.club_owner?.documentId || d.club_owner?.id) ||
+      (typeof d.clubOwner === 'string' ? d.clubOwner : d.clubOwner?.documentId || d.clubOwner?.id) ||
+      d.club_owner_document_id ||
+      d.clubOwnerDocumentId ||
+      d.documentId ||
+      d.id ||
+      gymId;
 
     return {
       id: String(d.documentId || d._id || d.id || gymId),
@@ -820,7 +881,10 @@ export default function GymDetailScreen() {
       email,
       membershipPlans,
       membership,
+      membershipClubName,
+      trial,
       isAlreadyMember,
+      clubOwner,
     };
   }, [
     apiData,
@@ -849,29 +913,61 @@ export default function GymDetailScreen() {
   }, [gym?.membershipPlans]);
 
   // ─── User Membership Status Check ──────────────────────────────────────────
-  // Backend returns "membership": false when user has already bought a membership (cannot buy again).
-  // Backend returns "membership": true when user has NOT bought any membership (can buy).
+  // Backend returns "membership": true when user already holds an active membership.
+  // Backend returns "membershipClubName": string with the club where the user is enrolled.
+  // We also check useClientSubscriptions to see if user has an active membership.
   const isAlreadyMember = Boolean(
     gym?.isAlreadyMember ||
-    gym?.membership === false ||
-    gym?.membership === 'false' ||
-    gym?.membership === 0 ||
-    gym?.membership === '0' ||
-    (apiData as any)?.membership === false ||
-    (apiData as any)?.membership === 'false' ||
-    (apiData as any)?.data?.membership === false ||
-    (apiData as any)?.data?.membership === 'false' ||
+    gym?.membership === true ||
+    gym?.membership === 'true' ||
+    gym?.membership === 1 ||
+    gym?.membership === '1' ||
+    Boolean(gym?.membershipClubName) ||
+    hasActiveSubscription ||
+    (apiData as any)?.membership === true ||
+    (apiData as any)?.membership === 'true' ||
+    (apiData as any)?.data?.membership === true ||
+    (apiData as any)?.data?.membership === 'true' ||
+    Boolean((apiData as any)?.membershipClubName) ||
+    Boolean((apiData as any)?.data?.membershipClubName) ||
     params.initialIsMember === 'true'
   );
 
+  // User holds an active membership at THIS specific gym:
+  // Rule: "jis gym ki membership le rakhi h uska trial nahi le sakta"
+  const isMemberOfThisClub = useMemo(() => {
+    const currentTitle = String(gym?.title || '').toLowerCase().trim();
+    const clubNameFromApi = String(
+      gym?.membershipClubName || (apiData as any)?.membershipClubName || ''
+    ).toLowerCase().trim();
+    if (clubNameFromApi && currentTitle && clubNameFromApi === currentTitle) {
+      return true;
+    }
+    const subscriptions = Array.isArray((subscriptionsData as any)?.data)
+      ? (subscriptionsData as any).data
+      : Array.isArray(subscriptionsData)
+      ? subscriptionsData
+      : [];
+    return subscriptions.some(
+      (s: any) =>
+        String(s.clubName || '').toLowerCase().trim() === currentTitle &&
+        ((s.membershipStatus || '').toLowerCase() === 'active' ||
+          (s.membershipStatus || '').toLowerCase() === 'paused')
+    );
+  }, [gym?.title, gym?.membershipClubName, apiData, subscriptionsData]);
+
   useEffect(() => {
-    console.log('🔍 [GYM MEMBERSHIP STATUS]:', {
+    console.log('🔍 [GYM MEMBERSHIP & TRIAL STATUS]:', {
       gymId: gym?.id,
       title: gym?.title,
       membershipField: gym?.membership ?? (apiData as any)?.membership,
+      membershipClubName: gym?.membershipClubName,
+      trialAvailable: gym?.trial?.trialAvailable,
+      trial: gym?.trial,
       isAlreadyMember,
+      isMemberOfThisClub,
     });
-  }, [gym?.id, gym?.title, gym?.membership, apiData, isAlreadyMember]);
+  }, [gym?.id, gym?.title, gym?.membership, gym?.membershipClubName, gym?.trial, apiData, isAlreadyMember, isMemberOfThisClub]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
@@ -1596,6 +1692,9 @@ export default function GymDetailScreen() {
             gymAddress={gym.address}
             gymCity={params.initialCity}
             gymId={gym.id}
+            clubOwner={gym.clubOwner || gym.documentId || gym.id}
+            trial={gym.trial}
+            isMemberOfThisClub={isMemberOfThisClub}
           />
 
           {/* 4. Key Features / Amenities */}
@@ -1607,7 +1706,8 @@ export default function GymDetailScreen() {
           {/* 5. Official Membership Plans */}
           <GymMembershipPlansSection
             membershipPlans={gym.membershipPlans}
-            isAlreadyMember={gym.membership}
+            isAlreadyMember={isAlreadyMember}
+            membershipClubName={gym.membershipClubName}
             gymTitle={gym.title}
             gymId={gym.id}
             isDetailFetching={isDetailFetching}
@@ -1757,6 +1857,7 @@ export default function GymDetailScreen() {
                         {/* Review Comment */}
                         <Text className="mt-3 text-xs leading-5 text-slate-600">
                           {rev.comment}
+                          
                         </Text>
                       </Animated.View>
                     );
@@ -1804,7 +1905,7 @@ export default function GymDetailScreen() {
           }}
           className="absolute bottom-0 left-0 right-0 flex-row items-center gap-3 border-t border-slate-100 bg-white px-4 pt-3">
           {/* Left indicator: Status if member, or Starting Price */}
-          {gym.membership ? (
+          {isAlreadyMember ? (
             <View className="pr-1 justify-center">
               <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
                 Status
@@ -1825,14 +1926,14 @@ export default function GymDetailScreen() {
             </View>
           ) : null}
 
-          {/* Buy Membership Button / Disabled Active Pill */}
-          {gym.membership ? (
+          {/* Buy Membership Button / View Membership Active */}
+          {isAlreadyMember ? (
             <TouchableOpacity
-              disabled={true}
-              activeOpacity={1}
+              onPress={() => router.push('/(tabs)/membership' as any)}
+              activeOpacity={0.85}
               className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-slate-200 py-3.5 border border-slate-300">
               <Ionicons name="checkmark-circle" size={17} color="#16A34A" />
-              <Text className="font-bold text-sm text-slate-600">Membership Active</Text>
+              <Text className="font-bold text-sm text-slate-700">Membership Active</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
