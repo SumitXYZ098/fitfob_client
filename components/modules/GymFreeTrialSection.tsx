@@ -518,32 +518,37 @@ export default function GymFreeTrialSection({
     });
   };
 
+  // If gym does not offer free trials (trial is null or trialAvailable is false), do not show section
+  if (!trial || trial.trialAvailable === false) {
+    return null;
+  }
+
   return (
     <View className="mt-6">
       {/* ─── 1. Free Trial Banner Card (Image 1) ──────────────────────────────── */}
       {isMemberOfThisClub ? (
-        // Case A: User already holds a membership for THIS gym ("jis gym ki membership le rakhi h uska trial nahi le sakta")
-        <View className="relative overflow-hidden rounded-[26px] bg-slate-900 p-5 shadow-sm">
+        // Case A: User already holds an active membership for this gym (free trials are not applicable)
+        <View className="relative overflow-hidden rounded-[26px] bg-[#E23744] p-5 shadow-sm">
           {/* Top Tag Row */}
           <View className="flex-row items-center justify-between">
-            <View className="self-start rounded-full bg-emerald-500/20 px-3 py-1 border border-emerald-500/30">
-              <Text className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+            <View className="self-start rounded-full bg-white px-3.5 py-1 shadow-xs">
+              <Text className="text-[10px] font-black uppercase tracking-wider text-[#E23744]">
                 ACTIVE MEMBER
               </Text>
             </View>
-            <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 border border-emerald-500/20">
-              <Ionicons name="shield-checkmark" size={13} color="#10B981" />
-              <Text className="text-[11px] font-bold text-emerald-400">Unlimited Access</Text>
+            <View className="flex-row items-center gap-1.5 rounded-full bg-black/20 px-3 py-1">
+              <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
+              <Text className="text-[10.5px] font-bold text-white">Unlimited Access</Text>
             </View>
           </View>
 
           {/* Headline */}
-          <Text className="mt-3 font-extrabold text-[19px] text-white tracking-tight leading-snug">
+          <Text className="mt-3 font-extrabold text-[20px] text-white tracking-tight leading-snug">
             Free trial not applicable
           </Text>
 
           {/* Subtitle description */}
-          <Text className="mt-1.5 text-xs text-slate-300 font-medium leading-relaxed">
+          <Text className="mt-1.5 text-xs text-white/90 font-medium leading-relaxed">
             {bannerDescription}
           </Text>
 
@@ -551,15 +556,15 @@ export default function GymFreeTrialSection({
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/membership' as any)}
             activeOpacity={0.88}
-            className="mt-4 flex-row items-center justify-center gap-2 rounded-2xl bg-white/10 py-3.5 border border-white/20 shadow-xs">
-            <Ionicons name="card-outline" size={17} color="#FFFFFF" />
-            <Text className="font-bold text-sm text-white">
-              View Your Active Membership
+            className="mt-4 flex-row items-center justify-center gap-2 rounded-2xl bg-white py-3.5 shadow-xs">
+            <Ionicons name="card-outline" size={17} color="#E23744" />
+            <Text className="font-bold text-sm text-[#E23744]">
+              View Active Membership
             </Text>
           </TouchableOpacity>
         </View>
       ) : (
-        // Case B: User does NOT hold membership for this gym (Can take trial subject to 6-week quota of 3 trials)
+        // Case B: User does not hold membership for this gym (eligible to book free trial within 6-week quota)
         <View className="relative overflow-hidden rounded-[26px] bg-[#E23744] p-5 shadow-sm">
           {/* Top Tag Row */}
           <View className="flex-row items-center justify-between">

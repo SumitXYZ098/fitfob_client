@@ -933,8 +933,8 @@ export default function GymDetailScreen() {
     params.initialIsMember === 'true'
   );
 
-  // User holds an active membership at THIS specific gym:
-  // Rule: "jis gym ki membership le rakhi h uska trial nahi le sakta"
+  // Check if user holds an active membership for this specific gym:
+  // Rule: Users cannot book a free trial at a gym where they already have an active membership.
   const isMemberOfThisClub = useMemo(() => {
     const currentTitle = String(gym?.title || '').toLowerCase().trim();
     const clubNameFromApi = String(
@@ -1686,16 +1686,18 @@ export default function GymDetailScreen() {
             onViewerStateChange={(isOpen) => setIsZoneViewerOpen(isOpen)}
           />
 
-          {/* Free Trial Section (Try Before You Buy) */}
-          <GymFreeTrialSection
-            gymName={gym.title || 'Gym'}
-            gymAddress={gym.address}
-            gymCity={params.initialCity}
-            gymId={gym.id}
-            clubOwner={gym.clubOwner || gym.documentId || gym.id}
-            trial={gym.trial}
-            isMemberOfThisClub={isMemberOfThisClub}
-          />
+          {/* Free Trial Section (Try Before You Buy - Only if gym offers trials) */}
+          {Boolean(gym.trial && gym.trial.trialAvailable !== false) && (
+            <GymFreeTrialSection
+              gymName={gym.title || 'Gym'}
+              gymAddress={gym.address}
+              gymCity={params.initialCity}
+              gymId={gym.id}
+              clubOwner={gym.clubOwner || gym.documentId || gym.id}
+              trial={gym.trial}
+              isMemberOfThisClub={isMemberOfThisClub}
+            />
+          )}
 
           {/* 4. Key Features / Amenities */}
           <GymKeyFeaturesSection
