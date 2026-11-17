@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ user });
 
     if (!user) {
-      await storageAPI.removeItem(STORAGE_KEY);
+      await storageAPI.clear();
       return;
     }
 
@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
 
     try {
-      await storageAPI.removeItem(STORAGE_KEY);
+      await storageAPI.clear();
       set({ user: null });
     } catch (error: any) {
       set({ user: null });

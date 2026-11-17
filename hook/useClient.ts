@@ -29,6 +29,7 @@ import {
   ClientSubscriptionItem,
   ClientSubscriptionsResponse,
   bookGymTrial,
+  getClientGymTrials,
   BookGymTrialPayload,
   BookGymTrialResponse,
   GymTrialData,
@@ -414,7 +415,7 @@ export const useClientSubscriptions = () => {
   });
 };
 
-// ─── Gym Free Trial Hook ────────────────────────────────────────────────────
+// ─── Gym Free Trial Hooks ───────────────────────────────────────────────────
 export const useBookGymTrial = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -425,6 +426,17 @@ export const useBookGymTrial = () => {
       queryClient.invalidateQueries({ queryKey: ['club-detail'] });
       queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
     },
+  });
+};
+
+export const useClientGymTrials = () => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ['gym-trials'],
+    queryFn: getClientGymTrials,
+    enabled: !!user?.token,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 };
 

@@ -621,5 +621,16 @@ export const bookGymTrial = async (
   }
 };
 
+// Get client's booked gym trials: GET /api/gym-trials
+export const getClientGymTrials = async () => {
+  try {
+    const response = await apiInstance.get(ENDPOINTS.GYM_TRIALS);
+    return response.data;
+  } catch (error: any) {
+    console.warn('ℹ️ Notice fetching gym trials from /api/gym-trials:', error?.response?.data || error.message);
+    return null;
+  }
+};
+
 
 

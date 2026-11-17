@@ -25,4 +25,12 @@ export const storageAPI = {
       throw new Error(error.message || 'An error occurred during logout.');
     }
   },
+
+  clear: async () => {
+    try {
+      await AsyncStorage.clear();
+    } catch (error: any) {
+      console.warn('Error clearing storage:', error);
+    }
+  },
 };

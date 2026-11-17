@@ -7,6 +7,7 @@ import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserStep } from '@/api/clientApi';
 import { useGetFavorites } from '@/hook/useClient';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface MenuItem {
   id: string;
@@ -18,6 +19,7 @@ interface MenuItem {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, setUser, logOut } = useAuthStore();
   const { data: favData } = useGetFavorites();
 
@@ -80,6 +82,7 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     try {
       await logOut();
+      queryClient.clear();
       Toast.show({
         type: 'success',
         text1: 'Logged Out',

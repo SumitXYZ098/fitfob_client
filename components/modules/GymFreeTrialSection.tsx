@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useBookGymTrial, type GymTrialQuota } from '@/hook/useClient';
+import { useBookGymTrial, useGetQr, type GymTrialQuota } from '@/hook/useClient';
 import { storageAPI } from '@/utility/storage';
 
 export interface GymTrialSlotInfo {
@@ -77,6 +77,9 @@ export default function GymFreeTrialSection({
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { mutateAsync: bookTrial, isPending: isBooking } = useBookGymTrial();
+  const getQrMutation = useGetQr();
+  const [cachedQrCode, setCachedQrCode] = useState<string | null>(null);
+  const [cachedClientId, setCachedClientId] = useState<string | null>(null);
 
   // Dynamic slot availability from backend response
   const isTodayClosed = trial?.today === 'closed';
@@ -118,8 +121,61 @@ export default function GymFreeTrialSection({
     validUntil: string;
     guestName: string;
     trialstatus?: string;
+    gymName?: string;
+    gymAddress?: string;
+    gymCity?: string;
+    clubOwner?: string;
+    gymId?: string;
+    qrCode?: string;
     quota?: GymTrialQuota;
   } | null>(null);
+
+  // Load cached client QR code and Client ID on mount and refresh with getQr
+  useEffect(() => {
+    (async () => {
+      try {
+        const [savedQr, savedId] = await Promise.all([
+          storageAPI.getItem('client_qr_code'),
+          storageAPI.getItem('client_id'),
+        ]);
+        if (savedQr) setCachedQrCode(savedQr);
+        if (savedId) setCachedClientId(savedId);
+
+        if (user?.token) {
+          getQrMutation.mutateAsync().then((res) => {
+            const qr = res?.data?.qrCode;
+            const cid = res?.data?.clientId;
+            if (qr) {
+              setCachedQrCode(qr);
+              storageAPI.setItem('client_qr_code', qr).catch(() => {});
+            }
+            if (cid) {
+              setCachedClientId(cid);
+              storageAPI.setItem('client_id', cid).catch(() => {});
+            }
+          }).catch(() => {});
+        }
+      } catch {}
+    })();
+  }, [user?.token]);
+
+  // Fetch QR on opening pass modal if not already available
+  useEffect(() => {
+    if (isPassModalVisible && !cachedQrCode && !getQrMutation.data?.data?.qrCode && user?.token) {
+      getQrMutation.mutateAsync().then((res) => {
+        const qr = res?.data?.qrCode;
+        const cid = res?.data?.clientId;
+        if (qr) {
+          setCachedQrCode(qr);
+          storageAPI.setItem('client_qr_code', qr).catch(() => {});
+        }
+        if (cid) {
+          setCachedClientId(cid);
+          storageAPI.setItem('client_id', cid).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, [isPassModalVisible, cachedQrCode, user?.token]);
 
   // Helper to format raw YYYY-MM-DD date to nice label "Tue, 17 Nov 2026"
   const formatRawDate = (dateStr: string): string => {
@@ -138,40 +194,6 @@ export default function GymFreeTrialSection({
     return dateStr;
   };
 
-  // Restore previously booked trial pass for this gym from storage ONLY IF backend data has not arrived yet
-  useEffect(() => {
-    // If backend already provided clientTrialBooking, backend is the single source of truth
-    if (trial && Array.isArray(trial.clientTrialBooking)) {
-      return;
-    }
-
-    const keysToCheck = [
-      clubOwner && clubOwner !== 'undefined' ? `booked_gym_trial_${clubOwner}` : null,
-      gymId && gymId !== 'undefined' ? `booked_gym_trial_${gymId}` : null,
-    ].filter(Boolean) as string[];
-
-    if (keysToCheck.length === 0) return;
-
-    (async () => {
-      for (const key of keysToCheck) {
-        try {
-          const saved = await storageAPI.getItem(key);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed && (parsed.passId || parsed.date)) {
-              setBookedPass((prev) => prev ?? parsed);
-              break;
-            }
-          }
-        } catch {}
-      }
-    })();
-  }, [clubOwner, gymId, trial?.clientTrialBooking]);
-
-  const guestName = useMemo(() => {
-    return user?.name || user?.username || 'Hardeep Singh';
-  }, [user]);
-
   // Helper to format date as YYYY-MM-DD
   const getTrialDateString = (option: 'today' | 'tomorrow'): string => {
     const d = new Date();
@@ -183,6 +205,18 @@ export default function GymFreeTrialSection({
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  const todayStr = getTrialDateString('today');
+
+  // Check if a pass date is active (today or future)
+  const isPassActive = (rawDate?: string): boolean => {
+    if (!rawDate) return true;
+    return rawDate >= todayStr;
+  };
+
+  const guestName = useMemo(() => {
+    return user?.name || user?.username || 'Hardeep Singh';
+  }, [user]);
 
   // Find if user already booked a trial at this gym from backend clientTrialBooking
   const existingGymBooking = useMemo<ClientTrialBookingItem | null>(() => {
@@ -197,60 +231,85 @@ export default function GymFreeTrialSection({
         const status = String(b.trialstatus || '').toLowerCase();
         if (status !== 'booked' && status !== 'active') return false;
 
-        const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+        const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
         const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
-        const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+        const ownerId = ownerObj?.id !== undefined ? String(ownerObj.id).toLowerCase().trim() : '';
+        const ownerClubName = String(ownerObj?.clubName || b.gymName || b.clubName || '').toLowerCase().trim();
 
+        // Strict match: unique documentId / id, or exact strict name equality (NO loose substring .includes)
         const matchesOwner = Boolean(
           currentClubOwner &&
-          ownerDocId &&
-          ownerDocId.length >= 3 &&
-          (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+          ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
+           (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
         );
-        const matchesName = Boolean(
+        const matchesExactName = Boolean(
           currentGymName &&
           ownerClubName &&
-          ownerClubName.length >= 2 &&
           ownerClubName === currentGymName
         );
 
-        return matchesOwner || matchesName;
+        return matchesOwner || matchesExactName;
       }) || null
     );
   }, [trial?.clientTrialBooking, gymName, clubOwner, gymId]);
 
-  // Synchronize pass details from backend clientTrialBooking
+  // Synchronize pass details from backend clientTrialBooking (Source of Truth)
   useEffect(() => {
     if (existingGymBooking) {
       const passId = `TRL-${String(existingGymBooking.documentId || existingGymBooking.id || 'PASS')
         .slice(-4)
         .toUpperCase()}`;
-      setBookedPass((prev) => {
-        if (prev && prev.documentId === existingGymBooking.documentId) return prev;
-        return {
-          id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
-          documentId: existingGymBooking.documentId,
-          passId,
-          date: formatRawDate(existingGymBooking.trialDate),
-          rawDate: existingGymBooking.trialDate,
-          validUntil: `${formatRawDate(existingGymBooking.trialDate)} (Closing Time: ${closingTime})`,
-          guestName,
-          trialstatus: existingGymBooking.trialstatus || 'booked',
-        };
+      setBookedPass({
+        id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
+        documentId: existingGymBooking.documentId,
+        passId,
+        date: formatRawDate(existingGymBooking.trialDate),
+        rawDate: existingGymBooking.trialDate,
+        validUntil: `${formatRawDate(existingGymBooking.trialDate)} (Closing Time: ${closingTime})`,
+        guestName,
+        trialstatus: existingGymBooking.trialstatus || 'booked',
+        gymName,
+        gymAddress,
+        gymCity,
+        clubOwner: clubOwner || gymId,
+        gymId,
       });
-    } else if (trial && Array.isArray(trial.clientTrialBooking)) {
-      // Backend returned clientTrialBooking array and this gym is NOT booked by user:
-      // Reset pass state to null and clean up any stale local storage key
+    } else {
+      // If user has not booked a trial at this club, reset to null (no ghost passes)
       setBookedPass(null);
-      const keysToRemove = [
-        clubOwner && clubOwner !== 'undefined' ? `booked_gym_trial_${clubOwner}` : null,
-        gymId && gymId !== 'undefined' ? `booked_gym_trial_${gymId}` : null,
-      ].filter(Boolean) as string[];
-      for (const k of keysToRemove) {
-        storageAPI.removeItem(k).catch(() => {});
-      }
     }
-  }, [existingGymBooking, trial?.clientTrialBooking, closingTime, guestName, clubOwner, gymId]);
+
+    // Keep global client booked trials list in sync for the scan screen
+    if (trial && Array.isArray(trial.clientTrialBooking) && trial.clientTrialBooking.length > 0) {
+      const bookingsList = trial.clientTrialBooking;
+      (async () => {
+        try {
+          const listToStore = bookingsList
+            .filter((b) => b && (b.trialstatus === 'booked' || b.trialstatus === 'active'))
+            .map((b) => {
+              const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+              const ownerDocId = String(ownerObj?.documentId || b.club_owner || '');
+              const ownerName = String(ownerObj?.clubName || (ownerDocId === gymId ? gymName : 'Partner Gym'));
+              const bPassId = `TRL-${String(b.documentId || b.id || 'PASS').slice(-4).toUpperCase()}`;
+              return {
+                id: typeof b.id === 'number' ? b.id : undefined,
+                documentId: b.documentId,
+                passId: bPassId,
+                date: formatRawDate(b.trialDate),
+                rawDate: b.trialDate,
+                validUntil: `${formatRawDate(b.trialDate)} (Closing Time: ${closingTime})`,
+                guestName,
+                trialstatus: b.trialstatus || 'booked',
+                gymName: ownerName,
+                clubOwner: ownerDocId,
+                gymId: ownerDocId,
+              };
+            });
+          await storageAPI.setItem('client_booked_trials', JSON.stringify(listToStore));
+        } catch {}
+      })();
+    }
+  }, [existingGymBooking, trial?.clientTrialBooking, closingTime, guestName, clubOwner, gymId, gymName, gymAddress, gymCity]);
 
   // Check if today or tomorrow is already booked at this gym
   const isTodayBookedAtThisGym = useMemo(() => {
@@ -266,20 +325,19 @@ export default function GymFreeTrialSection({
       const st = String(b.trialstatus || '').toLowerCase();
       if (st !== 'booked' && st !== 'active') return false;
 
-      const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+      const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
       const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
-      const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+      const ownerId = ownerObj?.id !== undefined ? String(ownerObj.id).toLowerCase().trim() : '';
+      const ownerClubName = String(ownerObj?.clubName || b.gymName || b.clubName || '').toLowerCase().trim();
 
       const matchesOwner = Boolean(
         currentClubOwner &&
-        ownerDocId &&
-        ownerDocId.length >= 3 &&
-        (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+        ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
+         (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
       );
       const matchesName = Boolean(
         currentGymName &&
         ownerClubName &&
-        ownerClubName.length >= 2 &&
         ownerClubName === currentGymName
       );
 
@@ -300,20 +358,19 @@ export default function GymFreeTrialSection({
       const st = String(b.trialstatus || '').toLowerCase();
       if (st !== 'booked' && st !== 'active') return false;
 
-      const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+      const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
       const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
-      const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+      const ownerId = ownerObj?.id !== undefined ? String(ownerObj.id).toLowerCase().trim() : '';
+      const ownerClubName = String(ownerObj?.clubName || b.gymName || b.clubName || '').toLowerCase().trim();
 
       const matchesOwner = Boolean(
         currentClubOwner &&
-        ownerDocId &&
-        ownerDocId.length >= 3 &&
-        (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+        ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
+         (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
       );
       const matchesName = Boolean(
         currentGymName &&
         ownerClubName &&
-        ownerClubName.length >= 2 &&
         ownerClubName === currentGymName
       );
 
@@ -575,12 +632,26 @@ export default function GymFreeTrialSection({
 
       setBookedPass(newPass);
 
-      // Persist to storage
+      // Persist to storage for this gym and for the global scan tab
       const storageKey = `booked_gym_trial_${targetClubOwner}`;
       storageAPI.setItem(storageKey, JSON.stringify(newPass)).catch(() => {});
       if (gymId && gymId !== targetClubOwner) {
         storageAPI.setItem(`booked_gym_trial_${gymId}`, JSON.stringify(newPass)).catch(() => {});
       }
+
+      (async () => {
+        try {
+          const rawList = await storageAPI.getItem('client_booked_trials');
+          const existingList = rawList ? JSON.parse(rawList) : [];
+          const filtered = Array.isArray(existingList)
+            ? existingList.filter(
+                (p: any) => p && p.documentId !== newPass.documentId && p.passId !== newPass.passId
+              )
+            : [];
+          filtered.unshift(newPass);
+          await storageAPI.setItem('client_booked_trials', JSON.stringify(filtered));
+        } catch {}
+      })();
 
       setIsBookingModalVisible(false);
       setIsSlotsFullModalVisible(false);
@@ -590,11 +661,13 @@ export default function GymFreeTrialSection({
         onTrialBooked(trialData);
       }
 
-      Toast.show({
-        type: 'success',
-        text1: response.message || 'Free Trial Booked! 🎉',
-        text2: `Pass ${passId} confirmed for ${dateOption === 'today' ? 'Today' : 'Tomorrow'} (${usedInPeriod} of ${maxInPeriod} used)`,
-      });
+      setTimeout(() => {
+        Toast.show({
+          type: 'success',
+          text1: response.message || 'Free Trial Booked! 🎉',
+          text2: `Pass ${passId} confirmed for ${dateOption === 'today' ? 'Today' : 'Tomorrow'} (${usedInPeriod} of ${maxInPeriod} used)`,
+        });
+      }, 350);
     } catch (err: any) {
       const errorMsg =
         err?.response?.data?.message ||
@@ -654,11 +727,13 @@ export default function GymFreeTrialSection({
         setIsSlotsFullModalVisible(false);
         setIsPassModalVisible(true);
 
-        Toast.show({
-          type: 'info',
-          text1: 'Trial Already Booked 🎟️',
-          text2: `You already have an active pass for ${passDate}. Showing your pass.`,
-        });
+        setTimeout(() => {
+          Toast.show({
+            type: 'info',
+            text1: 'Trial Already Booked 🎟️',
+            text2: `You already have an active pass for ${passDate}. Showing your pass.`,
+          });
+        }, 350);
         return;
       }
 
@@ -716,6 +791,17 @@ export default function GymFreeTrialSection({
   if (!isTrialAvailable) {
     return null;
   }
+
+  const activeQrCode =
+    bookedPass?.qrCode ||
+    getQrMutation.data?.data?.qrCode ||
+    cachedQrCode;
+
+  const activeClientId =
+    getQrMutation.data?.data?.clientId ||
+    cachedClientId ||
+    bookedPass?.passId ||
+    '';
 
   return (
     <View className="mt-6">
@@ -805,13 +891,13 @@ export default function GymFreeTrialSection({
                 onPress={() => setIsPassModalVisible(true)}
                 activeOpacity={0.88}
                 className="mt-4 flex-row items-center justify-center gap-2 rounded-2xl bg-white py-3.5 shadow-xs">
-                <Ionicons name="checkmark-circle" size={17} color="#16A34A" />
+                <Ionicons name="ticket" size={18} color="#E23744" />
                 <Text className="font-bold text-sm text-[#E23744]">
-                  View Booked Pass • {quotaInfo.used} of {quotaInfo.max} Used
+                  View Trial Pass
                 </Text>
               </TouchableOpacity>
               <Text className="mt-1.5 text-center text-[11px] font-semibold text-white/90">
-                Pass ID: {bookedPass.passId} • {quotaInfo.remaining} trials left (resets in {quotaInfo.periodWeeks} wks)
+                Pass ID: {bookedPass.passId} • Active for {bookedPass.date}
               </Text>
             </View>
           ) : quotaInfo.isQuotaFull ? (
@@ -843,14 +929,16 @@ export default function GymFreeTrialSection({
         transparent={true}
         animationType="slide"
         statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={() => setIsBookingModalVisible(false)}>
-        <Pressable
-          onPress={() => setIsBookingModalVisible(false)}
-          className="flex-1 justify-end bg-black/60">
+        <View style={{ flex: 1 }}>
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{ paddingBottom: Math.max(insets.bottom, 20) }}
-            className="rounded-t-[32px] bg-white px-5 pt-3">
+            onPress={() => setIsBookingModalVisible(false)}
+            className="flex-1 justify-end bg-black/60">
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{ paddingBottom: Math.max(insets.bottom, 20) }}
+              className="rounded-t-[32px] bg-white px-5 pt-3">
             {/* Top Drag Handle */}
             <View className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-300" />
 
@@ -1057,7 +1145,25 @@ export default function GymFreeTrialSection({
             </TouchableOpacity>
           </Pressable>
         </Pressable>
-      </Modal>
+
+        {/* In-Modal Toast to ensure notifications appear in front of the bottom sheet */}
+        {isBookingModalVisible && (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 99999,
+              elevation: 99999,
+            }}>
+            <Toast topOffset={Math.max(insets.top, 40) + 12} />
+          </View>
+        )}
+      </View>
+    </Modal>
 
       {/* ─── 3. Today's Slots Full Sheet Modal (Image 3) ───────────────────────── */}
       <Modal
@@ -1065,14 +1171,16 @@ export default function GymFreeTrialSection({
         transparent={true}
         animationType="slide"
         statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={() => setIsSlotsFullModalVisible(false)}>
-        <Pressable
-          onPress={() => setIsSlotsFullModalVisible(false)}
-          className="flex-1 justify-end bg-black/60">
+        <View style={{ flex: 1 }}>
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{ paddingBottom: Math.max(insets.bottom, 20) }}
-            className="rounded-t-[32px] bg-white px-5 pt-3 items-center">
+            onPress={() => setIsSlotsFullModalVisible(false)}
+            className="flex-1 justify-end bg-black/60">
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{ paddingBottom: Math.max(insets.bottom, 20) }}
+              className="rounded-t-[32px] bg-white px-5 pt-3 items-center">
             {/* Top Drag Handle */}
             <View className="mb-4 h-1 w-12 rounded-full bg-slate-300" />
 
@@ -1154,19 +1262,40 @@ export default function GymFreeTrialSection({
             </View>
           </Pressable>
         </Pressable>
-      </Modal>
+
+        {/* In-Modal Toast to ensure notifications appear in front of the slots modal */}
+        {isSlotsFullModalVisible && (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 99999,
+              elevation: 99999,
+            }}>
+            <Toast topOffset={Math.max(insets.top, 40) + 12} />
+          </View>
+        )}
+      </View>
+    </Modal>
 
       {/* ─── 4. Your Trial Pass Screen Modal (Image 4) ─────────────────────────── */}
       <Modal
         visible={isPassModalVisible}
         animationType="slide"
         presentationStyle="fullScreen"
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={() => setIsPassModalVisible(false)}>
         <View
           style={{
             flex: 1,
             backgroundColor: '#F8FAFC',
-            paddingTop: Platform.OS === 'android' ? 12 : insets.top,
+            paddingTop: insets.top > 0 ? insets.top : Platform.OS === 'android' ? 24 : 12,
+            paddingBottom: Math.max(insets.bottom, 12),
           }}>
           {/* Header Bar */}
           <View className="flex-row items-center px-4 py-3">
@@ -1186,7 +1315,7 @@ export default function GymFreeTrialSection({
             contentContainerStyle={{
               paddingHorizontal: 18,
               paddingTop: 4,
-              paddingBottom: Math.max(insets.bottom, 24) + 20,
+              paddingBottom: 20,
             }}>
             {/* Success Banner */}
             <View className="mb-3 flex-row items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
@@ -1244,18 +1373,32 @@ export default function GymFreeTrialSection({
               {/* QR Code Section */}
               <View className="items-center px-4 pt-5 pb-3">
                 <View className="h-56 w-56 items-center justify-center rounded-2xl bg-white p-2 border border-slate-100 shadow-xs">
-                  <Image
-                    source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${
-                        bookedPass?.passId || 'TRL-20871'
-                      }`,
-                    }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="contain"
-                  />
+                  {getQrMutation.isPending && !activeQrCode ? (
+                    <View className="items-center justify-center">
+                      <ActivityIndicator size="large" color="#E23744" />
+                      <Text className="mt-2 text-xs font-semibold text-slate-400">
+                        Generating QR Code...
+                      </Text>
+                    </View>
+                  ) : activeQrCode ? (
+                    <Image
+                      source={{ uri: activeQrCode }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View className="items-center justify-center">
+                      <Ionicons name="qr-code-outline" size={64} color="#CBD5E1" />
+                      <Text className="mt-2 text-center text-xs font-medium text-slate-400">
+                        Scan QR at front desk
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <Text className="mt-3 text-center text-xs font-medium text-slate-500">
-                  Show this at the front desk • {bookedPass?.passId || 'TRL-20871'}
+                  {activeClientId
+                    ? `Show this at the front desk • Pass ID: ${bookedPass?.passId || activeClientId}`
+                    : `Show this at the front desk • ${bookedPass?.passId || 'Trial Pass'}`}
                 </Text>
               </View>
 
@@ -1372,6 +1515,23 @@ export default function GymFreeTrialSection({
               </TouchableOpacity>
             </View>
           </ScrollView>
+
+          {/* In-Modal Toast to ensure notifications appear in front of the pass modal */}
+          {isPassModalVisible && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99999,
+                elevation: 99999,
+              }}>
+              <Toast topOffset={Math.max(insets.top, 40) + 12} />
+            </View>
+          )}
         </View>
       </Modal>
     </View>
