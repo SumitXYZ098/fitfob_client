@@ -24,12 +24,29 @@ export interface GymTrialSlotInfo {
   availableSlots?: number;
 }
 
+export interface ClientTrialBookingClubOwner {
+  documentId?: string;
+  clubName?: string;
+  [key: string]: any;
+}
+
+export interface ClientTrialBookingItem {
+  id?: number | string;
+  documentId?: string;
+  trialDate: string;
+  trialstatus: string;
+  club_owner?: ClientTrialBookingClubOwner | string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
 export interface GymTrialInfo {
   trialAvailable?: boolean;
   dailyTrialLimit?: number;
   description?: string;
   today?: GymTrialSlotInfo | string;
   tomorrow?: GymTrialSlotInfo | string;
+  clientTrialBooking?: ClientTrialBookingItem[];
   [key: string]: any;
 }
 
@@ -121,11 +138,16 @@ export default function GymFreeTrialSection({
     return dateStr;
   };
 
-  // Restore previously booked trial pass for this gym from storage
+  // Restore previously booked trial pass for this gym from storage ONLY IF backend data has not arrived yet
   useEffect(() => {
+    // If backend already provided clientTrialBooking, backend is the single source of truth
+    if (trial && Array.isArray(trial.clientTrialBooking)) {
+      return;
+    }
+
     const keysToCheck = [
-      clubOwner ? `booked_gym_trial_${clubOwner}` : null,
-      gymId ? `booked_gym_trial_${gymId}` : null,
+      clubOwner && clubOwner !== 'undefined' ? `booked_gym_trial_${clubOwner}` : null,
+      gymId && gymId !== 'undefined' ? `booked_gym_trial_${gymId}` : null,
     ].filter(Boolean) as string[];
 
     if (keysToCheck.length === 0) return;
@@ -137,23 +159,192 @@ export default function GymFreeTrialSection({
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed && (parsed.passId || parsed.date)) {
-              setBookedPass(parsed);
+              setBookedPass((prev) => prev ?? parsed);
               break;
             }
           }
         } catch {}
       }
     })();
-  }, [clubOwner, gymId]);
+  }, [clubOwner, gymId, trial?.clientTrialBooking]);
 
-  // Auto-switch date if selected option is closed
+  const guestName = useMemo(() => {
+    return user?.name || user?.username || 'Hardeep Singh';
+  }, [user]);
+
+  // Helper to format date as YYYY-MM-DD
+  const getTrialDateString = (option: 'today' | 'tomorrow'): string => {
+    const d = new Date();
+    if (option === 'tomorrow') {
+      d.setDate(d.getDate() + 1);
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Find if user already booked a trial at this gym from backend clientTrialBooking
+  const existingGymBooking = useMemo<ClientTrialBookingItem | null>(() => {
+    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return null;
+
+    const currentGymName = String(gymName || '').toLowerCase().trim();
+    const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
+
+    return (
+      trial.clientTrialBooking.find((b) => {
+        if (!b) return false;
+        const status = String(b.trialstatus || '').toLowerCase();
+        if (status !== 'booked' && status !== 'active') return false;
+
+        const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+        const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
+        const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+
+        const matchesOwner = Boolean(
+          currentClubOwner &&
+          ownerDocId &&
+          ownerDocId.length >= 3 &&
+          (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+        );
+        const matchesName = Boolean(
+          currentGymName &&
+          ownerClubName &&
+          ownerClubName.length >= 2 &&
+          ownerClubName === currentGymName
+        );
+
+        return matchesOwner || matchesName;
+      }) || null
+    );
+  }, [trial?.clientTrialBooking, gymName, clubOwner, gymId]);
+
+  // Synchronize pass details from backend clientTrialBooking
   useEffect(() => {
-    if (isTodayClosed && !isTomorrowClosed && selectedDateOption === 'today') {
+    if (existingGymBooking) {
+      const passId = `TRL-${String(existingGymBooking.documentId || existingGymBooking.id || 'PASS')
+        .slice(-4)
+        .toUpperCase()}`;
+      setBookedPass((prev) => {
+        if (prev && prev.documentId === existingGymBooking.documentId) return prev;
+        return {
+          id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
+          documentId: existingGymBooking.documentId,
+          passId,
+          date: formatRawDate(existingGymBooking.trialDate),
+          rawDate: existingGymBooking.trialDate,
+          validUntil: `${formatRawDate(existingGymBooking.trialDate)} (Closing Time: ${closingTime})`,
+          guestName,
+          trialstatus: existingGymBooking.trialstatus || 'booked',
+        };
+      });
+    } else if (trial && Array.isArray(trial.clientTrialBooking)) {
+      // Backend returned clientTrialBooking array and this gym is NOT booked by user:
+      // Reset pass state to null and clean up any stale local storage key
+      setBookedPass(null);
+      const keysToRemove = [
+        clubOwner && clubOwner !== 'undefined' ? `booked_gym_trial_${clubOwner}` : null,
+        gymId && gymId !== 'undefined' ? `booked_gym_trial_${gymId}` : null,
+      ].filter(Boolean) as string[];
+      for (const k of keysToRemove) {
+        storageAPI.removeItem(k).catch(() => {});
+      }
+    }
+  }, [existingGymBooking, trial?.clientTrialBooking, closingTime, guestName, clubOwner, gymId]);
+
+  // Check if today or tomorrow is already booked at this gym
+  const isTodayBookedAtThisGym = useMemo(() => {
+    const todayStr = getTrialDateString('today');
+    if (bookedPass?.rawDate === todayStr) return true;
+    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return false;
+
+    const currentGymName = String(gymName || '').toLowerCase().trim();
+    const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
+
+    return trial.clientTrialBooking.some((b) => {
+      if (b.trialDate !== todayStr) return false;
+      const st = String(b.trialstatus || '').toLowerCase();
+      if (st !== 'booked' && st !== 'active') return false;
+
+      const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+      const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
+      const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+
+      const matchesOwner = Boolean(
+        currentClubOwner &&
+        ownerDocId &&
+        ownerDocId.length >= 3 &&
+        (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+      );
+      const matchesName = Boolean(
+        currentGymName &&
+        ownerClubName &&
+        ownerClubName.length >= 2 &&
+        ownerClubName === currentGymName
+      );
+
+      return matchesOwner || matchesName;
+    });
+  }, [trial?.clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
+
+  const isTomorrowBookedAtThisGym = useMemo(() => {
+    const tomorrowStr = getTrialDateString('tomorrow');
+    if (bookedPass?.rawDate === tomorrowStr) return true;
+    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return false;
+
+    const currentGymName = String(gymName || '').toLowerCase().trim();
+    const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
+
+    return trial.clientTrialBooking.some((b) => {
+      if (b.trialDate !== tomorrowStr) return false;
+      const st = String(b.trialstatus || '').toLowerCase();
+      if (st !== 'booked' && st !== 'active') return false;
+
+      const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
+      const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
+      const ownerClubName = String(ownerObj?.clubName || '').toLowerCase().trim();
+
+      const matchesOwner = Boolean(
+        currentClubOwner &&
+        ownerDocId &&
+        ownerDocId.length >= 3 &&
+        (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)
+      );
+      const matchesName = Boolean(
+        currentGymName &&
+        ownerClubName &&
+        ownerClubName.length >= 2 &&
+        ownerClubName === currentGymName
+      );
+
+      return matchesOwner || matchesName;
+    });
+  }, [trial?.clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
+
+  // Auto-switch date if selected option is closed or already booked
+  useEffect(() => {
+    if (
+      (isTodayClosed || isTodayBookedAtThisGym) &&
+      !isTomorrowClosed &&
+      !isTomorrowBookedAtThisGym &&
+      selectedDateOption === 'today'
+    ) {
       setSelectedDateOption('tomorrow');
-    } else if (!isTodayClosed && isTomorrowClosed && selectedDateOption === 'tomorrow') {
+    } else if (
+      !isTodayClosed &&
+      !isTodayBookedAtThisGym &&
+      (isTomorrowClosed || isTomorrowBookedAtThisGym) &&
+      selectedDateOption === 'tomorrow'
+    ) {
       setSelectedDateOption('today');
     }
-  }, [isTodayClosed, isTomorrowClosed, selectedDateOption]);
+  }, [
+    isTodayClosed,
+    isTomorrowClosed,
+    isTodayBookedAtThisGym,
+    isTomorrowBookedAtThisGym,
+    selectedDateOption,
+  ]);
 
   // Calculate dynamic trial quota counts (used, remaining, max, period)
   // Rule: Clients can book up to 3 trials per 6 weeks. Resets after 6 weeks.
@@ -161,21 +352,7 @@ export default function GymFreeTrialSection({
     const max = 3;
     const periodWeeks = 6;
 
-    // 1. Quota from active bookedPass
-    if (bookedPass?.quota) {
-      const used = bookedPass.quota.trialsUsedInPeriod ?? 1;
-      const remaining = bookedPass.quota.trialsRemainingInPeriod ?? Math.max(0, max - used);
-      return {
-        used,
-        remaining,
-        max: bookedPass.quota.maxTrialsPerPeriod || max,
-        periodWeeks: bookedPass.quota.periodWeeks || periodWeeks,
-        isQuotaFull: remaining <= 0,
-        isBooked: true,
-      };
-    }
-
-    // 2. Parse remaining trials from trial.description (e.g. "You have 3 trials left...")
+    // 1. Check description text for "X trial(s) left"
     let parsedRemaining: number | null = null;
     if (trial?.description) {
       const match = trial.description.match(/(\d+)\s+trials?\s+left/i);
@@ -189,37 +366,43 @@ export default function GymFreeTrialSection({
       }
     }
 
-    // 3. If bookedPass exists for this gym
-    if (bookedPass) {
-      const remaining = parsedRemaining !== null ? parsedRemaining : Math.max(0, max - 1);
-      const used = Math.min(max, Math.max(1, max - remaining));
-      return {
-        used,
-        remaining,
-        max,
-        periodWeeks,
-        isQuotaFull: remaining <= 0,
-        isBooked: true,
-      };
+    // 2. Count active bookings from clientTrialBooking
+    const activeBookingsCount = Array.isArray(trial?.clientTrialBooking)
+      ? trial.clientTrialBooking.filter((b) => {
+          const st = String(b.trialstatus || '').toLowerCase();
+          return st === 'booked' || st === 'active';
+        }).length
+      : 0;
+
+    let remaining = 3;
+    let used = 0;
+
+    if (parsedRemaining !== null) {
+      remaining = parsedRemaining;
+      used = Math.max(activeBookingsCount, max - remaining);
+    } else if (activeBookingsCount > 0) {
+      used = Math.min(max, activeBookingsCount);
+      remaining = Math.max(0, max - used);
+    } else if (bookedPass?.quota?.trialsRemainingInPeriod !== undefined) {
+      remaining = bookedPass.quota.trialsRemainingInPeriod;
+      used = bookedPass.quota.trialsUsedInPeriod ?? (max - remaining);
+    } else if (bookedPass) {
+      used = 1;
+      remaining = 2;
     }
 
-    // 4. Default from trial object
-    const remaining =
-      parsedRemaining !== null
-        ? parsedRemaining
-        : trial?.trialAvailable === false
-        ? 0
-        : 3;
-    const used = Math.max(0, max - remaining);
+    const isQuotaFull = remaining <= 0;
+    const hasBookingAtThisGym = Boolean(existingGymBooking || bookedPass);
+
     return {
       used,
       remaining,
       max,
       periodWeeks,
-      isQuotaFull: remaining <= 0 || trial?.trialAvailable === false,
-      isBooked: false,
+      isQuotaFull,
+      isBooked: hasBookingAtThisGym,
     };
-  }, [bookedPass, trial]);
+  }, [trial?.description, trial?.clientTrialBooking, bookedPass, existingGymBooking]);
 
   // Dynamic banner description from backend & quota info
   const bannerDescription = useMemo(() => {
@@ -289,22 +472,6 @@ export default function GymFreeTrialSection({
     return parts.join(' • ');
   }, [gymName, gymAddress, gymCity]);
 
-  const guestName = useMemo(() => {
-    return user?.name || user?.username || 'Hardeep Singh';
-  }, [user]);
-
-  // Helper to format date as YYYY-MM-DD
-  const getTrialDateString = (option: 'today' | 'tomorrow'): string => {
-    const d = new Date();
-    if (option === 'tomorrow') {
-      d.setDate(d.getDate() + 1);
-    }
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   // Handle confirming the free trial booking via POST /api/gym-trials
   const handleConfirmBooking = async (dateOption: 'today' | 'tomorrow') => {
     if (!policyAccepted) {
@@ -321,6 +488,24 @@ export default function GymFreeTrialSection({
         type: 'info',
         text1: 'Active Member Notice',
         text2: `You already hold an active membership at ${gymName}. Free trial is not applicable.`,
+      });
+      return;
+    }
+
+    if (dateOption === 'today' && isTodayBookedAtThisGym) {
+      Toast.show({
+        type: 'info',
+        text1: 'Already Booked',
+        text2: `You already have a booked trial at ${gymName} for today.`,
+      });
+      return;
+    }
+
+    if (dateOption === 'tomorrow' && isTomorrowBookedAtThisGym) {
+      Toast.show({
+        type: 'info',
+        text1: 'Already Booked',
+        text2: `You already have a booked trial at ${gymName} for tomorrow.`,
       });
       return;
     }
@@ -518,8 +703,17 @@ export default function GymFreeTrialSection({
     });
   };
 
-  // If gym does not offer free trials (trial is null or trialAvailable is false), do not show section
-  if (!trial || trial.trialAvailable === false) {
+  // If gym does not offer free trials (trial is null, trialAvailable is not explicitly true, or only contains { clientTrialBooking: [] }), do not show section
+  const isTrialAvailable = Boolean(
+    trial &&
+    (trial.trialAvailable === true || (trial as any).trialAvailable === 'true') &&
+    (trial.dailyTrialLimit !== undefined ||
+      trial.description !== undefined ||
+      trial.today !== undefined ||
+      trial.tomorrow !== undefined)
+  );
+
+  if (!isTrialAvailable) {
     return null;
   }
 
@@ -698,11 +892,11 @@ export default function GymFreeTrialSection({
             <View className="mt-2.5 flex-row gap-3">
               {/* Option 1: Today */}
               <TouchableOpacity
-                disabled={isTodayClosed || isTodaySlotsFull}
+                disabled={isTodayClosed || isTodaySlotsFull || isTodayBookedAtThisGym}
                 onPress={() => setSelectedDateOption('today')}
                 activeOpacity={0.85}
                 className={`flex-1 rounded-2xl p-3.5 border ${
-                  isTodayClosed
+                  isTodayClosed || isTodayBookedAtThisGym
                     ? 'border-slate-200 bg-slate-100/70 opacity-60'
                     : selectedDateOption === 'today'
                     ? 'border-red-400 bg-red-50/40'
@@ -711,28 +905,36 @@ export default function GymFreeTrialSection({
                 <View className="flex-row items-center justify-between">
                   <Text
                     className={`font-bold text-sm ${
-                      isTodayClosed ? 'text-slate-400' : 'text-slate-900'
+                      isTodayClosed || isTodayBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
                     }`}>
                     Today
                   </Text>
-                  {isTodayClosed && (
+                  {isTodayBookedAtThisGym ? (
+                    <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
+                      <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
+                    </View>
+                  ) : isTodayClosed ? (
                     <View className="rounded-full bg-slate-200 px-2 py-0.5">
                       <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
                 <Text className="mt-0.5 text-xs text-slate-500 font-medium">
                   {dateInfo.todayShort}
                 </Text>
                 <Text
                   className={`mt-1.5 text-[11px] font-semibold ${
-                    isTodayClosed
+                    isTodayBookedAtThisGym
+                      ? 'text-emerald-700'
+                      : isTodayClosed
                       ? 'text-slate-400'
                       : isTodaySlotsFull
                       ? 'text-rose-600'
                       : 'text-rose-600'
                   }`}>
-                  {isTodayClosed
+                  {isTodayBookedAtThisGym
+                    ? 'Already booked'
+                    : isTodayClosed
                     ? 'Gym Closed'
                     : isTodaySlotsFull
                     ? 'Slots full'
@@ -742,11 +944,11 @@ export default function GymFreeTrialSection({
 
               {/* Option 2: Tomorrow */}
               <TouchableOpacity
-                disabled={isTomorrowClosed || isTomorrowSlotsFull}
+                disabled={isTomorrowClosed || isTomorrowSlotsFull || isTomorrowBookedAtThisGym}
                 onPress={() => setSelectedDateOption('tomorrow')}
                 activeOpacity={0.85}
                 className={`flex-1 rounded-2xl p-3.5 border ${
-                  isTomorrowClosed
+                  isTomorrowClosed || isTomorrowBookedAtThisGym
                     ? 'border-slate-200 bg-slate-100/70 opacity-60'
                     : selectedDateOption === 'tomorrow'
                     ? 'border-red-400 bg-red-50/40'
@@ -755,28 +957,36 @@ export default function GymFreeTrialSection({
                 <View className="flex-row items-center justify-between">
                   <Text
                     className={`font-bold text-sm ${
-                      isTomorrowClosed ? 'text-slate-400' : 'text-slate-900'
+                      isTomorrowClosed || isTomorrowBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
                     }`}>
                     Tomorrow
                   </Text>
-                  {isTomorrowClosed && (
+                  {isTomorrowBookedAtThisGym ? (
+                    <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
+                      <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
+                    </View>
+                  ) : isTomorrowClosed ? (
                     <View className="rounded-full bg-slate-200 px-2 py-0.5">
                       <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
                 <Text className="mt-0.5 text-xs text-slate-500 font-medium">
                   {dateInfo.tomorrowShort}
                 </Text>
                 <Text
                   className={`mt-1.5 text-[11px] font-semibold ${
-                    isTomorrowClosed
+                    isTomorrowBookedAtThisGym
+                      ? 'text-emerald-700'
+                      : isTomorrowClosed
                       ? 'text-slate-400'
                       : isTomorrowSlotsFull
                       ? 'text-rose-600'
                       : 'text-emerald-600'
                   }`}>
-                  {isTomorrowClosed
+                  {isTomorrowBookedAtThisGym
+                    ? 'Already booked'
+                    : isTomorrowClosed
                     ? 'Gym Closed'
                     : isTomorrowSlotsFull
                     ? 'Slots full'

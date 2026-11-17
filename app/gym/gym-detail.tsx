@@ -30,7 +30,10 @@ import * as Location from 'expo-location';
 import GymFreeTrialSection from '@/components/modules/GymFreeTrialSection';
 import GymWhereYouExercise from '@/components/modules/GymWhereYouExercise';
 import GymKeyFeaturesSection from '@/components/modules/GymKeyFeaturesSection';
-import GymMembershipPlansSection from '@/components/modules/GymMembershipPlansSection';
+import GymMembershipPlansSection, {
+  ActiveMembershipInfo,
+  formatPlanName,
+} from '@/components/modules/GymMembershipPlansSection';
 import GymWhereYouWillBeSection from '@/components/modules/GymWhereYouWillBeSection';
 import { formatPlanNameAndDuration } from '@/components/GymCard';
 import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds, useClientSubscriptions } from '@/hook/useClient';
@@ -46,12 +49,29 @@ export interface GymTrialSlotInfo {
   availableSlots?: number;
 }
 
+export interface ClientTrialBookingClubOwner {
+  documentId?: string;
+  clubName?: string;
+  [key: string]: any;
+}
+
+export interface ClientTrialBookingItem {
+  id?: number | string;
+  documentId?: string;
+  trialDate: string;
+  trialstatus: string;
+  club_owner?: ClientTrialBookingClubOwner | string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
 export interface GymTrialInfo {
   trialAvailable?: boolean;
   dailyTrialLimit?: number;
   description?: string;
   today?: GymTrialSlotInfo | string;
   tomorrow?: GymTrialSlotInfo | string;
+  clientTrialBooking?: ClientTrialBookingItem[];
   [key: string]: any;
 }
 
@@ -366,8 +386,8 @@ export default function GymDetailScreen() {
     const list = Array.isArray((subscriptionsData as any)?.data)
       ? (subscriptionsData as any).data
       : Array.isArray(subscriptionsData)
-      ? subscriptionsData
-      : [];
+        ? subscriptionsData
+        : [];
     return list.some(
       (s: any) =>
         (s.membershipStatus || '').toLowerCase() === 'active' ||
@@ -610,8 +630,10 @@ export default function GymDetailScreen() {
           membershipPlans: cachedMembershipPlans,
           membership: (sourceData as any)?.membership,
           membershipClubName: (sourceData as any)?.membershipClubName,
+          membershipClubDocumentId: (sourceData as any)?.membershipClubDocumentId,
           isAlreadyMember:
             (sourceData as any)?.membership === true ||
+            Boolean((sourceData as any)?.membershipClubDocumentId) ||
             Boolean((sourceData as any)?.membershipClubName) ||
             hasActiveSubscription ||
             params.initialIsMember === 'true',
@@ -812,19 +834,56 @@ export default function GymDetailScreen() {
 
     // Backend API field: "membership": true -> user already holds an active membership.
     // "membershipClubName" -> club where user has active membership.
-    const membership = d?.membership ?? (raw as any)?.membership;
+    // "membershipClubDocumentId" -> documentId of club where user has active membership.
+    const rawData = (apiData as any)?.data ?? {};
+    const membership =
+      d?.membership ??
+      (raw as any)?.membership ??
+      (apiData as any)?.membership ??
+      rawData?.membership;
+
     const membershipClubName: string = String(
       d?.membershipClubName ||
       d?.membership_club_name ||
       (raw as any)?.membershipClubName ||
+      (apiData as any)?.membershipClubName ||
+      rawData?.membershipClubName ||
       ''
     );
-    const trial: GymTrialInfo | null = d?.trial || (raw as any)?.trial || null;
 
+    const membershipClubDocumentId: string = String(
+      d?.membershipClubDocumentId ||
+      d?.membership_club_document_id ||
+      (raw as any)?.membershipClubDocumentId ||
+      (apiData as any)?.membershipClubDocumentId ||
+      rawData?.membershipClubDocumentId ||
+      ''
+    );
+
+    const rawTrial =
+      d?.trial ||
+      (raw as any)?.trial ||
+      (apiData as any)?.trial ||
+      rawData?.trial ||
+      null;
+
+    // Gym offers free trial ONLY when trialAvailable is explicitly true.
+    // When the backend returns only { clientTrialBooking: [] } without trialAvailable: true, trial is considered null.
+    const isTrialConfigured = Boolean(
+      rawTrial &&
+      (rawTrial.trialAvailable === true || (rawTrial as any).trialAvailable === 'true')
+    );
+    const trial: GymTrialInfo | null = isTrialConfigured ? rawTrial : null;
+
+    const currentDocId = String(d.documentId || d._id || d.id || gymId).toLowerCase().trim();
     const isMemberOfThisClub = Boolean(
-      membershipClubName &&
-      title &&
-      membershipClubName.toLowerCase().trim() === title.toLowerCase().trim()
+      (membershipClubDocumentId &&
+        currentDocId &&
+        (membershipClubDocumentId.toLowerCase().trim() === currentDocId ||
+          currentDocId.includes(membershipClubDocumentId.toLowerCase().trim()))) ||
+      (membershipClubName &&
+        title &&
+        membershipClubName.toLowerCase().trim() === title.toLowerCase().trim())
     );
 
     const isAlreadyMember = Boolean(
@@ -832,6 +891,7 @@ export default function GymDetailScreen() {
       membership === 'true' ||
       membership === 1 ||
       membership === '1' ||
+      Boolean(membershipClubDocumentId) ||
       Boolean(membershipClubName) ||
       isMemberOfThisClub ||
       hasActiveSubscription ||
@@ -882,6 +942,7 @@ export default function GymDetailScreen() {
       membershipPlans,
       membership,
       membershipClubName,
+      membershipClubDocumentId,
       trial,
       isAlreadyMember,
       clubOwner,
@@ -922,12 +983,15 @@ export default function GymDetailScreen() {
     gym?.membership === 'true' ||
     gym?.membership === 1 ||
     gym?.membership === '1' ||
+    Boolean(gym?.membershipClubDocumentId) ||
     Boolean(gym?.membershipClubName) ||
     hasActiveSubscription ||
     (apiData as any)?.membership === true ||
     (apiData as any)?.membership === 'true' ||
     (apiData as any)?.data?.membership === true ||
     (apiData as any)?.data?.membership === 'true' ||
+    Boolean((apiData as any)?.membershipClubDocumentId) ||
+    Boolean((apiData as any)?.data?.membershipClubDocumentId) ||
     Boolean((apiData as any)?.membershipClubName) ||
     Boolean((apiData as any)?.data?.membershipClubName) ||
     params.initialIsMember === 'true'
@@ -937,24 +1001,104 @@ export default function GymDetailScreen() {
   // Rule: Users cannot book a free trial at a gym where they already have an active membership.
   const isMemberOfThisClub = useMemo(() => {
     const currentTitle = String(gym?.title || '').toLowerCase().trim();
+    const currentDocId = String(gym?.documentId || gym?.id || gymId).toLowerCase().trim();
     const clubNameFromApi = String(
       gym?.membershipClubName || (apiData as any)?.membershipClubName || ''
     ).toLowerCase().trim();
+    const clubDocIdFromApi = String(
+      gym?.membershipClubDocumentId ||
+      (apiData as any)?.membershipClubDocumentId ||
+      (apiData as any)?.data?.membershipClubDocumentId ||
+      ''
+    ).toLowerCase().trim();
+
+    if (
+      clubDocIdFromApi &&
+      currentDocId &&
+      (clubDocIdFromApi === currentDocId || currentDocId.includes(clubDocIdFromApi))
+    ) {
+      return true;
+    }
+
     if (clubNameFromApi && currentTitle && clubNameFromApi === currentTitle) {
       return true;
     }
+
     const subscriptions = Array.isArray((subscriptionsData as any)?.data)
       ? (subscriptionsData as any).data
       : Array.isArray(subscriptionsData)
-      ? subscriptionsData
-      : [];
+        ? subscriptionsData
+        : [];
     return subscriptions.some(
       (s: any) =>
         String(s.clubName || '').toLowerCase().trim() === currentTitle &&
         ((s.membershipStatus || '').toLowerCase() === 'active' ||
           (s.membershipStatus || '').toLowerCase() === 'paused')
     );
-  }, [gym?.title, gym?.membershipClubName, apiData, subscriptionsData]);
+  }, [
+    gym?.title,
+    gym?.documentId,
+    gym?.id,
+    gymId,
+    gym?.membershipClubName,
+    gym?.membershipClubDocumentId,
+    apiData,
+    subscriptionsData,
+  ]);
+
+  // Resolve user's active/paused subscription details (clubName, plan, dates)
+  const activeSubscription = useMemo<ActiveMembershipInfo | null>(() => {
+    const rawList = Array.isArray((subscriptionsData as any)?.data)
+      ? (subscriptionsData as any).data
+      : Array.isArray(subscriptionsData)
+        ? subscriptionsData
+        : [];
+
+    const currentTitle = String(gym?.title || '').toLowerCase().trim();
+    const clubFromApi = String(
+      gym?.membershipClubName || (apiData as any)?.membershipClubName || ''
+    ).toLowerCase().trim();
+
+    // 1. Check if user has an active/paused subscription matching this gym's title
+    if (currentTitle) {
+      const matchThisGym = rawList.find(
+        (s: any) =>
+          String(s.clubName || '').toLowerCase().trim() === currentTitle &&
+          ((s.membershipStatus || '').toLowerCase() === 'active' ||
+            (s.membershipStatus || '').toLowerCase() === 'paused')
+      );
+      if (matchThisGym) return matchThisGym;
+    }
+
+    // 2. Check if user has an active/paused subscription matching the API clubName
+    if (clubFromApi) {
+      const matchApiClub = rawList.find(
+        (s: any) =>
+          String(s.clubName || '').toLowerCase().trim() === clubFromApi &&
+          ((s.membershipStatus || '').toLowerCase() === 'active' ||
+            (s.membershipStatus || '').toLowerCase() === 'paused')
+      );
+      if (matchApiClub) return matchApiClub;
+    }
+
+    // 3. Fallback: Any active/paused subscription the user holds
+    const anyActive = rawList.find(
+      (s: any) =>
+        (s.membershipStatus || '').toLowerCase() === 'active' ||
+        (s.membershipStatus || '').toLowerCase() === 'paused'
+    );
+    if (anyActive) return anyActive;
+
+    // 4. Fallback if user is flagged as member but subscription list query hasn't returned yet
+    if (isAlreadyMember) {
+      return {
+        clubName: gym?.membershipClubName || (isMemberOfThisClub ? gym?.title : undefined),
+        membershipStatus: 'active',
+      };
+    }
+
+    return null;
+  }, [subscriptionsData, gym?.title, gym?.membershipClubName, apiData, isAlreadyMember, isMemberOfThisClub]);
 
   useEffect(() => {
     console.log('🔍 [GYM MEMBERSHIP & TRIAL STATUS]:', {
@@ -962,12 +1106,26 @@ export default function GymDetailScreen() {
       title: gym?.title,
       membershipField: gym?.membership ?? (apiData as any)?.membership,
       membershipClubName: gym?.membershipClubName,
-      trialAvailable: gym?.trial?.trialAvailable,
-      trial: gym?.trial,
+      membershipClubDocumentId: gym?.membershipClubDocumentId,
       isAlreadyMember,
       isMemberOfThisClub,
+      hasActiveSubscription,
+      trialAvailable: gym?.trial?.trialAvailable,
+      trialDescription: gym?.trial?.description,
+      clientTrialBookingCount: gym?.trial?.clientTrialBooking?.length ?? 0,
     });
-  }, [gym?.id, gym?.title, gym?.membership, gym?.membershipClubName, gym?.trial, apiData, isAlreadyMember, isMemberOfThisClub]);
+  }, [
+    gym?.id,
+    gym?.title,
+    gym?.membership,
+    gym?.membershipClubName,
+    gym?.membershipClubDocumentId,
+    gym?.trial,
+    apiData,
+    isAlreadyMember,
+    isMemberOfThisClub,
+    hasActiveSubscription,
+  ]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const { width: screenWidth } = useWindowDimensions();
@@ -1052,7 +1210,7 @@ export default function GymDetailScreen() {
       }
     };
   }, []);
- 
+
 
   const slides: GymPhotoItem[] =
     gym?.photos && gym.photos.length > 1
@@ -1663,7 +1821,7 @@ export default function GymDetailScreen() {
             </View>
           )}
 
- 
+
 
           {/* Description Paragraph (Only if real description provided, skeleton while loading) */}
           {Boolean(gym.description) ? (
@@ -1687,7 +1845,10 @@ export default function GymDetailScreen() {
           />
 
           {/* Free Trial Section (Try Before You Buy - Only if gym offers trials) */}
-          {Boolean(gym.trial && gym.trial.trialAvailable !== false) && (
+          {Boolean(
+            gym.trial &&
+            (gym.trial.trialAvailable === true || (gym.trial as any).trialAvailable === 'true')
+          ) && (
             <GymFreeTrialSection
               gymName={gym.title || 'Gym'}
               gymAddress={gym.address}
@@ -1710,9 +1871,12 @@ export default function GymDetailScreen() {
             membershipPlans={gym.membershipPlans}
             isAlreadyMember={isAlreadyMember}
             membershipClubName={gym.membershipClubName}
+            membershipClubDocumentId={gym.membershipClubDocumentId}
             gymTitle={gym.title}
             gymId={gym.id}
             isDetailFetching={isDetailFetching}
+            activeSubscription={activeSubscription}
+            isMemberOfThisClub={isMemberOfThisClub}
           />
 
           {/* 6. Open Hours (Only if timings provided, skeleton while loading) */}
@@ -1859,7 +2023,7 @@ export default function GymDetailScreen() {
                         {/* Review Comment */}
                         <Text className="mt-3 text-xs leading-5 text-slate-600">
                           {rev.comment}
-                          
+
                         </Text>
                       </Animated.View>
                     );
@@ -1908,13 +2072,21 @@ export default function GymDetailScreen() {
           className="absolute bottom-0 left-0 right-0 flex-row items-center gap-3 border-t border-slate-100 bg-white px-4 pt-3">
           {/* Left indicator: Status if member, or Starting Price */}
           {isAlreadyMember ? (
-            <View className="pr-1 justify-center">
-              <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                Status
+            <View className="pr-1 justify-center max-w-[50%]">
+              <View className="flex-row items-center gap-1">
+                <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                  {isMemberOfThisClub ? 'Active Plan' : 'Active Member'}
+                </Text>
+              </View>
+              <Text className="font-extrabold text-[13px] text-slate-900 leading-tight" numberOfLines={1}>
+                {activeSubscription?.clubName || gym.membershipClubName || gym.title}
               </Text>
-              <Text className="font-extrabold text-[14px] text-emerald-700 leading-tight">
-                Active Member
-              </Text>
+              {activeSubscription?.plan ? (
+                <Text className="text-[11px] font-semibold text-slate-500" numberOfLines={1}>
+                  {formatPlanName(activeSubscription.plan)}
+                </Text>
+              ) : null}
             </View>
           ) : lowestPlanPrice > 0 ? (
             <View className="pr-1 justify-center">
@@ -1933,9 +2105,9 @@ export default function GymDetailScreen() {
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/membership' as any)}
               activeOpacity={0.85}
-              className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-slate-200 py-3.5 border border-slate-300">
-              <Ionicons name="checkmark-circle" size={17} color="#16A34A" />
-              <Text className="font-bold text-sm text-slate-700">Membership Active</Text>
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-md shadow-[#E23744]/25">
+              <Ionicons name="card-outline" size={17} color="#FFFFFF" />
+              <Text className="font-bold text-sm text-white">View Membership</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity

@@ -253,7 +253,8 @@ export const useGymDetail = (id: string | undefined) => {
     queryKey: ['gym-detail', id],
     queryFn: () => getGymDetail(id!),
     enabled: !!id && !!user?.token,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: 1,
   });
 };
@@ -390,8 +391,14 @@ export const useMyCheckins = () => {
 
 // ─── Membership Checkout Hook ──────────────────────────────────────────────
 export const useMembershipCheckoutBuy = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: MembershipCheckoutBuyPayload) => createMembershipCheckoutBuy(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+    },
   });
 };
 
@@ -402,7 +409,8 @@ export const useClientSubscriptions = () => {
     queryKey: ['client-subscriptions'],
     queryFn: getClientSubscriptions,
     enabled: !!user?.token,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 30, // 30 seconds
+    refetchOnMount: 'always',
   });
 };
 
@@ -413,7 +421,9 @@ export const useBookGymTrial = () => {
     mutationFn: (payload: BookGymTrialPayload) => bookGymTrial(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gym-trials'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
       queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
     },
   });
 };

@@ -316,10 +316,14 @@ export const searchNearbyGyms = async (params: {
 export const getGymDetail = async (id: string) => {
   try {
     const url = `${ENDPOINTS.GET_CLUB_DETAIL}/${id}`;
-    // console.log('📡 Fetching gym detail from:', url);
     const response = await apiInstance.get(url);
-    // console.log('✅ Gym detail fetched successfully for ID:', id);
-    // console.log('📋 [GYM DETAIL RESPONSE]:', JSON.stringify(response.data, null, 2));
+    console.log(`📋 [RAW GYM DETAIL RESPONSE from server for ${id}]:`, {
+      membership: response.data?.membership ?? response.data?.data?.membership,
+      membershipClubName: response.data?.membershipClubName ?? response.data?.data?.membershipClubName,
+      membershipClubDocumentId: response.data?.membershipClubDocumentId ?? response.data?.data?.membershipClubDocumentId,
+      trialDescription: response.data?.trial?.description ?? response.data?.data?.trial?.description,
+      clientTrialBooking: response.data?.trial?.clientTrialBooking ?? response.data?.data?.trial?.clientTrialBooking,
+    });
     return response.data;
   } catch (error) {
     console.error('❌ Error fetching gym detail:', error);
