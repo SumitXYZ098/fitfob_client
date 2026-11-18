@@ -34,9 +34,11 @@ import {
   BookGymTrialResponse,
   GymTrialData,
   GymTrialQuota,
+  ClientTrialItem,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
+import { storageAPI } from '@/utility/storage';
 
 export const useClientBasicDetails = () => {
   const { logOut } = useAuthStore();
@@ -154,6 +156,29 @@ export const useGetQr = () => {
       const msg = error?.response?.data?.error?.message || 'Failed to fetch QR';
       Toast.show({ type: 'error', text1: 'Error', text2: msg });
     },
+  });
+};
+
+// Auto-fetching Query hook for the client's verified QR code from /api/client-details/me/qr
+export const useClientQrCode = () => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ['client-verified-qr'],
+    queryFn: async () => {
+      const response = await getQr();
+      const qrCode = response?.data?.qrCode;
+      const clientId = response?.data?.clientId;
+      if (qrCode) {
+        await storageAPI.setItem('client_qr_code', qrCode).catch(() => {});
+      }
+      if (clientId) {
+        await storageAPI.setItem('client_id', clientId).catch(() => {});
+      }
+      return response?.data;
+    },
+    enabled: !!user?.token,
+    staleTime: 1000 * 60 * 5, // 5 minutes fresh
+    refetchOnMount: 'always',
   });
 };
 
@@ -453,6 +478,7 @@ export type {
   BookGymTrialResponse,
   GymTrialData,
   GymTrialQuota,
+  ClientTrialItem,
 };
 
 

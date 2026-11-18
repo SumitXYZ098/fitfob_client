@@ -11,13 +11,14 @@ import {
   Linking,
   Platform,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
-import { useClientGymTrials, useGetQr } from '@/hook/useClient';
+import { useClientGymTrials, useClientQrCode } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { storageAPI } from '@/utility/storage';
 import { formatGymTitle, formatPersonName } from '@/components/GymCard';
@@ -129,6 +130,28 @@ const getNextDayInfo = (baseDateStr?: string) => {
   };
 };
 
+// Helper to format check-in time / status note
+const formatCheckinNote = (info?: string | null, checkintime?: string | null) => {
+  const isoCandidate =
+    checkintime ||
+    (info && info.includes('T') ? info.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z?/)?.[0] : null);
+  if (isoCandidate) {
+    try {
+      const d = new Date(isoCandidate);
+      if (!isNaN(d.getTime())) {
+        const timeStr = d.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        return `Checked in at ${timeStr}`;
+      }
+    } catch {}
+  }
+  if (info) return info;
+  return 'Checked in at gym';
+};
+
 // Cancel reasons
 const CANCEL_REASONS = [
   'My plans changed',
@@ -141,11 +164,17 @@ export default function MyFreeTrialsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { data: gymTrialsApiData, refetch: refetchTrials } = useClientGymTrials();
-  const { data: qrData } = useGetQr();
+  const {
+    data: gymTrialsApiData,
+    isLoading: isTrialsLoading,
+    isRefetching: isTrialsRefetching,
+    refetch: refetchTrials,
+  } = useClientGymTrials();
+  const { data: qrData, isLoading: isQrLoading } = useClientQrCode();
 
   const [selectedTab, setSelectedTab] = useState<'upcoming' | 'past'>('upcoming');
   const [storedTrials, setStoredTrials] = useState<any[]>([]);
+  const [cachedQrCode, setCachedQrCode] = useState<string | null>(null);
   const [selectedQrPass, setSelectedQrPass] = useState<TrialPassItem | null>(null);
   const [selectedManagePass, setSelectedManagePass] = useState<TrialPassItem | null>(null);
 
@@ -325,10 +354,16 @@ export default function MyFreeTrialsScreen() {
     setIsCancelSuccessVisible(true);
   };
 
-  // Load booked passes from local storage
+  // Load booked passes and verified QR code from local storage
   const loadStoredTrials = useCallback(async () => {
     try {
-      const raw = await storageAPI.getItem('client_booked_trials');
+      const [raw, savedQr] = await Promise.all([
+        storageAPI.getItem('client_booked_trials'),
+        storageAPI.getItem('client_qr_code'),
+      ]);
+      if (savedQr) {
+        setCachedQrCode(savedQr);
+      }
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -353,67 +388,93 @@ export default function MyFreeTrialsScreen() {
       if (!b) return null;
       const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
       const gymName = formatGymTitle(
-        String(ownerObj?.clubName || b.gymName || b.clubName || b.title || 'Hit Fit Gym')
+        String(b.clubName || b.gymName || ownerObj?.clubName || b.title || 'Check Fit')
       );
       const rawDate = String(b.trialDate || b.rawDate || todayStr);
       const passId =
-        b.passId || `TRL-${String(b.documentId || b.id || 'PASS').slice(-4).toUpperCase()}`;
+        b.passId ||
+        (b.id
+          ? `TRL-${String(b.id).padStart(4, '0')}`
+          : `TRL-${String(b.documentId || 'PASS').slice(-4).toUpperCase()}`);
       const key = `${passId}_${rawDate}_${gymName}`;
       if (seen.has(key)) return null;
       seen.add(key);
 
       const parts = parseDateParts(rawDate, b.date);
       const isPast = rawDate < todayStr;
-      const statusRaw = String(b.trialstatus || b.status || (isPast ? 'expired' : 'booked')).toLowerCase();
+      const statusRaw = String(b.trialStatus || b.trialstatus || b.status || '').toLowerCase().trim();
 
       let badge: 'booked' | 'checked_in' | 'expired' | 'cancelled' = 'booked';
       let label = 'Booked';
-      let note = `Valid today until ${b.validUntil || '10:00 PM'}`;
+      let note = `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`;
 
-      if (statusRaw === 'checked_in' || statusRaw === 'attended') {
+      if (statusRaw === 'completed' || statusRaw === 'checked_in' || statusRaw === 'attended') {
         badge = 'checked_in';
         label = 'Checked in';
-        note = 'Checked in at gym';
-      } else if (statusRaw === 'cancelled') {
-        badge = 'cancelled';
-        label = 'Cancelled';
-        note = 'Cancelled by you';
-      } else if (isPast || statusRaw === 'expired') {
+        note = formatCheckinNote(b.info, b.checkintime);
+      } else if (
+        statusRaw === 'no-show' ||
+        statusRaw === 'no_show' ||
+        statusRaw === 'noshow' ||
+        statusRaw === 'expired'
+      ) {
         badge = 'expired';
         label = 'Expired';
-        note = 'Not visited by closing time';
+        note = b.info || 'Not visited by closing time';
+      } else if (statusRaw === 'cancelled' || statusRaw === 'canceled') {
+        badge = 'cancelled';
+        label = 'Cancelled';
+        note = b.info || 'Cancelled by you';
+      } else if (isPast) {
+        badge = 'expired';
+        label = 'Expired';
+        note = b.info || 'Not visited by closing time';
+      } else {
+        badge = 'booked';
+        label = 'Booked';
+        note = b.info || `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`;
+      }
+
+      let distanceDisplay: string | undefined = undefined;
+      if (b.distance !== null && b.distance !== undefined && b.distance !== '') {
+        distanceDisplay = `${b.distance} ${b.distanceUnit || 'km'}`.trim();
       }
 
       return {
         id: b.id || b.documentId || passId,
         passId,
         gymName,
-        gymAddress: b.gymAddress || ownerObj?.address || 'Sector 22, Mohali',
-        distance: b.distance || '1.2 km',
-        date: b.date || rawDate,
+        gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || 'Sector 91, Mohali',
+        distance: distanceDisplay,
+        date: formatPassDate(rawDate, b.date),
         rawDate,
         month: parts.month,
         day: parts.day,
-        validUntil: b.validUntil || '10:00 PM',
+        validUntil: b.closingTime || b.validUntil || '10:00 PM',
         statusNote: note,
         statusBadge: badge,
         statusBadgeLabel: label,
         guestName: b.guestName || user?.clientDetail?.name || user?.name || 'Guest',
-        qrCode: b.qrCode || qrData?.data?.qrCode,
+        qrCode: b.qrCode || qrData?.qrCode || qrData?.data?.qrCode || cachedQrCode,
         isToday: rawDate === todayStr,
       };
     };
 
-    // 1. Storage passes
+    // 1. Storage passes (user locally scheduled / cancelled)
     for (const item of storedTrials) {
       const p = normalizeItem(item);
       if (p) {
+        if (p.statusBadge === 'booked' && !p.isToday && p.rawDate && p.rawDate < todayStr) {
+          p.statusBadge = 'expired';
+          p.statusBadgeLabel = 'Expired';
+          p.statusNote = 'Not visited by closing time';
+        }
         if (p.statusBadge === 'booked') realUpcoming.push(p);
         else realPast.push(p);
       }
     }
 
-    // 2. API passes
+    // 2. API passes from /api/client/my-trials
     const apiList = Array.isArray(gymTrialsApiData)
       ? gymTrialsApiData
       : Array.isArray((gymTrialsApiData as any)?.data)
@@ -427,7 +488,13 @@ export default function MyFreeTrialsScreen() {
       }
     }
 
-    // 3. Fallbacks to guarantee the screen displays the complete mockup if user has no trials
+    // Sort upcoming ascending by date, past descending by date
+    realUpcoming.sort((a, b) => (a.rawDate || '').localeCompare(b.rawDate || ''));
+    realPast.sort((a, b) => (b.rawDate || '').localeCompare(a.rawDate || ''));
+
+    const hasAnyRealData = realUpcoming.length > 0 || realPast.length > 0;
+
+    // 3. Fallbacks to guarantee the screen displays mockup if user has zero trials
     const sampleUpcoming: TrialPassItem[] = [
       {
         id: 'sample-1',
@@ -501,10 +568,10 @@ export default function MyFreeTrialsScreen() {
     ];
 
     return {
-      upcomingPasses: realUpcoming.length > 0 ? realUpcoming : sampleUpcoming,
-      pastPasses: realPast.length > 0 ? realPast : samplePast,
+      upcomingPasses: hasAnyRealData ? realUpcoming : sampleUpcoming,
+      pastPasses: hasAnyRealData ? realPast : samplePast,
     };
-  }, [gymTrialsApiData, storedTrials, qrData?.data?.qrCode, user]);
+  }, [gymTrialsApiData, storedTrials, qrData, cachedQrCode, user]);
 
   const handleOpenDirections = (gymName: string, address?: string) => {
     const query = encodeURIComponent(`${gymName} ${address || ''}`.trim());
@@ -592,138 +659,277 @@ export default function MyFreeTrialsScreen() {
           paddingTop: 16,
           paddingBottom: insets.bottom + 28,
         }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={Boolean(isTrialsLoading || isTrialsRefetching)}
+            onRefresh={() => {
+              refetchTrials();
+            }}
+            tintColor="#F6163C"
+            colors={['#F6163C']}
+          />
+        }>
         {selectedTab === 'upcoming' ? (
           <>
-            {/* ── TODAY SECTION ── */}
+            {/* ── TODAY / UPCOMING SECTION ── */}
             <View>
               <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
                 TODAY
               </Text>
 
-              {upcomingPasses.map((pass) => (
-                <View
-                  key={pass.id}
-                  className="mb-4 overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-xs">
-                  {/* Top Card Row */}
-                  <View className="flex-row items-start">
-                    {/* Red Date Square with Gradient */}
-                    <LinearGradient
-                      colors={['#F6163C', '#FF4578']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={{
-                        width: 54,
-                        height: 54,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 4,
-                      }}>
-                      <Text
+              {upcomingPasses.length > 0 ? (
+                upcomingPasses.map((pass) => (
+                  <View
+                    key={pass.id}
+                    className="mb-4 overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-xs">
+                    {/* Top Card Row */}
+                    <View className="flex-row items-start">
+                      {/* Red Date Square with Gradient */}
+                      <LinearGradient
+                        colors={['#F6163C', '#FF4578']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                         style={{
-                          fontSize: 11,
-                          fontWeight: '800',
-                          color: '#FFFFFF',
-                          letterSpacing: 0.5,
-                          textTransform: 'uppercase',
-                          lineHeight: 14,
-                          textAlign: 'center',
+                          width: 54,
+                          height: 54,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 4,
                         }}>
-                        {pass.month}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 22,
-                          fontWeight: '900',
-                          color: '#FFFFFF',
-                          lineHeight: 24,
-                          marginTop: 2,
-                          textAlign: 'center',
-                        }}>
-                        {pass.day}
-                      </Text>
-                    </LinearGradient>
-
-                    {/* Right Content Column */}
-                    <View className="ml-3.5 flex-1 justify-center">
-                      {/* Title + Status Badge Row */}
-                      <View className="flex-row items-center justify-between">
-                        <Text className="text-[16px] font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
-                          {pass.gymName}
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: '#FFFFFF',
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            lineHeight: 14,
+                            textAlign: 'center',
+                          }}>
+                          {pass.month}
                         </Text>
-                        <View className="rounded-full bg-blue-50 border border-blue-200/80 px-2.5 py-0.5">
-                          <Text className="text-xs font-bold text-blue-600">
-                            {pass.statusBadgeLabel}
+                        <Text
+                          style={{
+                            fontSize: 22,
+                            fontWeight: '900',
+                            color: '#FFFFFF',
+                            lineHeight: 24,
+                            marginTop: 2,
+                            textAlign: 'center',
+                          }}>
+                          {pass.day}
+                        </Text>
+                      </LinearGradient>
+
+                      {/* Right Content Column */}
+                      <View className="ml-3.5 flex-1 justify-center">
+                        {/* Title + Status Badge Row */}
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-[16px] font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
+                            {pass.gymName}
                           </Text>
+                          <View className="rounded-full bg-blue-50 border border-blue-200/80 px-2.5 py-0.5">
+                            <Text className="text-xs font-bold text-blue-600">
+                              {pass.statusBadgeLabel}
+                            </Text>
+                          </View>
                         </View>
+
+                        {/* Address & Distance */}
+                        <Text className="mt-1 text-xs font-medium text-slate-400" numberOfLines={1}>
+                          {pass.gymAddress}
+                          {pass.distance ? ` · ${pass.distance}` : ''}
+                        </Text>
+
+                        {/* Validity Note */}
+                        <Text className="mt-1 text-xs font-bold text-[#F6163C]">
+                          {pass.statusNote}
+                        </Text>
                       </View>
+                    </View>
 
-                      {/* Address & Distance */}
-                      <Text className="mt-1 text-xs font-medium text-slate-400" numberOfLines={1}>
-                        {pass.gymAddress}
-                        {pass.distance ? ` · ${pass.distance}` : ''}
-                      </Text>
+                    {/* Bottom Action Buttons */}
+                    <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      {/* Show QR pass button */}
+                      <TouchableOpacity
+                        onPress={() => setSelectedQrPass(pass)}
+                        activeOpacity={0.88}
+                        style={{
+                          flex: 1,
+                          height: 48,
+                          borderRadius: 12,
+                          backgroundColor: '#E23744',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                        <Text
+                          style={{
+                            color: '#FFFFFF',
+                            fontSize: 14,
+                            fontWeight: '700',
+                          }}>
+                          Show QR pass
+                        </Text>
+                      </TouchableOpacity>
 
-                      {/* Validity Note */}
-                      <Text className="mt-1 text-xs font-bold text-[#F6163C]">
-                        {pass.statusNote}
-                      </Text>
+                      {/* Manage Trial (Three Dots) button */}
+                      <TouchableOpacity
+                        onPress={() => setSelectedManagePass(pass)}
+                        activeOpacity={0.85}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          backgroundColor: '#FFFFFF',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                        <Ionicons name="ellipsis-vertical" size={20} color="#0F172A" />
+                      </TouchableOpacity>
                     </View>
                   </View>
-
-                  {/* Bottom Action Buttons */}
-                  <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    {/* Show QR pass button */}
-                    <TouchableOpacity
-                      onPress={() => setSelectedQrPass(pass)}
-                      activeOpacity={0.88}
-                      style={{
-                        flex: 1,
-                        height: 48,
-                        borderRadius: 12,
-                        backgroundColor: '#E23744',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                      <Text
-                        style={{
-                          color: '#FFFFFF',
-                          fontSize: 14,
-                          fontWeight: '700',
-                        }}>
-                        Show QR pass
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* Manage Trial (Three Dots) button */}
-                    <TouchableOpacity
-                      onPress={() => setSelectedManagePass(pass)}
-                      activeOpacity={0.85}
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        backgroundColor: '#FFFFFF',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                      <Ionicons name="ellipsis-vertical" size={20} color="#0F172A" />
-                    </TouchableOpacity>
+                ))
+              ) : (
+                <View
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: '#F1F5F9',
+                    padding: 24,
+                    alignItems: 'center',
+                    marginBottom: 16,
+                  }}>
+                  <View
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
+                      backgroundColor: '#FEE2E2',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 10,
+                    }}>
+                    <Ionicons name="calendar-outline" size={24} color="#F6163C" />
                   </View>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
+                    No upcoming free trials
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: '#64748B',
+                      textAlign: 'center',
+                      marginTop: 4,
+                      lineHeight: 18,
+                    }}>
+                    You have no active trial booked for today. Find a gym below and start your free trial!
+                  </Text>
                 </View>
-              ))}
+              )}
             </View>
 
             {/* ── EARLIER SECTION (Displayed below TODAY matching Figma design) ── */}
-            <View className="mt-2">
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
-                EARLIER
-              </Text>
+            {pastPasses.length > 0 && (
+              <View className="mt-2">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
+                  EARLIER
+                </Text>
 
-              {pastPasses.map((pass) => (
+                {pastPasses.map((pass) => (
+                  <View
+                    key={pass.id}
+                    className="mb-3 rounded-[20px] border border-slate-100 bg-white p-4 shadow-xs">
+                    <View className="flex-row items-start">
+                      {/* Grey Date Square */}
+                      <View
+                        style={{
+                          width: 54,
+                          height: 54,
+                          borderRadius: 12,
+                          backgroundColor: '#F1F5F9',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 4,
+                        }}>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: '#94A3B8',
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            lineHeight: 14,
+                            textAlign: 'center',
+                          }}>
+                          {pass.month}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 22,
+                            fontWeight: '800',
+                            color: '#334155',
+                            lineHeight: 24,
+                            marginTop: 2,
+                            textAlign: 'center',
+                          }}>
+                          {pass.day}
+                        </Text>
+                      </View>
+
+                      {/* Right Content Column */}
+                      <View className="ml-3.5 flex-1 justify-center">
+                        {/* Title + Status Badge Row */}
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-[16px] font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
+                            {pass.gymName}
+                          </Text>
+
+                          {/* Badge aligned to the right on the top row */}
+                          {pass.statusBadge === 'checked_in' ? (
+                            <View className="rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5">
+                              <Text className="text-xs font-bold text-emerald-700">Checked in</Text>
+                            </View>
+                          ) : pass.statusBadge === 'expired' ? (
+                            <View className="rounded-full bg-amber-50 border border-amber-200/80 px-2.5 py-0.5">
+                              <Text className="text-xs font-bold text-amber-700">Expired</Text>
+                            </View>
+                          ) : (
+                            <View className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5">
+                              <Text className="text-xs font-bold text-slate-600">Cancelled</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Address */}
+                        <Text className="mt-1 text-xs font-medium text-slate-400" numberOfLines={1}>
+                          {pass.gymAddress}
+                        </Text>
+
+                        {/* Status Note */}
+                        <Text className="mt-1 text-xs font-medium text-slate-500">
+                          {pass.statusNote}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
+          <View>
+            <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
+              PAST PASSES
+            </Text>
+
+            {pastPasses.length > 0 ? (
+              pastPasses.map((pass) => (
                 <View
                   key={pass.id}
                   className="mb-3 rounded-[20px] border border-slate-100 bg-white p-4 shadow-xs">
@@ -800,93 +1006,46 @@ export default function MyFreeTrialsScreen() {
                     </View>
                   </View>
                 </View>
-              ))}
-            </View>
-          </>
-        ) : (
-          <View>
-            <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
-              EARLIER
-            </Text>
-
-            {pastPasses.map((pass) => (
+              ))
+            ) : (
               <View
-                key={pass.id}
-                className="mb-3 rounded-[20px] border border-slate-100 bg-white p-4 shadow-xs">
-                <View className="flex-row items-start">
-                  {/* Grey Date Square */}
-                  <View
-                    style={{
-                      width: 54,
-                      height: 54,
-                      borderRadius: 12,
-                      backgroundColor: '#F1F5F9',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 4,
-                    }}>
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '800',
-                        color: '#94A3B8',
-                        letterSpacing: 0.5,
-                        textTransform: 'uppercase',
-                        lineHeight: 14,
-                        textAlign: 'center',
-                      }}>
-                      {pass.month}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 22,
-                        fontWeight: '800',
-                        color: '#334155',
-                        lineHeight: 24,
-                        marginTop: 2,
-                        textAlign: 'center',
-                      }}>
-                      {pass.day}
-                    </Text>
-                  </View>
-
-                  {/* Right Content Column */}
-                  <View className="ml-3.5 flex-1 justify-center">
-                    {/* Title + Status Badge Row */}
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-[16px] font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
-                        {pass.gymName}
-                      </Text>
-
-                      {/* Badge aligned to the right on the top row */}
-                      {pass.statusBadge === 'checked_in' ? (
-                        <View className="rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5">
-                          <Text className="text-xs font-bold text-emerald-700">Checked in</Text>
-                        </View>
-                      ) : pass.statusBadge === 'expired' ? (
-                        <View className="rounded-full bg-amber-50 border border-amber-200/80 px-2.5 py-0.5">
-                          <Text className="text-xs font-bold text-amber-700">Expired</Text>
-                        </View>
-                      ) : (
-                        <View className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5">
-                          <Text className="text-xs font-bold text-slate-600">Cancelled</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Address */}
-                    <Text className="mt-1 text-xs font-medium text-slate-400" numberOfLines={1}>
-                      {pass.gymAddress}
-                    </Text>
-
-                    {/* Status Note */}
-                    <Text className="mt-1 text-xs font-medium text-slate-500">
-                      {pass.statusNote}
-                    </Text>
-                  </View>
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#F1F5F9',
+                  padding: 28,
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}>
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: '#F1F5F9',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 12,
+                  }}>
+                  <Ionicons name="time-outline" size={26} color="#64748B" />
                 </View>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>
+                  No past trials yet
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '500',
+                    color: '#64748B',
+                    textAlign: 'center',
+                    marginTop: 6,
+                    lineHeight: 19,
+                  }}>
+                  Your checked-in, expired, or cancelled trial passes will appear here.
+                </Text>
               </View>
-            ))}
+            )}
           </View>
         )}
 
@@ -1045,21 +1204,57 @@ export default function MyFreeTrialsScreen() {
                 </View>
               </View>
 
-              {/* QR Code Graphic */}
-              <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 12 }}>
-                <Image
-                  source={{
-                    uri:
-                      selectedQrPass?.qrCode ||
-                      qrData?.data?.qrCode ||
-                      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-                        selectedQrPass?.passId || 'TRL-20871'
-                      )}`,
-                  }}
-                  style={{ width: 210, height: 210 }}
-                  resizeMode="contain"
-                />
-              </View>
+              {/* QR Code Graphic (Real Verified QR Code) */}
+              {(() => {
+                const activePassQr =
+                  selectedQrPass?.qrCode ||
+                  qrData?.qrCode ||
+                  qrData?.data?.qrCode ||
+                  cachedQrCode;
+                return (
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginVertical: 12,
+                      minHeight: 210,
+                    }}>
+                    {isQrLoading && !activePassQr ? (
+                      <View style={{ alignItems: 'center', justifyContent: 'center', height: 210 }}>
+                        <ActivityIndicator size="large" color="#E23744" />
+                        <Text
+                          style={{
+                            marginTop: 10,
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: '#94A3B8',
+                          }}>
+                          Loading your QR pass...
+                        </Text>
+                      </View>
+                    ) : activePassQr ? (
+                      <Image
+                        source={{ uri: activePassQr }}
+                        style={{ width: 210, height: 210 }}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={{ alignItems: 'center', justifyContent: 'center', height: 210 }}>
+                        <Ionicons name="qr-code-outline" size={64} color="#CBD5E1" />
+                        <Text
+                          style={{
+                            marginTop: 8,
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: '#94A3B8',
+                          }}>
+                          Pass ID: {selectedQrPass?.passId || 'TRL-0014'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* Pass ID & Front Desk Subtext */}
               <View style={{ alignItems: 'center' }}>
@@ -1138,10 +1333,8 @@ export default function MyFreeTrialsScreen() {
                   paddingVertical: 8,
                   borderRadius: 24,
                 }}>
-                <Ionicons name="sunny" size={14} color="#FDE047" />
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600', marginLeft: 6 }}>
-                  Screen brightness boosted for faster scanning
-                </Text>
+               
+                  
               </View>
             </View>
           </ScrollView>
@@ -2289,14 +2482,14 @@ export default function MyFreeTrialsScreen() {
               <View style={{ alignItems: 'center', alignSelf: 'center', marginTop: 4 }}>
                 <View
                   style={{
-                    width: 260,
-                    height: 220,
+                    width: 280,
+                    height: 250,
                     backgroundColor: 'transparent',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
                   <Image
-                    source={require('@/assets/images/gym_trial_cancelled_hd_3d.png')}
+                    source={require('@/assets/images/gym_trial_cancelled_friendly_3d.jpg')}
                     style={{ width: '100%', height: '100%' }}
                     resizeMode="contain"
                   />

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,20 +6,33 @@ import {
   ScrollView,
   Image,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useGetQr } from '@/hook/useClient';
+import { useClientQrCode } from '@/hook/useClient';
+import { storageAPI } from '@/utility/storage';
 import { formatPersonName } from '@/components/GymCard';
 
 export default function TrialQrScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { data: qrData } = useGetQr();
+  const { data: qrData, isLoading: isQrLoading } = useClientQrCode();
+  const [cachedQrCode, setCachedQrCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    storageAPI
+      .getItem('client_qr_code')
+      .then((val) => {
+        if (val) setCachedQrCode(val);
+      })
+      .catch(() => {});
+  }, []);
+
   const params = useLocalSearchParams<{
     gymName?: string;
     gymAddress?: string;
@@ -65,10 +78,11 @@ export default function TrialQrScreen() {
     return '4h 18m';
   })();
 
-  const qrImageUri =
+  const realQrCode =
     params.qrCode ||
+    qrData?.qrCode ||
     qrData?.data?.qrCode ||
-    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(passId)}`;
+    cachedQrCode;
 
   const handleSaveToGallery = () => {
     Toast.show({
@@ -205,13 +219,47 @@ export default function TrialQrScreen() {
             </View>
           </View>
 
-          {/* QR Code Graphic */}
-          <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 12 }}>
-            <Image
-              source={{ uri: qrImageUri }}
-              style={{ width: 210, height: 210 }}
-              resizeMode="contain"
-            />
+          {/* QR Code Graphic (Real Verified QR Code) */}
+          <View
+            style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginVertical: 12,
+              minHeight: 210,
+            }}>
+            {isQrLoading && !realQrCode ? (
+              <View style={{ alignItems: 'center', justifyContent: 'center', height: 210 }}>
+                <ActivityIndicator size="large" color="#E23744" />
+                <Text
+                  style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    fontWeight: '600',
+                    color: '#94A3B8',
+                  }}>
+                  Loading your QR pass...
+                </Text>
+              </View>
+            ) : realQrCode ? (
+              <Image
+                source={{ uri: realQrCode }}
+                style={{ width: 210, height: 210 }}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={{ alignItems: 'center', justifyContent: 'center', height: 210 }}>
+                <Ionicons name="qr-code-outline" size={64} color="#CBD5E1" />
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    fontWeight: '600',
+                    color: '#94A3B8',
+                  }}>
+                  Pass ID: {passId}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Pass ID & Front Desk Subtext */}
@@ -289,10 +337,8 @@ export default function TrialQrScreen() {
               paddingVertical: 8,
               borderRadius: 24,
             }}>
-            <Ionicons name="sunny" size={14} color="#FDE047" />
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600', marginLeft: 6 }}>
-              Screen brightness boosted for faster scanning
-            </Text>
+           
+           
           </View>
         </View>
       </ScrollView>

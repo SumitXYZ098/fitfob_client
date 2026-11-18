@@ -274,6 +274,7 @@ export default function GymFreeTrialSection({
         gymCity,
         clubOwner: clubOwner || gymId,
         gymId,
+        qrCode: existingGymBooking.qrCode || activeQrCode || cachedQrCode,
       });
     } else {
       // If user has not booked a trial at this club, reset to null (no ghost passes)
@@ -304,6 +305,7 @@ export default function GymFreeTrialSection({
                 gymName: ownerName,
                 clubOwner: ownerDocId,
                 gymId: ownerDocId,
+                qrCode: b.qrCode || activeQrCode || cachedQrCode,
               };
             });
           await storageAPI.setItem('client_booked_trials', JSON.stringify(listToStore));
@@ -614,6 +616,12 @@ export default function GymFreeTrialSection({
       const remainingInPeriod =
         serverQuota?.trialsRemainingInPeriod ?? Math.max(0, maxInPeriod - usedInPeriod);
 
+      const realQr =
+        trialData.qrCode ||
+        activeQrCode ||
+        cachedQrCode ||
+        getQrMutation.data?.data?.qrCode;
+
       const newPass = {
         id: trialData.id,
         documentId: trialData.documentId,
@@ -623,6 +631,12 @@ export default function GymFreeTrialSection({
         validUntil: `${closingTime} (closing)`,
         guestName,
         trialstatus: trialData.trialstatus || 'booked',
+        gymName,
+        gymAddress,
+        gymCity,
+        clubOwner: targetClubOwner,
+        gymId: targetClubOwner,
+        qrCode: realQr,
         quota: {
           trialsUsedInPeriod: usedInPeriod,
           trialsRemainingInPeriod: remainingInPeriod,

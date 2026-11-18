@@ -617,14 +617,38 @@ export const bookGymTrial = async (
   }
 };
 
-// Get client's booked gym trials: GET /api/gym-trials
-export const getClientGymTrials = async () => {
+export interface ClientTrialItem {
+  id: number;
+  documentId: string;
+  clubName: string;
+  clubAddress: string;
+  latitude?: string | null;
+  longitude?: string | null;
+  trialDate: string;
+  trialStatus: string;
+  distance?: number | string | null;
+  distanceUnit?: string | null;
+  info?: string | null;
+  checkintime?: string | null;
+  closingTime?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Get client's booked gym trials: GET /api/client/my-trials
+export const getClientGymTrials = async (): Promise<ClientTrialItem[] | null> => {
   try {
-    const response = await apiInstance.get(ENDPOINTS.GYM_TRIALS);
+    const response = await apiInstance.get(ENDPOINTS.MY_TRIALS);
+    console.log('🎟️ Fetched /api/client/my-trials:', response.data);
     return response.data;
   } catch (error: any) {
-    console.warn('ℹ️ Notice fetching gym trials from /api/gym-trials:', error?.response?.data || error.message);
-    return null;
+    console.warn('ℹ️ Notice fetching gym trials from /api/client/my-trials:', error?.response?.data || error.message);
+    try {
+      const fb = await apiInstance.get(ENDPOINTS.GYM_TRIALS);
+      return fb.data;
+    } catch {
+      return null;
+    }
   }
 };
 
