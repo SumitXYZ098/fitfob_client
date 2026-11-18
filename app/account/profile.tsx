@@ -159,6 +159,17 @@ export default function ProfileScreen() {
       route: '/(tabs)/membership',
     },
     {
+      id: 'free-trials',
+      title: 'Free Trials',
+      iconName: 'ticket-outline',
+      badge: (
+        <View className="mr-2 h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-[#E23744]">
+          <Text className="font-bold text-[11px] text-white">1</Text>
+        </View>
+      ),
+      route: '/account/my-free-trials',
+    },
+    {
       id: 'transactions',
       title: 'Transaction History',
       iconName: 'document-text-outline',
