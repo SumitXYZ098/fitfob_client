@@ -878,14 +878,22 @@ export default function GymDetailScreen() {
     const trial: GymTrialInfo | null = isTrialConfigured ? rawTrial : null;
 
     const currentDocId = String(d.documentId || d._id || d.id || gymId).toLowerCase().trim();
+    const normalizeGymStr = (str?: string) =>
+      String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const currentTitleNorm = normalizeGymStr(title);
+    const membershipClubNameNorm = normalizeGymStr(membershipClubName);
+    const membershipClubDocIdNorm = membershipClubDocumentId.toLowerCase().trim();
+
     const isMemberOfThisClub = Boolean(
-      (membershipClubDocumentId &&
+      (membershipClubDocIdNorm &&
         currentDocId &&
-        (membershipClubDocumentId.toLowerCase().trim() === currentDocId ||
-          currentDocId.includes(membershipClubDocumentId.toLowerCase().trim()))) ||
-      (membershipClubName &&
-        title &&
-        membershipClubName.toLowerCase().trim() === title.toLowerCase().trim())
+        membershipClubDocIdNorm === currentDocId) ||
+      (membershipClubNameNorm &&
+        currentTitleNorm &&
+        membershipClubNameNorm === currentTitleNorm)
     );
 
     const isAlreadyMember = Boolean(
@@ -976,77 +984,111 @@ export default function GymDetailScreen() {
   }, [gym?.membershipPlans]);
 
   // ─── User Membership Status Check ──────────────────────────────────────────
-  // Backend returns "membership": true when user already holds an active membership.
-  // Backend returns "membershipClubName": string with the club where the user is enrolled.
-  // We also check useClientSubscriptions to see if user has an active membership.
-  const isAlreadyMember = Boolean(
-    gym?.isAlreadyMember ||
-    gym?.membership === true ||
-    gym?.membership === 'true' ||
-    gym?.membership === 1 ||
-    gym?.membership === '1' ||
-    Boolean(gym?.membershipClubDocumentId) ||
-    Boolean(gym?.membershipClubName) ||
-    hasActiveSubscription ||
-    (apiData as any)?.membership === true ||
-    (apiData as any)?.membership === 'true' ||
-    (apiData as any)?.data?.membership === true ||
-    (apiData as any)?.data?.membership === 'true' ||
-    Boolean((apiData as any)?.membershipClubDocumentId) ||
-    Boolean((apiData as any)?.data?.membershipClubDocumentId) ||
-    Boolean((apiData as any)?.membershipClubName) ||
-    Boolean((apiData as any)?.data?.membershipClubName) ||
-    params.initialIsMember === 'true'
-  );
-
   // Check if user holds an active membership for this specific gym:
-  // Rule: Users cannot book a free trial at a gym where they already have an active membership.
+  // Rule: A user is only considered an active member on this screen if they belong to THIS club.
   const isMemberOfThisClub = useMemo(() => {
-    const currentTitle = String(gym?.title || '').toLowerCase().trim();
-    const currentDocId = String(gym?.documentId || gym?.id || gymId).toLowerCase().trim();
-    const clubNameFromApi = String(
-      gym?.membershipClubName || (apiData as any)?.membershipClubName || ''
-    ).toLowerCase().trim();
+    const normalizeGymStr = (str?: string) =>
+      String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const currentTitleNorm = normalizeGymStr(gym?.title || params.initialTitle);
+    const currentDocId = String(gym?.documentId || gym?.id || gymId || '').toLowerCase().trim();
+
+    if (!currentTitleNorm && !currentDocId) return false;
+
+    // 1. Direct API relation by documentId (strict equality)
     const clubDocIdFromApi = String(
       gym?.membershipClubDocumentId ||
       (apiData as any)?.membershipClubDocumentId ||
       (apiData as any)?.data?.membershipClubDocumentId ||
       ''
     ).toLowerCase().trim();
-
-    if (
-      clubDocIdFromApi &&
-      currentDocId &&
-      (clubDocIdFromApi === currentDocId || currentDocId.includes(clubDocIdFromApi))
-    ) {
+    if (clubDocIdFromApi && currentDocId && clubDocIdFromApi === currentDocId) {
       return true;
     }
 
-    if (clubNameFromApi && currentTitle && clubNameFromApi === currentTitle) {
+    // 2. Direct API relation by club name (strict equality)
+    const clubNameFromApi = normalizeGymStr(
+      gym?.membershipClubName || (apiData as any)?.membershipClubName || (apiData as any)?.data?.membershipClubName || ''
+    );
+    if (clubNameFromApi && currentTitleNorm && clubNameFromApi === currentTitleNorm) {
       return true;
     }
 
+    // 3. Subscriptions query from /api/client-details/me/subscriptions
     const subscriptions = Array.isArray((subscriptionsData as any)?.data)
       ? (subscriptionsData as any).data
       : Array.isArray(subscriptionsData)
         ? subscriptionsData
         : [];
-    return subscriptions.some(
-      (s: any) =>
-        String(s.clubName || '').toLowerCase().trim() === currentTitle &&
-        ((s.membershipStatus || '').toLowerCase() === 'active' ||
-          (s.membershipStatus || '').toLowerCase() === 'paused')
-    );
+
+    return subscriptions.some((s: any) => {
+      const status = (s.membershipStatus || '').toLowerCase();
+      if (status !== 'active' && status !== 'paused') return false;
+
+      // Must strictly match THIS gym's title
+      const sClubName = normalizeGymStr(
+        s.clubName || s.gymName || s.club?.clubName || s.clubOwner?.clubName || ''
+      );
+      if (sClubName && currentTitleNorm && sClubName === currentTitleNorm) {
+        return true;
+      }
+
+      // Or strictly match THIS gym's document ID
+      const sDocId = String(
+        s.clubDocumentId ||
+        s.clubOwnerDocumentId ||
+        s.club_owner?.documentId ||
+        s.clubOwner?.documentId ||
+        s.club?.documentId ||
+        s.club_owner?.id ||
+        s.clubOwner?.id ||
+        s.club?.id ||
+        s.gymId ||
+        (typeof s.club_owner === 'string' ? s.club_owner : '') ||
+        (typeof s.clubOwner === 'string' ? s.clubOwner : '') ||
+        ''
+      ).toLowerCase().trim();
+      if (sDocId && currentDocId && sDocId === currentDocId) {
+        return true;
+      }
+
+      return false;
+    });
   }, [
     gym?.title,
     gym?.documentId,
     gym?.id,
+    params.initialTitle,
     gymId,
     gym?.membershipClubName,
     gym?.membershipClubDocumentId,
     apiData,
     subscriptionsData,
   ]);
+
+  // A user is already a member if they hold any active subscription or API reports active membership
+  const isAlreadyMember = Boolean(
+    hasActiveSubscription ||
+    isMemberOfThisClub ||
+    gym?.isAlreadyMember ||
+    gym?.membership === true ||
+    gym?.membership === 'true' ||
+    gym?.membership === 1 ||
+    gym?.membership === '1' ||
+    (apiData as any)?.membership === true ||
+    (apiData as any)?.membership === 'true' ||
+    (apiData as any)?.data?.membership === true ||
+    (apiData as any)?.data?.membership === 'true' ||
+    Boolean(gym?.membershipClubName) ||
+    Boolean((apiData as any)?.membershipClubName) ||
+    Boolean((apiData as any)?.data?.membershipClubName) ||
+    Boolean(gym?.membershipClubDocumentId) ||
+    Boolean((apiData as any)?.membershipClubDocumentId) ||
+    Boolean((apiData as any)?.data?.membershipClubDocumentId) ||
+    params.initialIsMember === 'true'
+  );
 
   // Resolve user's active/paused subscription details (clubName, plan, dates)
   const activeSubscription = useMemo<ActiveMembershipInfo | null>(() => {
@@ -1056,34 +1098,50 @@ export default function GymDetailScreen() {
         ? subscriptionsData
         : [];
 
-    const currentTitle = String(gym?.title || '').toLowerCase().trim();
-    const clubFromApi = String(
-      gym?.membershipClubName || (apiData as any)?.membershipClubName || ''
-    ).toLowerCase().trim();
+    const normalizeGymStr = (str?: string) =>
+      String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
 
-    // 1. Check if user has an active/paused subscription matching this gym's title
-    if (currentTitle) {
-      const matchThisGym = rawList.find(
-        (s: any) =>
-          String(s.clubName || '').toLowerCase().trim() === currentTitle &&
-          ((s.membershipStatus || '').toLowerCase() === 'active' ||
-            (s.membershipStatus || '').toLowerCase() === 'paused')
+    const currentTitleNorm = normalizeGymStr(gym?.title || params.initialTitle);
+    const currentDocId = String(gym?.documentId || gym?.id || gymId || '').toLowerCase().trim();
+
+    // 1. First priority: Subscription strictly matching THIS gym
+    const matchThisGym = rawList.find((s: any) => {
+      const status = (s.membershipStatus || '').toLowerCase();
+      if (status !== 'active' && status !== 'paused') return false;
+
+      const sClubName = normalizeGymStr(
+        s.clubName || s.gymName || s.club?.clubName || s.clubOwner?.clubName || ''
       );
-      if (matchThisGym) return matchThisGym;
-    }
+      if (sClubName && currentTitleNorm && sClubName === currentTitleNorm) {
+        return true;
+      }
 
-    // 2. Check if user has an active/paused subscription matching the API clubName
-    if (clubFromApi) {
-      const matchApiClub = rawList.find(
-        (s: any) =>
-          String(s.clubName || '').toLowerCase().trim() === clubFromApi &&
-          ((s.membershipStatus || '').toLowerCase() === 'active' ||
-            (s.membershipStatus || '').toLowerCase() === 'paused')
-      );
-      if (matchApiClub) return matchApiClub;
-    }
+      const sDocId = String(
+        s.clubDocumentId ||
+        s.clubOwnerDocumentId ||
+        s.club_owner?.documentId ||
+        s.clubOwner?.documentId ||
+        s.club?.documentId ||
+        s.club_owner?.id ||
+        s.clubOwner?.id ||
+        s.club?.id ||
+        s.gymId ||
+        (typeof s.club_owner === 'string' ? s.club_owner : '') ||
+        (typeof s.clubOwner === 'string' ? s.clubOwner : '') ||
+        ''
+      ).toLowerCase().trim();
+      if (sDocId && currentDocId && sDocId === currentDocId) {
+        return true;
+      }
 
-    // 3. Fallback: Any active/paused subscription the user holds
+      return false;
+    });
+
+    if (matchThisGym) return matchThisGym;
+
+    // 2. Second priority: Any active/paused subscription the user holds on FitFob
     const anyActive = rawList.find(
       (s: any) =>
         (s.membershipStatus || '').toLowerCase() === 'active' ||
@@ -1091,16 +1149,27 @@ export default function GymDetailScreen() {
     );
     if (anyActive) return anyActive;
 
-    // 4. Fallback if user is flagged as member but subscription list query hasn't returned yet
-    if (isAlreadyMember) {
+    // 3. Fallback from API membershipClubName if subscription query hasn't resolved yet
+    const apiClub = gym?.membershipClubName || (apiData as any)?.membershipClubName || (apiData as any)?.data?.membershipClubName;
+    if (apiClub || isMemberOfThisClub) {
       return {
-        clubName: gym?.membershipClubName || (isMemberOfThisClub ? gym?.title : undefined),
+        clubName: apiClub || gym?.title,
         membershipStatus: 'active',
       };
     }
 
     return null;
-  }, [subscriptionsData, gym?.title, gym?.membershipClubName, apiData, isAlreadyMember, isMemberOfThisClub]);
+  }, [
+    subscriptionsData,
+    gym?.title,
+    params.initialTitle,
+    gym?.documentId,
+    gym?.id,
+    gymId,
+    gym?.membershipClubName,
+    apiData,
+    isMemberOfThisClub,
+  ]);
 
   useEffect(() => {
     console.log('🔍 [GYM MEMBERSHIP & TRIAL STATUS]:', {
@@ -2082,7 +2151,7 @@ export default function GymDetailScreen() {
                 </Text>
               </View>
               <Text className="font-extrabold text-[13px] text-slate-900 leading-tight" numberOfLines={1}>
-                {activeSubscription?.clubName || gym.membershipClubName || gym.title}
+                {activeSubscription?.clubName || gym.title}
               </Text>
               {activeSubscription?.plan ? (
                 <Text className="text-[11px] font-semibold text-slate-500" numberOfLines={1}>

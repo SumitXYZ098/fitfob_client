@@ -4,9 +4,12 @@ import {
   Text,
   TouchableOpacity,
   Animated,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 
 export interface ClubMembershipPlan {
   id?: string | number;
@@ -235,8 +238,7 @@ export default function GymMembershipPlansSection({
   }
 
   const maxDuration = Math.max(...membershipPlans.map((p) => p.monthDuration));
-  const activeGymName =
-    activeSubscription?.clubName || membershipClubName || (isMemberOfThisClub ? gymTitle : '');
+  const activeGymName = activeSubscription?.clubName || membershipClubName || (isMemberOfThisClub ? gymTitle : '');
   const activePlanFormatted = formatPlanName(activeSubscription?.plan);
   const activeEndDateFormatted = formatMembershipDate(activeSubscription?.endDate);
 
@@ -266,27 +268,67 @@ export default function GymMembershipPlansSection({
           </View>
           <Text className="mt-0.5 text-xs text-slate-500 font-medium">
             {isAlreadyMember
-              ? !isMemberOfThisClub && activeGymName
-                ? `You already have an active membership at ${activeGymName}`
-                : `You already have an active membership for ${gymTitle}`
+              ? isMemberOfThisClub
+                ? `You already have an active membership for ${gymTitle}`
+                : `You already have an active membership at ${activeGymName || 'another club'}`
               : `Official club pricing for ${gymTitle}`}
           </Text>
         </View>
       </View>
 
-      {/* ─── Active Membership Status Card (Displayed when user holds active membership) ──── */}
-      {isAlreadyMember && (
-        <View className="mb-4 overflow-hidden rounded-[22px] bg-slate-900 p-4 border border-slate-800 shadow-sm">
+      {/* ─── Active Membership Status Card (Displayed ONLY on the gym where user bought the plan) ──── */}
+      {isAlreadyMember && isMemberOfThisClub && (
+        <View
+          style={{
+            borderRadius: 22,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.25)',
+            position: 'relative',
+          }}
+          className="mt-3.5 mb-5 p-4 shadow-sm">
+          {/* Background Red Gradient */}
+          <LinearGradient
+            colors={['#E23744', '#C92030', '#8F101D']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Decorative Translucent Wave Patterns */}
+          <Svg
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 180,
+              height: '100%',
+            }}
+            viewBox="0 0 180 160"
+            preserveAspectRatio="none"
+            pointerEvents="none">
+            <Path
+              d="M 40,0 C 100,35 50,100 180,120 L 180,0 Z"
+              fill="rgba(255, 255, 255, 0.08)"
+            />
+            <Path
+              d="M 80,0 C 135,50 85,115 180,150 L 180,0 Z"
+              fill="rgba(255, 255, 255, 0.12)"
+            />
+          </Svg>
+
           {/* Top Row: Tag + Status badge */}
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 border border-emerald-500/30">
-              <Ionicons name="shield-checkmark" size={13} color="#10B981" />
-              <Text className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-                {isMemberOfThisClub ? 'CURRENT CLUB MEMBERSHIP' : 'ACTIVE AT ANOTHER CLUB'}
+            <View className="flex-row items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 border border-white/30">
+              <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
+              <Text className="text-[10px] font-black uppercase tracking-wider text-white">
+                CURRENT CLUB MEMBERSHIP
               </Text>
             </View>
-            <View className="rounded-full bg-white/10 px-2.5 py-0.5">
-              <Text className="text-[10px] font-bold text-white/90">
+            <View className="flex-row items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 shadow-xs">
+              <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <Text className="text-[10px] font-extrabold text-[#E23744]">
                 {activeSubscription?.membershipStatus
                   ? String(activeSubscription.membershipStatus).toUpperCase()
                   : 'ACTIVE'}
@@ -296,18 +338,18 @@ export default function GymMembershipPlansSection({
 
           {/* Enrolled Gym Name */}
           <View className="mt-3">
-            <Text className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-white/80">
               Enrolled Gym
             </Text>
             <Text className="font-extrabold text-[18px] text-white tracking-tight mt-0.5">
-              {activeGymName || gymTitle}
+              {gymTitle}
             </Text>
           </View>
 
           {/* Plan Name & Validity */}
-          <View className="mt-2.5 flex-row items-center justify-between rounded-xl bg-white/5 px-3.5 py-2.5 border border-white/10">
+          <View className="mt-2.5 flex-row items-center justify-between rounded-xl bg-white/15 px-3.5 py-2.5 border border-white/20">
             <View className="flex-1 pr-2">
-              <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/80">
                 Purchased Plan
               </Text>
               <Text className="font-bold text-sm text-white mt-0.5">
@@ -316,10 +358,10 @@ export default function GymMembershipPlansSection({
             </View>
             {activeEndDateFormatted ? (
               <View className="items-end">
-                <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/80">
                   Valid Until
                 </Text>
-                <Text className="font-semibold text-xs text-emerald-400 mt-0.5">
+                <Text className="font-bold text-xs text-white mt-0.5">
                   {activeEndDateFormatted}
                 </Text>
               </View>
@@ -327,20 +369,20 @@ export default function GymMembershipPlansSection({
           </View>
 
           {/* Informational Message */}
-          <Text className="mt-2.5 text-xs text-slate-300 font-medium leading-relaxed">
-            {isMemberOfThisClub
-              ? `You have unlimited access to ${gymTitle} under your active ${activePlanFormatted}. New plan purchases are paused while active.`
-              : `You are enrolled at ${activeGymName}. Fitfob allows one active gym membership at a time.`}
+          <Text className="mt-2.5 text-xs text-white/90 font-medium leading-relaxed">
+            {`You have unlimited access to ${gymTitle} under your active ${activePlanFormatted}. New plan purchases are paused while active.`}
           </Text>
 
-          {/* Action button */}
+          {/* Action button: White pill with FitFob red text */}
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/membership' as any)}
-            activeOpacity={0.85}
-            className="mt-3 flex-row items-center justify-center gap-1.5 rounded-xl bg-[#E23744] py-2.5 shadow-sm">
-            <Ionicons name="card-outline" size={15} color="#FFFFFF" />
-            <Text className="font-bold text-xs text-white">View Membership Pass in Wallet</Text>
-            <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+            activeOpacity={0.88}
+            className="mt-3 flex-row items-center justify-center gap-1.5 rounded-xl bg-white py-2.5 shadow-sm">
+            <Ionicons name="card" size={15} color="#E23744" />
+            <Text className="font-extrabold text-xs text-[#E23744]">
+              View Membership Pass in Wallet
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color="#E23744" />
           </TouchableOpacity>
         </View>
       )}
@@ -444,7 +486,7 @@ export default function GymMembershipPlansSection({
                       ) : isAlreadyMember ? (
                         <View className="rounded-full bg-slate-200/80 px-2 py-0.5 border border-slate-300">
                           <Text className="text-[10px] font-bold text-slate-600">
-                            Disabled
+                            {isMemberOfThisClub ? 'Current Member' : 'Disabled'}
                           </Text>
                         </View>
                       ) : isBestValue ? (
