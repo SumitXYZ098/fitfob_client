@@ -6,6 +6,7 @@ import { Container } from '@/components/modules/Container';
 import { Button } from '@/components/modules/Button';
 import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserStep } from '@/api/clientApi';
+import { formatPersonName } from '@/components/GymCard';
 
 export default function Congratulations() {
   const router = useRouter();
@@ -72,13 +73,14 @@ export default function Congratulations() {
     router.replace('/(tabs)');
   };
 
-  const displayName =
+  const displayName = formatPersonName(
     user?.clientDetail?.name ||
-    user?.name ||
-    user?.fullName ||
-    (user?.username && !user.username.includes('phone.user') && !user.username.startsWith('+')
-      ? user.username
-      : '');
+      user?.name ||
+      user?.fullName ||
+      (user?.username && !user.username.includes('phone.user') && !user.username.startsWith('+')
+        ? user.username
+        : '')
+  );
 
   return (
     <Container>

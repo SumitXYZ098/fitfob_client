@@ -75,6 +75,21 @@ export const formatGymTitle = (rawName?: string): string => {
   );
 };
 
+/**
+ * Ensures the first letter of each word in a person's name is capitalized,
+ * e.g. "shweta rana" -> "Shweta Rana".
+ */
+export const formatPersonName = (rawName?: string): string => {
+  if (!rawName) return '';
+  const str = String(rawName).trim();
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .replace(/(?:^|[\s\-/.()\[\]])([a-z])/g, (match, letter) =>
+      match.replace(letter, letter.toUpperCase())
+    );
+};
+
 // ─── Holiday Calculation Helper ─────────────────────────────────────────────
 export const getHolidayInfo = (holidays?: HolidayItem[]): HolidayInfo | null => {
   if (!Array.isArray(holidays) || holidays.length === 0) return null;

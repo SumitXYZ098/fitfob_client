@@ -18,7 +18,7 @@ import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useBookGymTrial, useGetQr, type GymTrialQuota } from '@/hook/useClient';
 import { storageAPI } from '@/utility/storage';
-import { formatGymTitle } from '@/components/GymCard';
+import { formatGymTitle, formatPersonName } from '@/components/GymCard';
 
 export interface GymTrialSlotInfo {
   totalBooked?: number;
@@ -216,7 +216,7 @@ export default function GymFreeTrialSection({
   };
 
   const guestName = useMemo(() => {
-    return user?.name || user?.username || 'Hardeep Singh';
+    return formatPersonName(user?.clientDetail?.name || user?.name || user?.username || 'Hardeep Singh');
   }, [user]);
 
   // Find if user already booked a trial at this gym from backend clientTrialBooking

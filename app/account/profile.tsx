@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, ImageBackground, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,8 +6,9 @@ import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
 import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserStep } from '@/api/clientApi';
-import { useGetFavorites } from '@/hook/useClient';
+import { useGetFavorites, useClientSubscriptions } from '@/hook/useClient';
 import { useQueryClient } from '@tanstack/react-query';
+import { formatGymTitle, formatPersonName } from '@/components/GymCard';
 
 interface MenuItem {
   id: string;
@@ -22,6 +23,7 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const { user, setUser, logOut } = useAuthStore();
   const { data: favData } = useGetFavorites();
+  const { data: subscriptionsData } = useClientSubscriptions();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const favList = Array.isArray(favData)
@@ -32,6 +34,57 @@ export default function ProfileScreen() {
         ? favData.favorites
         : [];
   const favCount = favList.length;
+
+  const subscriptions = useMemo(() => {
+    if (!subscriptionsData) return [];
+    if (Array.isArray(subscriptionsData?.data)) return subscriptionsData.data;
+    if (Array.isArray(subscriptionsData)) return subscriptionsData;
+    return [];
+  }, [subscriptionsData]);
+
+  const activeSubscription = useMemo(() => {
+    const active = subscriptions.find(
+      (s: any) => (s.membershipStatus || '').toLowerCase() === 'active'
+    );
+    if (active) return active;
+
+    const paused = subscriptions.find(
+      (s: any) => (s.membershipStatus || '').toLowerCase() === 'paused'
+    );
+    if (paused) return paused;
+
+    return subscriptions[0] || null;
+  }, [subscriptions]);
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatPlanName = (plan?: string) => {
+    if (!plan) return 'Membership Plan';
+    const clean = plan.toLowerCase().replace(/_/g, ' ').trim();
+    if (clean === 'twelve months' || clean === '12 months' || clean === 'annual') return '12 Months Plan';
+    if (clean === 'six months' || clean === '6 months') return '6 Months Plan';
+    if (clean === 'three months' || clean === '3 months') return '3 Months Plan';
+    if (clean === 'monthly' || clean === '1 month' || clean === 'one month') return 'Monthly Plan';
+    return (
+      clean
+        .split(' ')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ') + (clean.endsWith('plan') ? '' : ' Plan')
+    );
+  };
 
   useEffect(() => {
     const fetchLatestProfile = async () => {
@@ -226,14 +279,16 @@ export default function ProfileScreen() {
                 <View className="ml-3 flex-1 justify-center">
                   <View className="flex-row items-center">
                     <Text className="font-bold text-xl text-white">
-                      {user?.clientDetail?.name ||
-                        user?.name ||
-                        user?.fullName ||
-                        (user?.username &&
-                        !user.username.includes('phone.user') &&
-                        !user.username.startsWith('+')
-                          ? user.username
-                          : 'Member')}
+                      {formatPersonName(
+                        user?.clientDetail?.name ||
+                          user?.name ||
+                          user?.fullName ||
+                          (user?.username &&
+                          !user.username.includes('phone.user') &&
+                          !user.username.startsWith('+')
+                            ? user.username
+                            : 'Member')
+                      )}
                     </Text>
                     <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" className="ml-1.5" />
                   </View>
@@ -247,18 +302,40 @@ export default function ProfileScreen() {
               <View className="my-4 h-[1px] w-full bg-white/20" />
 
               {/* Bottom Pass Status Row */}
-              <View className="flex-row items-center justify-between">
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/membership')}
+                activeOpacity={0.85}
+                className="flex-row items-center justify-between">
                 <View className="flex-1 pr-2">
-                  <Text className="font-bold text-base text-white">Outdoor pass</Text>
-                  <Text className="mt-1 font-medium text-xs leading-tight text-white/80">
-                    24–day unlimited access(Fair Usage Limit: 8 visits left)
+                  <Text className="font-bold text-base text-white" numberOfLines={1}>
+                    {activeSubscription?.clubName
+                      ? formatGymTitle(activeSubscription.clubName)
+                      : activeSubscription?.plan
+                      ? formatPlanName(activeSubscription.plan)
+                      : 'No Active Membership'}
+                  </Text>
+                  <Text className="mt-1 font-medium text-xs leading-tight text-white/80" numberOfLines={2}>
+                    {activeSubscription
+                      ? `${formatPlanName(activeSubscription.plan)}${
+                          activeSubscription.endDate
+                            ? ` • Valid until ${formatDate(activeSubscription.endDate)}`
+                            : ' • Unlimited Access'
+                        }`
+                      : 'Explore clubs and get unlimited gym access'}
                   </Text>
                 </View>
 
-                <View className="rounded-full bg-white px-4 py-2 shadow-sm">
-                  <Text className="font-semibold text-xs text-slate-700">Subscribed</Text>
+                <View className="rounded-full bg-white px-3.5 py-1.5 shadow-sm">
+                  <Text className="font-semibold text-xs text-slate-700">
+                    {activeSubscription
+                      ? (activeSubscription.membershipStatus
+                          ? activeSubscription.membershipStatus.charAt(0).toUpperCase() +
+                            activeSubscription.membershipStatus.slice(1).toLowerCase()
+                          : 'Subscribed')
+                      : 'Explore'}
+                  </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             </ImageBackground>
           </View>
 
