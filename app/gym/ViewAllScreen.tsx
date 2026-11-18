@@ -20,6 +20,7 @@ import CategoryPillItem, { CATEGORIES } from '@/components/CategoryPillItem';
 import { useNearbyGyms, useGetFavorites, extractFavoriteIds } from '@/hook/useClient';
 import GymCard, {
   formatPlanNameAndDuration,
+  formatGymTitle,
   GymCardSkeleton,
   GymItem,
   HolidayItem,
@@ -157,7 +158,7 @@ const extractStringList = (val: any): string[] => {
 const mapClubOwnerToGym = (item: any): GymItem => {
   const data = item?.attributes ? { id: item.id, ...item.attributes } : item || {};
 
-  const title =
+  const rawTitle =
     data.clubName ||
     data.businessName ||
     data.gymName ||
@@ -165,6 +166,7 @@ const mapClubOwnerToGym = (item: any): GymItem => {
     data.title ||
     data.club_name ||
     'Fitness Club';
+  const title = formatGymTitle(rawTitle);
 
   const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
   const rating =

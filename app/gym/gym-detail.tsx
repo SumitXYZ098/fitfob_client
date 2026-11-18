@@ -35,7 +35,7 @@ import GymMembershipPlansSection, {
   formatPlanName,
 } from '@/components/modules/GymMembershipPlansSection';
 import GymWhereYouWillBeSection from '@/components/modules/GymWhereYouWillBeSection';
-import { formatPlanNameAndDuration } from '@/components/GymCard';
+import { formatPlanNameAndDuration, formatGymTitle } from '@/components/GymCard';
 import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds, useClientSubscriptions } from '@/hook/useClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -520,12 +520,13 @@ export default function GymDetailScreen() {
     if (!d || typeof d !== 'object') {
       if (initialPhotos.length > 0 || params.initialTitle || cachedFromNearby) {
         const sourceData = cachedFromNearby || {};
-        const title =
+        const rawTitle =
           params.initialTitle ||
           sourceData.clubName ||
           sourceData.businessName ||
           sourceData.title ||
           '';
+        const title = formatGymTitle(rawTitle);
         const address =
           params.initialAddress ||
           sourceData.address ||
@@ -723,7 +724,8 @@ export default function GymDetailScreen() {
     const rawFacilities = extractList(d.facilities || d.facility);
     const rawAmenitiesList = extractList(d.amenities);
 
-    const title = d.clubName || d.businessName || d.gymName || d.name || d.title || '';
+    const rawTitle = d.clubName || d.businessName || d.gymName || d.name || d.title || '';
+    const title = formatGymTitle(rawTitle);
     let category = '';
     if (rawCategories.length > 0) category = rawCategories[0];
     else if (rawServices.length > 0) category = rawServices[0];

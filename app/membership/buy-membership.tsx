@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { formatPlanNameAndDuration } from '@/components/GymCard';
+import { formatPlanNameAndDuration, formatGymTitle } from '@/components/GymCard';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
 
@@ -74,7 +74,7 @@ export default function BuyMembershipScreen() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
 
-  const gymName = (params.gymName as string) || 'Anytime Fitness Gym';
+  const gymName = formatGymTitle((params.gymName as string) || 'Anytime Fitness Gym');
 
   // Parse dynamic club plans if passed from Gym Detail screen
   const clubPlans: ClubMembershipPlan[] = useMemo(() => {

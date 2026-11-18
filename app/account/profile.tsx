@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, ImageBackground } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Image, ImageBackground, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -22,6 +22,7 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const { user, setUser, logOut } = useAuthStore();
   const { data: favData } = useGetFavorites();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const favList = Array.isArray(favData)
     ? favData
@@ -80,6 +81,8 @@ export default function ProfileScreen() {
   const displayContact = isDummyPhoneEmail ? userPhone : user?.email || userPhone || '';
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       await logOut();
       queryClient.clear();
@@ -91,6 +94,7 @@ export default function ProfileScreen() {
       router.replace('/welcome');
     } catch (error) {
       console.error('Logout error:', error);
+      setIsLoggingOut(false);
     }
   };
 
@@ -188,106 +192,119 @@ export default function ProfileScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* 2. Top Profile Card */}
-        <View className="my-4 overflow-hidden rounded-[28px] shadow-lg">
-          <ImageBackground
-            source={require('../../assets/images/Bg.png')}
-            resizeMode="cover"
-            className="p-5">
-            {/* User Info Row */}
-            <View className="flex-row items-center space-x-3.5">
-              {/* Avatar with Edit Badge */}
-              <View className="relative">
-                <View className="h-16 w-16 overflow-hidden rounded-full border-2 border-white">
-                  <Image
-                    source={
-                      user?.clientDetail?.selfieUrl
-                        ? { uri: user.clientDetail.selfieUrl }
-                        : require('../../assets/images/male.png')
-                    }
-                    className="h-full w-full"
-                    resizeMode="cover"
-                  />
-                </View>
-                {/* <TouchableOpacity
-                  activeOpacity={0.8}
-                  className="absolute bottom-0 right-0 h-6 w-6 items-center justify-center rounded-full border border-[#FFEAEF] bg-white shadow-sm">
-                  <Ionicons name="pencil" size={12} color="#F6163C" />
-                </TouchableOpacity> */}
-              </View>
-
-              {/* Name & Email / Phone */}
-              <View className="ml-3 flex-1 justify-center">
-                <View className="flex-row items-center">
-                  <Text className="font-bold text-xl text-white">
-                    {user?.clientDetail?.name ||
-                      user?.name ||
-                      user?.fullName ||
-                      (user?.username &&
-                      !user.username.includes('phone.user') &&
-                      !user.username.startsWith('+')
-                        ? user.username
-                        : 'Member')}
-                  </Text>
-                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" className="ml-1.5" />
-                </View>
-                <Text className="font-regular mt-0.5 text-xs text-white/80">
-                  {displayContact}
-                </Text>
-              </View>
-            </View>
-
-            {/* Divider Line */}
-            <View className="my-4 h-[1px] w-full bg-white/20" />
-
-            {/* Bottom Pass Status Row */}
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-2">
-                <Text className="font-bold text-base text-white">Outdoor pass</Text>
-                <Text className="mt-1 font-medium text-xs leading-tight text-white/80">
-                  24–day unlimited access(Fair Usage Limit: 8 visits left)
-                </Text>
-              </View>
-
-              <View className="rounded-full bg-white px-4 py-2 shadow-sm">
-                <Text className="font-semibold text-xs text-slate-700">Subscribed</Text>
-              </View>
-            </View>
-          </ImageBackground>
-        </View>
-
-        {/* 3. Menu Items List */}
-        <View className="mt-2 space-y-1">
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.7}
-              onPress={() => handleItemPress(item)}
-              className="flex-row items-center justify-between border-b border-slate-100 px-1 py-3.5">
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'space-between',
+          paddingBottom: 16,
+        }}>
+        {/* Top Content: Profile Card & Menu Items */}
+        <View>
+          {/* 2. Top Profile Card */}
+          <View className="my-4 overflow-hidden rounded-[28px] shadow-lg">
+            <ImageBackground
+              source={require('../../assets/images/Bg.png')}
+              resizeMode="cover"
+              className="p-5">
+              {/* User Info Row */}
               <View className="flex-row items-center space-x-3.5">
-                <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#FFEAEF]">
-                  <Ionicons name={item.iconName} size={20} color="#F6163C" />
+                {/* Avatar with Edit Badge */}
+                <View className="relative">
+                  <View className="h-16 w-16 overflow-hidden rounded-full border-2 border-white">
+                    <Image
+                      source={
+                        user?.clientDetail?.selfieUrl
+                          ? { uri: user.clientDetail.selfieUrl }
+                          : require('../../assets/images/male.png')
+                      }
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
+                  </View>
                 </View>
-                <Text className="ml-3 font-semibold text-base text-slate-800">{item.title}</Text>
+
+                {/* Name & Email / Phone */}
+                <View className="ml-3 flex-1 justify-center">
+                  <View className="flex-row items-center">
+                    <Text className="font-bold text-xl text-white">
+                      {user?.clientDetail?.name ||
+                        user?.name ||
+                        user?.fullName ||
+                        (user?.username &&
+                        !user.username.includes('phone.user') &&
+                        !user.username.startsWith('+')
+                          ? user.username
+                          : 'Member')}
+                    </Text>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" className="ml-1.5" />
+                  </View>
+                  <Text className="font-regular mt-0.5 text-xs text-white/80">
+                    {displayContact}
+                  </Text>
+                </View>
               </View>
 
-              <View className="flex-row items-center">
-                {item.badge}
-                <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+              {/* Divider Line */}
+              <View className="my-4 h-[1px] w-full bg-white/20" />
+
+              {/* Bottom Pass Status Row */}
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-2">
+                  <Text className="font-bold text-base text-white">Outdoor pass</Text>
+                  <Text className="mt-1 font-medium text-xs leading-tight text-white/80">
+                    24–day unlimited access(Fair Usage Limit: 8 visits left)
+                  </Text>
+                </View>
+
+                <View className="rounded-full bg-white px-4 py-2 shadow-sm">
+                  <Text className="font-semibold text-xs text-slate-700">Subscribed</Text>
+                </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            </ImageBackground>
+          </View>
+
+          {/* 3. Menu Items List */}
+          <View className="mt-2 space-y-1">
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.7}
+                onPress={() => handleItemPress(item)}
+                className="flex-row items-center justify-between border-b border-slate-100 px-1 py-3.5">
+                <View className="flex-row items-center space-x-3.5">
+                  <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#FFEAEF]">
+                    <Ionicons name={item.iconName} size={20} color="#F6163C" />
+                  </View>
+                  <Text className="ml-3 font-semibold text-base text-slate-800">{item.title}</Text>
+                </View>
+
+                <View className="flex-row items-center">
+                  {item.badge}
+                  <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
-        {/* 4. Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogout}
-          activeOpacity={0.8}
-          className="mb-6 mt-8 flex-row items-center justify-center rounded-2xl border border-slate-100 bg-[#F8FAFC] py-4">
-          <Ionicons name="log-out-outline" size={20} color="#64748B" />
-          <Text className="ml-2 font-bold text-base text-[#64748B]">Logout</Text>
-        </TouchableOpacity>
+        {/* 4. Logout Button (Anchored to the very bottom of the screen) */}
+        <View className="pt-6 pb-2">
+          <TouchableOpacity
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+            activeOpacity={0.8}
+            className={`flex-row items-center justify-center rounded-2xl border border-slate-100 bg-[#F8FAFC] py-4 ${
+              isLoggingOut ? 'opacity-60' : ''
+            }`}>
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color="#64748B" />
+            ) : (
+              <>
+                <Ionicons name="log-out-outline" size={20} color="#64748B" />
+                <Text className="ml-2 font-bold text-base text-[#64748B]">Logout</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </Container>
   );

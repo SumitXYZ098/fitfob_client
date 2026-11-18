@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGymDetail } from '@/hook/useClient';
 import GradientDivider from '@/components/GradientDivider';
+import { formatGymTitle } from '@/components/GymCard';
 
 interface ReviewItem {
   id: string;
@@ -197,7 +198,8 @@ export default function ReviewsScreen() {
   const gym = useMemo(() => {
     const raw = apiData?.data ?? apiData;
     const d = raw?.attributes ? { id: raw.id, ...raw.attributes } : raw;
-    const title = d?.clubName || d?.businessName || d?.gymName || d?.name || d?.title || 'Fitness Club';
+    const rawTitle = d?.clubName || d?.businessName || d?.gymName || d?.name || d?.title || 'Fitness Club';
+    const title = formatGymTitle(rawTitle);
     const rating = String(d?.rating || d?.avgRating || '5.0');
     const totalReviews = d?.totalReviews || d?.reviewCount || 0;
     const ratingBreakdown: { star: number; pct: string }[] = Array.isArray(d?.ratingBreakdown)

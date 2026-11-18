@@ -61,6 +61,20 @@ export interface HolidayInfo {
   dateStr?: string;
 }
 
+// ─── Gym Title Capitalization Helper ─────────────────────────────────────────
+/**
+ * Ensures the first letter of each word in a gym name is always capitalized,
+ * preserving uppercase acronyms (e.g. "MMA", "HIIT", "VIP", "24/7") and handling hyphens/parentheses.
+ */
+export const formatGymTitle = (rawName?: string): string => {
+  if (!rawName) return '';
+  const str = String(rawName).trim();
+  if (!str) return '';
+  return str.replace(/(?:^|[\s\-/.()\[\]])([a-z])/g, (match, letter) =>
+    match.replace(letter, letter.toUpperCase())
+  );
+};
+
 // ─── Holiday Calculation Helper ─────────────────────────────────────────────
 export const getHolidayInfo = (holidays?: HolidayItem[]): HolidayInfo | null => {
   if (!Array.isArray(holidays) || holidays.length === 0) return null;
@@ -491,7 +505,7 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
   const clubData = item.club || item.clubOwner || item.gym || item;
   const data = clubData?.attributes ? { id: clubData.id, ...clubData.attributes } : clubData;
 
-  const title =
+  const rawTitle =
     data.clubName ||
     data.businessName ||
     data.gymName ||
@@ -499,6 +513,7 @@ export const mapClubOwnerToGym = (item: any): GymItem => {
     data.title ||
     data.club_name ||
     'Fitness Club';
+  const title = formatGymTitle(rawTitle);
 
   const ratingVal = data.rating || data.avgRating || data.reviewsRating || 4.5;
   const rating =
@@ -804,7 +819,7 @@ const GymCard = React.memo(function GymCard({
         params: {
           id: gym.id,
           initialImages: gym.images && gym.images.length > 0 ? JSON.stringify(gym.images) : undefined,
-          initialTitle: gym.title || '',
+          initialTitle: formatGymTitle(gym.title) || '',
           initialAddress: gym.address || '',
           initialCategory: gym.category || '',
           initialRating: gym.rating || '',
@@ -932,7 +947,7 @@ const GymCard = React.memo(function GymCard({
         {/* Title & Rating */}
         <View className="flex-row items-center justify-between">
           <Text className="mr-2 flex-1 font-bold text-lg text-darkText" numberOfLines={1}>
-            {gym.title}
+            {formatGymTitle(gym.title)}
           </Text>
           {/* <View className="flex-row items-center space-x-1">
             <Ionicons name="star" size={14} color="#F59E0B" />

@@ -18,6 +18,7 @@ import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useBookGymTrial, useGetQr, type GymTrialQuota } from '@/hook/useClient';
 import { storageAPI } from '@/utility/storage';
+import { formatGymTitle } from '@/components/GymCard';
 
 export interface GymTrialSlotInfo {
   totalBooked?: number;
@@ -525,7 +526,7 @@ export default function GymFreeTrialSection({
   }, []);
 
   const locationSubtitle = useMemo(() => {
-    const parts = [gymName, gymAddress || gymCity].filter(Boolean);
+    const parts = [formatGymTitle(gymName), gymAddress || gymCity].filter(Boolean);
     return parts.join(' • ');
   }, [gymName, gymAddress, gymCity]);
 
@@ -1355,7 +1356,7 @@ export default function GymFreeTrialSection({
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
                     <Text className="font-extrabold text-[17px] text-white tracking-tight">
-                      {gymName}
+                      {formatGymTitle(gymName)}
                     </Text>
                     <Text className="mt-0.5 text-xs text-white/90 font-medium">
                       {gymAddress || gymCity || 'Partner Club'}
