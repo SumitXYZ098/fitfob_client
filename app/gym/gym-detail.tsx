@@ -869,6 +869,12 @@ export default function GymDetailScreen() {
       rawData?.trial ||
       null;
 
+    console.log('🧪 [GYM DETAIL RAW TRIAL EXTRACTED]:', {
+      gymId: d?.documentId || d?.id || gymId,
+      title,
+      rawTrial,
+    });
+
     // Gym offers free trial ONLY when trialAvailable is explicitly true.
     // When the backend returns only { clientTrialBooking: [] } without trialAvailable: true, trial is considered null.
     const isTrialConfigured = Boolean(
@@ -1170,6 +1176,22 @@ export default function GymDetailScreen() {
     apiData,
     isMemberOfThisClub,
   ]);
+
+  useEffect(() => {
+    const rawTrialData = (apiData as any)?.data?.trial ?? (apiData as any)?.trial;
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🧪 [FREE TRIAL RAW DATA IN GYM DETAIL]:');
+    console.log('Gym ID:', gymId || gym?.id);
+    console.log('Gym Title:', gym?.title);
+    console.log('Raw Trial Object:', rawTrialData);
+    try {
+      console.log('Raw Trial JSON:\n', JSON.stringify(rawTrialData, null, 2));
+    } catch {
+      console.log('Raw Trial JSON could not be formatted');
+    }
+    console.log('gym.trial in UI state:', gym?.trial);
+    console.log('═══════════════════════════════════════════════════════════════');
+  }, [apiData, gym?.trial, gymId, gym?.title]);
 
   useEffect(() => {
     console.log('🔍 [GYM MEMBERSHIP & TRIAL STATUS]:', {

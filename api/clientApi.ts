@@ -317,13 +317,9 @@ export const getGymDetail = async (id: string) => {
   try {
     const url = `${ENDPOINTS.GET_CLUB_DETAIL}/${id}`;
     const response = await apiInstance.get(url);
-    console.log(`📋 [RAW GYM DETAIL RESPONSE from server for ${id}]:`, {
-      membership: response.data?.membership ?? response.data?.data?.membership,
-      membershipClubName: response.data?.membershipClubName ?? response.data?.data?.membershipClubName,
-      membershipClubDocumentId: response.data?.membershipClubDocumentId ?? response.data?.data?.membershipClubDocumentId,
-      trialDescription: response.data?.trial?.description ?? response.data?.data?.trial?.description,
-      clientTrialBooking: response.data?.trial?.clientTrialBooking ?? response.data?.data?.trial?.clientTrialBooking,
-    });
+    console.log(`📋 [RAW GYM TAIL RESPONSE from server for ${id}]:`,
+      response.data.trial
+    );
     return response.data;
   } catch (error) {
     console.error('❌ Error fetching gym detail:', error);

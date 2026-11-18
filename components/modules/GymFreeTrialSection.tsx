@@ -917,7 +917,7 @@ export default function GymFreeTrialSection({
               activeOpacity={0.88}
               className="mt-4 items-center justify-center rounded-2xl bg-white py-3.5 shadow-xs">
               <Text className="font-bold text-sm text-[#E23744]">
-                Book free trial • ₹0 ({quotaInfo.remaining} of {quotaInfo.max} left)
+                Book free trial • ₹0 ({quotaInfo.remaining} left)
               </Text>
             </TouchableOpacity>
           )}
