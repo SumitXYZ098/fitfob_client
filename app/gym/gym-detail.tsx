@@ -1432,7 +1432,7 @@ export default function GymDetailScreen() {
           await Linking.openURL(googleMapsAppUrl);
           return;
         }
-      } catch { }
+      } catch {}
 
       try {
         if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {

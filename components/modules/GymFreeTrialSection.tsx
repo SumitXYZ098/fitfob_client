@@ -88,14 +88,14 @@ export default function GymFreeTrialSection({
 
   const todaySlotsAvailable =
     typeof trial?.today === 'object' && trial.today?.availableSlots !== undefined
-      ? trial.today.availableSlots - trial.today.availableSlots
+      ? Math.max(0, trial.today.availableSlots )
       : isTodayClosed
       ? 0
       : 3;
 
   const tomorrowSlotsAvailable =
     typeof trial?.tomorrow === 'object' && trial.tomorrow?.availableSlots !== undefined
-      ? trial.tomorrow.availableSlots - trial.tomorrow.availableSlots
+      ? Math.max(0, trial.tomorrow.availableSlots  )
       : isTomorrowClosed
       ? 0
       : 3;
