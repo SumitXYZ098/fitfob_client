@@ -639,16 +639,92 @@ export interface ClientTrialItem {
 export const getClientGymTrials = async (): Promise<ClientTrialItem[] | null> => {
   try {
     const response = await apiInstance.get(ENDPOINTS.MY_TRIALS);
-    console.log('🎟️ Fetched /api/client/my-trials:', response.data);
     return response.data;
   } catch (error: any) {
-    console.warn('ℹ️ Notice fetching gym trials from /api/client/my-trials:', error?.response?.data || error.message);
     try {
       const fb = await apiInstance.get(ENDPOINTS.GYM_TRIALS);
       return fb.data;
     } catch {
       return null;
     }
+  }
+};
+
+export interface CancelGymTrialPayload {
+  reason?: string;
+}
+
+export interface CancelGymTrialResponse {
+  message: string;
+  data: {
+    id: number;
+    documentId: string;
+    trialDate: string;
+    trialStatus: string;
+    info?: string;
+    cancellationReason?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+export interface RescheduleGymTrialPayload {
+  [key: string]: any;
+}
+
+export interface RescheduleGymTrialResponse {
+  success?: boolean;
+  message: string;
+  data: {
+    id: number;
+    documentId: string;
+    previousDate?: string;
+    trialDate: string;
+    trialStatus: string;
+    info?: string;
+    closingTime?: string;
+    clubName?: string;
+    clubAddress?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+// Cancel a booked gym trial: POST /api/client/my-trials/:docid/cancel
+export const cancelGymTrial = async (
+  docId: string | number,
+  payload?: CancelGymTrialPayload
+): Promise<CancelGymTrialResponse> => {
+  try {
+    console.log(`🚫 Cancelling gym trial ${docId} with payload:`, payload);
+    const response = await apiInstance.post(
+      ENDPOINTS.CANCEL_TRIAL(docId),
+      payload || { reason: 'Change of schedule' }
+    );
+    console.log('✅ Gym trial cancelled successfully:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error cancelling gym trial:', error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Reschedule a gym trial: POST /api/client/my-trials/:docid/reschedule
+export const rescheduleGymTrial = async (
+  docId: string | number,
+  payload?: RescheduleGymTrialPayload
+): Promise<RescheduleGymTrialResponse> => {
+  try {
+    console.log(`🔄 Rescheduling gym trial ${docId} with payload:`, payload);
+    const response = await apiInstance.post(
+      ENDPOINTS.RESCHEDULE_TRIAL(docId),
+      payload || {}
+    );
+    console.log('✅ Gym trial rescheduled successfully:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error rescheduling gym trial:', error?.response?.data || error.message);
+    throw error;
   }
 };
 

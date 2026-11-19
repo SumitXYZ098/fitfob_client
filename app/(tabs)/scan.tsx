@@ -49,10 +49,29 @@ export interface OutdoorSubscription {
   price?: number;
 }
 
+export interface GymTrialItem {
+  id?: number | string;
+  documentId?: string;
+  gymname?: string;
+  gymName?: string;
+  clubName?: string;
+  trialDate?: string;
+  trialStatus?: string;
+  trialstatus?: string;
+  closingTime?: string;
+  isToday?: boolean;
+  isTomorrow?: boolean;
+  clubAddress?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  distance?: number | string | null;
+  distanceUnit?: string;
+}
+
 export interface BookedTrialPass {
   id?: number | string;
   documentId?: string;
-  passId: string;
+  passId?: string;
   gymName: string;
   gymAddress?: string;
   gymCity?: string;
@@ -64,6 +83,8 @@ export interface BookedTrialPass {
   validUntil?: string;
   guestName?: string;
   trialstatus?: string;
+  isToday?: boolean;
+  isTomorrow?: boolean;
   clubOwner?: string;
   gymId?: string;
   qrCode?: string;
@@ -220,18 +241,32 @@ export default function ScanScreen() {
 
     const normalizePass = (b: any): BookedTrialPass | null => {
       if (!b) return null;
+
+      // Filter out cancelled passes
+      const statusRaw = (b.trialStatus || b.trialstatus || '').toString().toLowerCase();
+      if (statusRaw === 'cancelled' || statusRaw === 'canceled') {
+        return null;
+      }
+
       const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
       const gymName = String(
-        ownerObj?.clubName || b.gymName || b.clubName || b.title || 'Partner Gym'
+        b.gymname || b.gymName || ownerObj?.clubName || b.clubName || b.title || 'Partner Gym'
       );
-      const passId =
-        (b.passId && typeof b.passId === 'string' && b.passId.trim())
-          ? b.passId.trim()
-          : (b.id !== undefined && b.id !== null && !isNaN(Number(b.id)))
-          ? `TRL-${String(b.id).padStart(4, '0')}`
-          : `TRL-${String(b.documentId || 'PASS').slice(-4).toUpperCase()}`;
+
       const rawDate = b.trialDate || b.rawDate;
-      const key = `${passId}_${rawDate}_${gymName}`;
+      const isToday = Boolean(
+        b.isToday === true ||
+          (rawDate && rawDate === new Date().toISOString().split('T')[0])
+      );
+      const isTomorrow = Boolean(b.isTomorrow === true);
+
+      // Clean pass key for deduplication
+      const key = b.documentId
+        ? String(b.documentId)
+        : b.id !== undefined && b.id !== null
+        ? `trial_${b.id}`
+        : `${gymName}_${rawDate}`;
+
       if (seen.has(key)) return null;
       seen.add(key);
 
@@ -245,31 +280,44 @@ export default function ScanScreen() {
       const lat = b.latitude || b.lat || ownerObj?.latitude || ownerObj?.lat || null;
       const lng = b.longitude || b.lng || ownerObj?.longitude || ownerObj?.lng || null;
 
+      let dateDisplay = 'Upcoming';
+      if (isTomorrow) {
+        dateDisplay = `Tomorrow (${formatDate(rawDate)})`;
+      } else if (isToday) {
+        dateDisplay = `Today (${formatDate(rawDate)})`;
+      } else if (rawDate) {
+        dateDisplay = formatDate(rawDate);
+      } else if (b.date) {
+        dateDisplay = b.date;
+      }
+
       return {
         id: b.id,
         documentId: b.documentId,
-        passId,
+        passId: b.passId || (b.id ? `TRL-${String(b.id).padStart(4, '0')}` : undefined),
         gymName,
         gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || '',
         gymCity: b.gymCity || ownerObj?.city || '',
         distance: distanceDisplay,
         latitude: lat,
         longitude: lng,
-        date: b.date || (rawDate ? formatDate(rawDate) : 'Upcoming'),
+        date: dateDisplay,
         rawDate,
-        validUntil: b.closingTime || b.validUntil || 'Closing Time',
+        validUntil: b.closingTime || b.validUntil || '10:00 PM',
         guestName: b.guestName || data?.data?.name || 'Guest',
         trialstatus: b.trialStatus || b.trialstatus || 'booked',
+        isToday,
+        isTomorrow,
         qrCode: b.qrCode || data?.data?.qrCode,
       };
     };
 
-    // 1. Passes from GET_QR endpoint response
+    // 1. Passes from GET_QR endpoint response (prioritizing new gymTrials response field)
     const qrTrials =
+      data?.data?.gymTrials ||
       data?.data?.clientTrialBooking ||
       data?.data?.trialBooking ||
       data?.data?.trials ||
-      data?.data?.gymTrials ||
       [];
     if (Array.isArray(qrTrials)) {
       for (const item of qrTrials) {
@@ -314,18 +362,14 @@ export default function ScanScreen() {
   const handleReload = useCallback(async () => {
     try {
       await Promise.allSettled([getQrMutation.mutateAsync(), refetchGymTrials(), loadStoredTrials()]);
-    } catch (error) {
-      console.error('Error reloading QR:', error);
-    }
+    } catch {}
   }, [getQrMutation, refetchGymTrials, loadStoredTrials]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.allSettled([getQrMutation.mutateAsync(), refetchGymTrials(), loadStoredTrials()]);
-    } catch (error) {
-      console.error('Error refreshing QR:', error);
-    } finally {
+    } catch {} finally {
       setRefreshing(false);
     }
   }, [getQrMutation, refetchGymTrials, loadStoredTrials]);
@@ -743,7 +787,7 @@ export default function ScanScreen() {
               {trialPasses.length > 0 ? (
                 trialPasses.map((trialPass, idx) => (
                   <View
-                    key={trialPass.passId || String(idx)}
+                    key={trialPass.documentId || trialPass.id || String(idx)}
                     className="mb-4 overflow-hidden rounded-3xl border border-rose-100 bg-white p-4 shadow-xs">
                     {/* Card Header */}
                     <View className="flex-row items-start justify-between">
@@ -762,12 +806,21 @@ export default function ScanScreen() {
                       </View>
 
                       {/* Status Badge */}
-                      <View className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border border-blue-200 bg-blue-50">
-                        <View className="h-2 w-2 rounded-full bg-blue-500" />
-                        <Text className="text-[11px] font-bold uppercase text-blue-700">
-                          {trialPass.trialstatus || 'Booked'}
-                        </Text>
-                      </View>
+                      {trialPass.trialstatus?.toLowerCase() === 'rescheduled' ? (
+                        <View className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border border-purple-200 bg-purple-50">
+                          <View className="h-2 w-2 rounded-full bg-purple-500" />
+                          <Text className="text-[11px] font-bold uppercase text-purple-700">
+                            Rescheduled
+                          </Text>
+                        </View>
+                      ) : (
+                        <View className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border border-blue-200 bg-blue-50">
+                          <View className="h-2 w-2 rounded-full bg-blue-500" />
+                          <Text className="text-[11px] font-bold uppercase text-blue-700">
+                            {trialPass.trialstatus || 'Booked'}
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
                     {/* Details Grid */}
@@ -780,16 +833,16 @@ export default function ScanScreen() {
                       </View>
 
                       <View className="w-[47%]">
-                        <Text className="text-[11px] font-medium text-slate-400">Pass ID</Text>
-                        <Text className="mt-0.5 font-bold text-xs text-slate-800">
-                          {trialPass.passId}
+                        <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
+                        <Text className="mt-0.5 font-bold text-xs text-slate-800" numberOfLines={1}>
+                          {trialPass.validUntil || '10:00 PM'}
                         </Text>
                       </View>
 
                       <View className="w-[47%]">
-                        <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
+                        <Text className="text-[11px] font-medium text-slate-400">Guest</Text>
                         <Text className="mt-0.5 font-bold text-xs text-slate-800" numberOfLines={1}>
-                          {trialPass.validUntil || 'Closing Time'}
+                          {trialPass.guestName || data?.data?.name || 'Guest'}
                         </Text>
                       </View>
 
@@ -971,7 +1024,7 @@ export default function ScanScreen() {
                   )}
                 </View>
                 <Text className="mt-3 text-center text-xs font-medium text-slate-500">
-                  Pass ID: {selectedTrialModal?.passId} • User ID: {USER_ID}
+                  User ID: {USER_ID}
                 </Text>
               </View>
 
@@ -987,7 +1040,7 @@ export default function ScanScreen() {
                   <View className="flex-1 items-end pl-2">
                     <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
                     <Text className="mt-0.5 font-bold text-xs text-slate-900">
-                      {selectedTrialModal?.validUntil || 'Closing Time'}
+                      {selectedTrialModal?.validUntil || '10:00 PM'}
                     </Text>
                   </View>
                 </View>
@@ -1001,7 +1054,12 @@ export default function ScanScreen() {
                   </View>
                   <View className="flex-1 items-end pl-2">
                     <Text className="text-[11px] font-medium text-slate-400">Status</Text>
-                    <Text className="mt-0.5 font-bold text-xs text-blue-600 uppercase">
+                    <Text
+                      className={`mt-0.5 font-bold text-xs uppercase ${
+                        selectedTrialModal?.trialstatus?.toLowerCase() === 'rescheduled'
+                          ? 'text-purple-600'
+                          : 'text-blue-600'
+                      }`}>
                       {selectedTrialModal?.trialstatus || 'Booked'}
                     </Text>
                   </View>

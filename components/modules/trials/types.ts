@@ -1,5 +1,6 @@
 export interface TrialPassItem {
   id: string | number;
+  documentId?: string;
   passId: string;
   gymName: string;
   gymAddress: string;
@@ -56,16 +57,41 @@ export const formatPassDate = (rawDateStr?: string | null, fallbackDate?: string
   return fallbackDate || 'Upcoming';
 };
 
-export const formatExpiresIn = (validUntil?: string) => {
+export const formatExpiresIn = (validUntil?: string, rawDateStr?: string) => {
   try {
     const now = new Date();
-    const target = new Date();
-    target.setHours(22, 0, 0, 0); // 10:00 PM closing
+    let target = new Date();
+    if (rawDateStr) {
+      const parsed = new Date(rawDateStr);
+      if (!isNaN(parsed.getTime())) {
+        target = parsed;
+      }
+    }
+
+    let hour = 22;
+    let min = 0;
+    if (validUntil) {
+      const match = validUntil.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+      if (match) {
+        hour = parseInt(match[1], 10);
+        min = match[2] ? parseInt(match[2], 10) : 0;
+        const ampm = match[3]?.toUpperCase();
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+      }
+    }
+    target.setHours(hour, min, 0, 0);
+
     const diff = target.getTime() - now.getTime();
     if (diff > 0) {
-      const h = Math.floor(diff / (1000 * 60 * 60));
+      const totalHours = Math.floor(diff / (1000 * 60 * 60));
       const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      return `${h}h ${m}m`;
+      if (totalHours >= 24) {
+        const d = Math.floor(totalHours / 24);
+        const h = totalHours % 24;
+        return `${d}d ${h}h`;
+      }
+      return `${totalHours}h ${m}m`;
     }
   } catch {}
   return '4h 18m';

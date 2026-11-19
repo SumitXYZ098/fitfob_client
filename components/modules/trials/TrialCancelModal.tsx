@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ export interface TrialCancelModalProps {
   onSelectReason: (reason: string) => void;
   onConfirmCancel: () => void;
   onRescheduleInstead?: (pass: TrialPassItem) => void;
+  isCancelling?: boolean;
 }
 
 export default function TrialCancelModal({
@@ -37,11 +39,12 @@ export default function TrialCancelModal({
   onSelectReason,
   onConfirmCancel,
   onRescheduleInstead,
+  isCancelling = false,
 }: TrialCancelModalProps) {
   const insets = useSafeAreaInsets();
   const dateParts = parseDateParts(cancellingPass?.rawDate, cancellingPass?.date);
   const formattedDate = formatPassDate(cancellingPass?.rawDate, cancellingPass?.date);
-  const gymTitle = cancellingPass?.gymName || 'Hit Fit Gym';
+  const gymTitle = cancellingPass?.gymName || 'Gym';
 
   return (
     <Modal
@@ -58,7 +61,7 @@ export default function TrialCancelModal({
           justifyContent: 'flex-end',
         }}>
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={(e: any) => e.stopPropagation()}
           style={{
             backgroundColor: '#FFFFFF',
             borderTopLeftRadius: 28,
@@ -300,12 +303,13 @@ export default function TrialCancelModal({
 
             <TouchableOpacity
               onPress={onConfirmCancel}
+              disabled={isCancelling}
               activeOpacity={0.88}
               style={{
                 flex: 1,
                 height: 50,
                 borderRadius: 16,
-                backgroundColor: '#E23744',
+                backgroundColor: isCancelling ? '#FDA4AF' : '#E23744',
                 alignItems: 'center',
                 justifyContent: 'center',
                 shadowColor: '#E23744',
@@ -314,9 +318,13 @@ export default function TrialCancelModal({
                 shadowRadius: 8,
                 elevation: 3,
               }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
-                Yes, cancel
-              </Text>
+              {isCancelling ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                  Yes, cancel
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </Pressable>

@@ -65,11 +65,11 @@ export default function TrialRescheduleSuccessModal({
     Toast.show({
       type: 'success',
       text1: 'Added to Calendar',
-      text2: `Trial at ${rescheduledPass?.gymName || 'Hit Fit Gym'} added to your calendar`,
+      text2: `Trial at ${rescheduledPass?.gymName || 'Gym'} added to your calendar`,
     });
   };
 
-  const gymTitle = rescheduledPass?.gymName || 'Hit Fit Gym';
+  const gymTitle = rescheduledPass?.gymName || 'Gym';
 
   return (
     <Modal
@@ -223,19 +223,6 @@ export default function TrialRescheduleSuccessModal({
                 <Text style={{ fontSize: 12, fontWeight: '500', color: '#64748B' }}>Valid until</Text>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
                   10:00 PM (closing)
-                </Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 12, fontWeight: '500', color: '#64748B' }}>Pass ID</Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '700',
-                    color: '#0F172A',
-                    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-                  }}>
-                  {rescheduledPass?.passId || 'TRL-20871'}
                 </Text>
               </View>
 

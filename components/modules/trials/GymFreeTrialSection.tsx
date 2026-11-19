@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
@@ -16,13 +18,42 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useBookGymTrial, useGetQr, type GymTrialQuota } from '@/hook/useClient';
+import {
+  useBookGymTrial,
+  useCancelGymTrial,
+  useRescheduleGymTrial,
+  useGetQr,
+  type GymTrialQuota,
+} from '@/hook/useClient';
 import { storageAPI } from '@/utility/storage';
 import { formatGymTitle, formatPersonName } from '@/components/GymCard';
+import TrialCancelModal from './TrialCancelModal';
+import TrialCancelSuccessModal from './TrialCancelSuccessModal';
+import TrialRescheduleModal from './TrialRescheduleModal';
+import TrialRescheduleSuccessModal from './TrialRescheduleSuccessModal';
+import { TrialPassItem, parseDateParts, getNextDayInfo } from './types';
 
 export interface GymTrialSlotInfo {
   totalBooked?: number;
   availableSlots?: number;
+}
+
+export interface BookedPassData {
+  id?: number;
+  documentId?: string;
+  passId: string;
+  date: string;
+  rawDate?: string;
+  validUntil: string;
+  guestName: string;
+  trialstatus?: string;
+  gymName?: string;
+  gymAddress?: string;
+  gymCity?: string;
+  clubOwner?: string;
+  gymId?: string;
+  qrCode?: string;
+  quota?: GymTrialQuota;
 }
 
 export interface ClientTrialBookingClubOwner {
@@ -88,17 +119,17 @@ export default function GymFreeTrialSection({
 
   const todaySlotsAvailable =
     typeof trial?.today === 'object' && trial.today?.availableSlots !== undefined
-      ? Math.max(0, trial.today.availableSlots )
+      ? Math.max(0, trial.today.availableSlots)
       : isTodayClosed
-      ? 0
-      : 3;
+        ? 0
+        : 3;
 
   const tomorrowSlotsAvailable =
     typeof trial?.tomorrow === 'object' && trial.tomorrow?.availableSlots !== undefined
-      ? Math.max(0, trial.tomorrow.availableSlots  )
+      ? Math.max(0, trial.tomorrow.availableSlots)
       : isTomorrowClosed
-      ? 0
-      : 3;
+        ? 0
+        : 3;
 
   const isTodaySlotsFull = !isTodayClosed && todaySlotsAvailable <= 0;
   const isTomorrowSlotsFull = !isTomorrowClosed && tomorrowSlotsAvailable <= 0;
@@ -108,28 +139,27 @@ export default function GymFreeTrialSection({
   const [isSlotsFullModalVisible, setIsSlotsFullModalVisible] = useState(false);
   const [isPassModalVisible, setIsPassModalVisible] = useState(false);
 
+  // Cancel and Reschedule mutations
+  const { mutateAsync: cancelTrialMutation, isPending: isCancelling } = useCancelGymTrial();
+  const { mutateAsync: rescheduleTrialMutation, isPending: isRescheduling } = useRescheduleGymTrial();
+
+  // Cancel & Reschedule flow states for section
+  const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState<string>('Change of schedule');
+  const [isCancelSuccessVisible, setIsCancelSuccessVisible] = useState(false);
+  const [cancelledPass, setCancelledPass] = useState<TrialPassItem | null>(null);
+
+  const [isRescheduleModalVisible, setIsRescheduleModalVisible] = useState(false);
+  const [isRescheduleSuccessVisible, setIsRescheduleSuccessVisible] = useState(false);
+  const [rescheduledPass, setRescheduledPass] = useState<TrialPassItem | null>(null);
+
   // Booking form state
   const [selectedDateOption, setSelectedDateOption] = useState<'today' | 'tomorrow'>(() => {
     return isTodayClosed && !isTomorrowClosed ? 'tomorrow' : 'today';
   });
   const [policyAccepted, setPolicyAccepted] = useState(true);
-  const [bookedPass, setBookedPass] = useState<{
-    id?: number;
-    documentId?: string;
-    passId: string;
-    date: string;
-    rawDate?: string;
-    validUntil: string;
-    guestName: string;
-    trialstatus?: string;
-    gymName?: string;
-    gymAddress?: string;
-    gymCity?: string;
-    clubOwner?: string;
-    gymId?: string;
-    qrCode?: string;
-    quota?: GymTrialQuota;
-  } | null>(null);
+  // Local user action override (set on book/cancel/reschedule). Falls back to server pass.
+  const [localPassOverride, setLocalPassOverride] = useState<BookedPassData | null | undefined>(undefined);
 
   // Load cached client QR code and Client ID on mount and refresh with getQr
   useEffect(() => {
@@ -148,15 +178,15 @@ export default function GymFreeTrialSection({
             const cid = res?.data?.clientId;
             if (qr) {
               setCachedQrCode(qr);
-              storageAPI.setItem('client_qr_code', qr).catch(() => {});
+              storageAPI.setItem('client_qr_code', qr).catch(() => { });
             }
             if (cid) {
               setCachedClientId(cid);
-              storageAPI.setItem('client_id', cid).catch(() => {});
+              storageAPI.setItem('client_id', cid).catch(() => { });
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
-      } catch {}
+      } catch { }
     })();
   }, [user?.token]);
 
@@ -168,13 +198,13 @@ export default function GymFreeTrialSection({
         const cid = res?.data?.clientId;
         if (qr) {
           setCachedQrCode(qr);
-          storageAPI.setItem('client_qr_code', qr).catch(() => {});
+          storageAPI.setItem('client_qr_code', qr).catch(() => { });
         }
         if (cid) {
           setCachedClientId(cid);
-          storageAPI.setItem('client_id', cid).catch(() => {});
+          storageAPI.setItem('client_id', cid).catch(() => { });
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [isPassModalVisible, cachedQrCode, user?.token]);
 
@@ -191,7 +221,7 @@ export default function GymFreeTrialSection({
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return `${days[dateObj.getDay()]}, ${d} ${months[m]} ${y}`;
       }
-    } catch {}
+    } catch { }
     return dateStr;
   };
 
@@ -207,30 +237,27 @@ export default function GymFreeTrialSection({
     return `${year}-${month}-${day}`;
   };
 
-  const todayStr = getTrialDateString('today');
-
-  // Check if a pass date is active (today or future)
-  const isPassActive = (rawDate?: string): boolean => {
-    if (!rawDate) return true;
-    return rawDate >= todayStr;
-  };
-
   const guestName = useMemo(() => {
-    return formatPersonName(user?.clientDetail?.name || user?.name || user?.username || 'Hardeep Singh');
+    return formatPersonName(user?.clientDetail?.name || user?.name || user?.username || 'Guest');
   }, [user]);
+
+  // Extract trial sub-properties so useMemo dependencies match static analysis exactly
+  const clientTrialBooking = trial?.clientTrialBooking;
+  const trialDescription = trial?.description;
+  const dailyTrialLimit = trial?.dailyTrialLimit;
 
   // Find if user already booked a trial at this gym from backend clientTrialBooking
   const existingGymBooking = useMemo<ClientTrialBookingItem | null>(() => {
-    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return null;
+    if (!clientTrialBooking || !Array.isArray(clientTrialBooking)) return null;
 
     const currentGymName = String(gymName || '').toLowerCase().trim();
     const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
 
     return (
-      trial.clientTrialBooking.find((b) => {
+      clientTrialBooking.find((b) => {
         if (!b) return false;
-        const status = String(b.trialstatus || '').toLowerCase();
-        if (status !== 'booked' && status !== 'active') return false;
+        const status = String(b.trialStatus || b.trialstatus || '').toLowerCase();
+        if (status !== 'booked' && status !== 'active' && status !== 'rescheduled') return false;
 
         const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
         const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
@@ -241,7 +268,7 @@ export default function GymFreeTrialSection({
         const matchesOwner = Boolean(
           currentClubOwner &&
           ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
-           (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
+            (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
         );
         const matchesExactName = Boolean(
           currentGymName &&
@@ -252,43 +279,65 @@ export default function GymFreeTrialSection({
         return matchesOwner || matchesExactName;
       }) || null
     );
-  }, [trial?.clientTrialBooking, gymName, clubOwner, gymId]);
+  }, [clientTrialBooking, gymName, clubOwner, gymId]);
 
-  // Synchronize pass details from backend clientTrialBooking (Source of Truth)
+  // Derive booked pass from existingGymBooking (Source of Truth from backend)
+  const serverBookedPass: BookedPassData | null = useMemo(() => {
+    if (!existingGymBooking) return null;
+    const passId =
+      typeof existingGymBooking.id === 'number' && existingGymBooking.id > 0
+        ? `TRL-${String(existingGymBooking.id).padStart(4, '0')}`
+        : `TRL-${String(existingGymBooking.documentId || 'PASS').slice(-4).toUpperCase()}`;
+    return {
+      id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
+      documentId: existingGymBooking.documentId,
+      passId,
+      date: formatRawDate(existingGymBooking.trialDate),
+      rawDate: existingGymBooking.trialDate,
+      validUntil: `${formatRawDate(existingGymBooking.trialDate)} (Closing Time: ${closingTime})`,
+      guestName,
+      trialstatus: existingGymBooking.trialstatus || 'booked',
+      gymName,
+      gymAddress,
+      gymCity,
+      clubOwner: clubOwner || gymId,
+      gymId,
+      qrCode: existingGymBooking.qrCode || cachedQrCode,
+    };
+  }, [
+    existingGymBooking,
+    closingTime,
+    guestName,
+    gymName,
+    gymAddress,
+    gymCity,
+    clubOwner,
+    gymId,
+    cachedQrCode,
+  ]);
+
+  // Reset local override when gym changes
+  const [prevGymId, setPrevGymId] = useState(gymId);
+  if (gymId !== prevGymId) {
+    setPrevGymId(gymId);
+    setLocalPassOverride(undefined);
+  }
+
+  // Active booked pass: prefers local user action override, falls back to server pass
+  const bookedPass: BookedPassData | null = localPassOverride !== undefined ? localPassOverride : serverBookedPass;
+  const setBookedPass = (pass: BookedPassData | null) => setLocalPassOverride(pass);
+
+  // Keep global client booked trials list in sync for the scan screen (External System synchronization only)
   useEffect(() => {
-    if (existingGymBooking) {
-      const passId =
-        typeof existingGymBooking.id === 'number' && existingGymBooking.id > 0
-          ? `TRL-${String(existingGymBooking.id).padStart(4, '0')}`
-          : `TRL-${String(existingGymBooking.documentId || 'PASS').slice(-4).toUpperCase()}`;
-      setBookedPass({
-        id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
-        documentId: existingGymBooking.documentId,
-        passId,
-        date: formatRawDate(existingGymBooking.trialDate),
-        rawDate: existingGymBooking.trialDate,
-        validUntil: `${formatRawDate(existingGymBooking.trialDate)} (Closing Time: ${closingTime})`,
-        guestName,
-        trialstatus: existingGymBooking.trialstatus || 'booked',
-        gymName,
-        gymAddress,
-        gymCity,
-        clubOwner: clubOwner || gymId,
-        gymId,
-        qrCode: existingGymBooking.qrCode || activeQrCode || cachedQrCode,
-      });
-    } else {
-      // If user has not booked a trial at this club, reset to null (no ghost passes)
-      setBookedPass(null);
-    }
-
-    // Keep global client booked trials list in sync for the scan screen
-    if (trial && Array.isArray(trial.clientTrialBooking) && trial.clientTrialBooking.length > 0) {
-      const bookingsList = trial.clientTrialBooking;
+    if (clientTrialBooking && Array.isArray(clientTrialBooking) && clientTrialBooking.length > 0) {
+      const bookingsList = clientTrialBooking;
       (async () => {
         try {
           const listToStore = bookingsList
-            .filter((b) => b && (b.trialstatus === 'booked' || b.trialstatus === 'active'))
+            .filter((b) => {
+              const st = String(b?.trialStatus || b?.trialstatus || '').toLowerCase();
+              return st === 'booked' || st === 'active' || st === 'rescheduled';
+            })
             .map((b) => {
               const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
               const ownerDocId = String(ownerObj?.documentId || b.club_owner || '');
@@ -309,28 +358,28 @@ export default function GymFreeTrialSection({
                 gymName: ownerName,
                 clubOwner: ownerDocId,
                 gymId: ownerDocId,
-                qrCode: b.qrCode || activeQrCode || cachedQrCode,
+                qrCode: b.qrCode || cachedQrCode,
               };
             });
           await storageAPI.setItem('client_booked_trials', JSON.stringify(listToStore));
-        } catch {}
+        } catch { }
       })();
     }
-  }, [existingGymBooking, trial?.clientTrialBooking, closingTime, guestName, clubOwner, gymId, gymName, gymAddress, gymCity]);
+  }, [clientTrialBooking, closingTime, guestName, clubOwner, gymId, gymName, cachedQrCode]);
 
   // Check if today or tomorrow is already booked at this gym
   const isTodayBookedAtThisGym = useMemo(() => {
-    const todayStr = getTrialDateString('today');
-    if (bookedPass?.rawDate === todayStr) return true;
-    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return false;
+    const todayDate = getTrialDateString('today');
+    if (bookedPass?.rawDate === todayDate) return true;
+    if (!clientTrialBooking || !Array.isArray(clientTrialBooking)) return false;
 
     const currentGymName = String(gymName || '').toLowerCase().trim();
     const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
 
-    return trial.clientTrialBooking.some((b) => {
-      if (b.trialDate !== todayStr) return false;
-      const st = String(b.trialstatus || '').toLowerCase();
-      if (st !== 'booked' && st !== 'active') return false;
+    return clientTrialBooking.some((b) => {
+      if (b.trialDate !== todayDate) return false;
+      const st = String(b.trialStatus || b.trialstatus || '').toLowerCase();
+      if (st !== 'booked' && st !== 'active' && st !== 'rescheduled') return false;
 
       const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
       const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
@@ -340,7 +389,7 @@ export default function GymFreeTrialSection({
       const matchesOwner = Boolean(
         currentClubOwner &&
         ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
-         (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
+          (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
       );
       const matchesName = Boolean(
         currentGymName &&
@@ -350,20 +399,20 @@ export default function GymFreeTrialSection({
 
       return matchesOwner || matchesName;
     });
-  }, [trial?.clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
+  }, [clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
 
   const isTomorrowBookedAtThisGym = useMemo(() => {
-    const tomorrowStr = getTrialDateString('tomorrow');
-    if (bookedPass?.rawDate === tomorrowStr) return true;
-    if (!trial?.clientTrialBooking || !Array.isArray(trial.clientTrialBooking)) return false;
+    const tomorrowDate = getTrialDateString('tomorrow');
+    if (bookedPass?.rawDate === tomorrowDate) return true;
+    if (!clientTrialBooking || !Array.isArray(clientTrialBooking)) return false;
 
     const currentGymName = String(gymName || '').toLowerCase().trim();
     const currentClubOwner = String(clubOwner || gymId || '').toLowerCase().trim();
 
-    return trial.clientTrialBooking.some((b) => {
-      if (b.trialDate !== tomorrowStr) return false;
-      const st = String(b.trialstatus || '').toLowerCase();
-      if (st !== 'booked' && st !== 'active') return false;
+    return clientTrialBooking.some((b) => {
+      if (b.trialDate !== tomorrowDate) return false;
+      const st = String(b.trialStatus || b.trialstatus || '').toLowerCase();
+      if (st !== 'booked' && st !== 'active' && st !== 'rescheduled') return false;
 
       const ownerObj = typeof b.club_owner === 'object' && b.club_owner ? b.club_owner : null;
       const ownerDocId = String(ownerObj?.documentId || b.club_owner || '').toLowerCase().trim();
@@ -373,7 +422,7 @@ export default function GymFreeTrialSection({
       const matchesOwner = Boolean(
         currentClubOwner &&
         ((ownerDocId && (ownerDocId === currentClubOwner || currentClubOwner === ownerDocId)) ||
-         (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
+          (ownerId && (ownerId === currentClubOwner || currentClubOwner === ownerId)))
       );
       const matchesName = Boolean(
         currentGymName &&
@@ -383,7 +432,7 @@ export default function GymFreeTrialSection({
 
       return matchesOwner || matchesName;
     });
-  }, [trial?.clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
+  }, [clientTrialBooking, bookedPass?.rawDate, gymName, clubOwner, gymId]);
 
   // Auto-switch date if selected option is closed or already booked
   useEffect(() => {
@@ -418,24 +467,24 @@ export default function GymFreeTrialSection({
 
     // 1. Check description text for "X trial(s) left"
     let parsedRemaining: number | null = null;
-    if (trial?.description) {
-      const match = trial.description.match(/(\d+)\s+trials?\s+left/i);
+    if (trialDescription) {
+      const match = trialDescription.match(/(\d+)\s+trials?\s+left/i);
       if (match && match[1]) {
         parsedRemaining = parseInt(match[1], 10);
       } else if (
-        trial.description.toLowerCase().includes('no trials left') ||
-        trial.description.toLowerCase().includes('0 trials left')
+        trialDescription.toLowerCase().includes('no trials left') ||
+        trialDescription.toLowerCase().includes('0 trials left')
       ) {
         parsedRemaining = 0;
       }
     }
 
     // 2. Count active bookings from clientTrialBooking
-    const activeBookingsCount = Array.isArray(trial?.clientTrialBooking)
-      ? trial.clientTrialBooking.filter((b) => {
-          const st = String(b.trialstatus || '').toLowerCase();
-          return st === 'booked' || st === 'active';
-        }).length
+    const activeBookingsCount = Array.isArray(clientTrialBooking)
+      ? clientTrialBooking.filter((b) => {
+        const st = String(b.trialStatus || b.trialstatus || '').toLowerCase();
+        return st === 'booked' || st === 'active' || st === 'rescheduled';
+      }).length
       : 0;
 
     let remaining = 3;
@@ -466,7 +515,7 @@ export default function GymFreeTrialSection({
       isQuotaFull,
       isBooked: hasBookingAtThisGym,
     };
-  }, [trial?.description, trial?.clientTrialBooking, bookedPass, existingGymBooking]);
+  }, [trialDescription, clientTrialBooking, bookedPass, existingGymBooking]);
 
   // Dynamic banner description from backend & quota info
   const bannerDescription = useMemo(() => {
@@ -479,24 +528,23 @@ export default function GymFreeTrialSection({
     if (quotaInfo.isQuotaFull) {
       return `You have used all ${quotaInfo.max} free trials for this ${quotaInfo.periodWeeks}-week period. Your trial quota will reset after ${quotaInfo.periodWeeks} weeks.`;
     }
-    if (trial?.description) {
-      return trial.description;
+    if (trialDescription) {
+      return trialDescription;
     }
     if (isTodayClosed) {
       return `One full session at ${gymName}, on us. Today closed • Tomorrow open. (${quotaInfo.remaining} of ${quotaInfo.max} trials left per ${quotaInfo.periodWeeks} weeks).`;
     }
-    return `One full session at ${gymName}, on us. Only ${todaySlotsAvailable} of ${
-      trial?.dailyTrialLimit || 3
-    } trial slots left today (${quotaInfo.remaining} of ${quotaInfo.max} trials left in 6-wk period).`;
+    return `One full session at ${gymName}, on us. Only ${todaySlotsAvailable} of ${dailyTrialLimit || 3
+      } trial slots left today (${quotaInfo.remaining} of ${quotaInfo.max} trials left in 6-wk period).`;
   }, [
     isMemberOfThisClub,
     bookedPass,
     quotaInfo,
-    trial?.description,
-    trial?.dailyTrialLimit,
+    trialDescription,
+    dailyTrialLimit,
+    gymName,
     isTodayClosed,
     todaySlotsAvailable,
-    gymName,
   ]);
 
   // Dynamic formatted dates for today & tomorrow
@@ -656,9 +704,9 @@ export default function GymFreeTrialSection({
 
       // Persist to storage for this gym and for the global scan tab
       const storageKey = `booked_gym_trial_${targetClubOwner}`;
-      storageAPI.setItem(storageKey, JSON.stringify(newPass)).catch(() => {});
+      storageAPI.setItem(storageKey, JSON.stringify(newPass)).catch(() => { });
       if (gymId && gymId !== targetClubOwner) {
-        storageAPI.setItem(`booked_gym_trial_${gymId}`, JSON.stringify(newPass)).catch(() => {});
+        storageAPI.setItem(`booked_gym_trial_${gymId}`, JSON.stringify(newPass)).catch(() => { });
       }
 
       (async () => {
@@ -667,12 +715,12 @@ export default function GymFreeTrialSection({
           const existingList = rawList ? JSON.parse(rawList) : [];
           const filtered = Array.isArray(existingList)
             ? existingList.filter(
-                (p: any) => p && p.documentId !== newPass.documentId && p.passId !== newPass.passId
-              )
+              (p: any) => p && p.documentId !== newPass.documentId && p.passId !== newPass.passId
+            )
             : [];
           filtered.unshift(newPass);
           await storageAPI.setItem('client_booked_trials', JSON.stringify(filtered));
-        } catch {}
+        } catch { }
       })();
 
       setIsBookingModalVisible(false);
@@ -687,7 +735,7 @@ export default function GymFreeTrialSection({
         Toast.show({
           type: 'success',
           text1: response.message || 'Free Trial Booked! 🎉',
-          text2: `Pass ${passId} confirmed for ${dateOption === 'today' ? 'Today' : 'Tomorrow'} (${usedInPeriod} of ${maxInPeriod} used)`,
+          text2: `Pass confirmed for ${dateOption === 'today' ? 'Today' : 'Tomorrow'} (${usedInPeriod} of ${maxInPeriod} used)`,
         });
       }, 350);
     } catch (err: any) {
@@ -696,9 +744,6 @@ export default function GymFreeTrialSection({
         err?.response?.data?.error?.message ||
         err?.message ||
         'Could not book free trial.';
-
-      // DO NOT emit console.error to avoid React Native LogBox red screen
-      console.warn('ℹ️ Gym trial booking note:', errorMsg);
 
       const lower = String(errorMsg).toLowerCase();
 
@@ -740,9 +785,9 @@ export default function GymFreeTrialSection({
 
         // Persist to storage
         const storageKey = `booked_gym_trial_${targetClubOwner}`;
-        storageAPI.setItem(storageKey, JSON.stringify(activePass)).catch(() => {});
+        storageAPI.setItem(storageKey, JSON.stringify(activePass)).catch(() => { });
         if (gymId && gymId !== targetClubOwner) {
-          storageAPI.setItem(`booked_gym_trial_${gymId}`, JSON.stringify(activePass)).catch(() => {});
+          storageAPI.setItem(`booked_gym_trial_${gymId}`, JSON.stringify(activePass)).catch(() => { });
         }
 
         setIsBookingModalVisible(false);
@@ -800,6 +845,194 @@ export default function GymFreeTrialSection({
     });
   };
 
+  // Convert bookedPass to TrialPassItem
+  const bookedPassItem: TrialPassItem | null = useMemo(() => {
+    if (!bookedPass) return null;
+    const parts = parseDateParts(bookedPass.rawDate, bookedPass.date);
+    return {
+      id: bookedPass.id || bookedPass.documentId || bookedPass.passId,
+      documentId: bookedPass.documentId,
+      passId: bookedPass.passId,
+      gymName: bookedPass.gymName || gymName,
+      gymAddress: bookedPass.gymAddress || gymAddress || '',
+      date: bookedPass.date,
+      rawDate: bookedPass.rawDate,
+      month: parts.month,
+      day: parts.day,
+      validUntil: bookedPass.validUntil,
+      statusNote: `Valid until ${closingTime}`,
+      statusBadge: 'booked',
+      statusBadgeLabel: 'Booked',
+      guestName: bookedPass.guestName,
+      qrCode: bookedPass.qrCode,
+    };
+  }, [bookedPass, gymName, gymAddress, closingTime]);
+
+  const handleOpenCancelFromSection = () => {
+    setIsPassModalVisible(false);
+    setSelectedCancelReason('Change of schedule');
+    setIsCancelModalVisible(true);
+  };
+
+  const handleConfirmCancelFromSection = async () => {
+    if (!bookedPass) return;
+    const targetPass = bookedPass;
+    const docId = targetPass.documentId || targetPass.id;
+    if (!docId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Trial pass not found',
+      });
+      return;
+    }
+
+    try {
+      const res = await cancelTrialMutation({ docId, reason: selectedCancelReason });
+
+      const passItemToCancel = bookedPassItem;
+      setCancelledPass(passItemToCancel);
+      setBookedPass(null);
+
+      // Clean storage
+      try {
+        const raw = await storageAPI.getItem('client_booked_trials');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((item: any) => {
+              if (
+                item.passId === targetPass.passId ||
+                item.id === targetPass.id ||
+                item.documentId === targetPass.documentId
+              ) {
+                return { ...item, trialstatus: 'cancelled', status: 'cancelled' };
+              }
+              return item;
+            });
+            await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
+          }
+        }
+      } catch { }
+
+      setIsCancelModalVisible(false);
+      setIsCancelSuccessVisible(true);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Trial Cancelled',
+        text2: res?.message || 'Gym trial cancelled successfully. The slot has been reopened.',
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Cancellation Failed',
+        text2: err?.response?.data?.message || err?.message || 'Failed to cancel gym trial',
+      });
+    }
+  };
+
+  const handleOpenRescheduleFromSection = () => {
+    setIsPassModalVisible(false);
+    setIsRescheduleModalVisible(true);
+  };
+
+  const handleConfirmRescheduleFromSection = async () => {
+    if (!bookedPass) return;
+    const targetPass = bookedPass;
+    const docId = targetPass.documentId || targetPass.id;
+    if (!docId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Trial pass not found',
+      });
+      return;
+    }
+
+    try {
+      const res = await rescheduleTrialMutation({ docId, payload: {} });
+
+      const newDate = res?.data?.trialDate;
+      const dayInfo = getNextDayInfo(newDate || targetPass.rawDate);
+      const newFormattedDate = formatRawDate(newDate || dayInfo.tomorrowIso || '');
+
+      const updatedBookedPass = {
+        ...targetPass,
+        date: newFormattedDate,
+        rawDate: newDate || dayInfo.tomorrowIso,
+        validUntil: `${newFormattedDate} (Closing Time: ${res?.data?.closingTime || closingTime})`,
+        trialstatus: res?.data?.trialStatus || 'rescheduled',
+      };
+
+      setBookedPass(updatedBookedPass);
+
+      const updatedPassItem: TrialPassItem = {
+        ...(bookedPassItem || {
+          id: docId,
+          passId: targetPass.passId,
+          gymName,
+          gymAddress: gymAddress || '',
+          guestName,
+          month: dayInfo.tomorrowMonth || 'NOV',
+          day: dayInfo.tomorrowDay || '20',
+          statusBadge: 'booked',
+          statusBadgeLabel: 'Booked',
+          statusNote: res?.data?.info || `Valid until ${res?.data?.closingTime || closingTime}`,
+        }),
+        date: newFormattedDate,
+        rawDate: newDate || dayInfo.tomorrowIso,
+        month: dayInfo.tomorrowMonth || bookedPassItem?.month || 'NOV',
+        day: dayInfo.tomorrowDay || bookedPassItem?.day || '20',
+        validUntil: res?.data?.closingTime || closingTime,
+      };
+
+      setRescheduledPass(updatedPassItem);
+
+      // Update storage
+      try {
+        const raw = await storageAPI.getItem('client_booked_trials');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((item: any) => {
+              if (
+                item.passId === targetPass.passId ||
+                item.id === targetPass.id ||
+                item.documentId === targetPass.documentId
+              ) {
+                return {
+                  ...item,
+                  date: newFormattedDate,
+                  rawDate: newDate || dayInfo.tomorrowIso,
+                  trialDate: newDate || dayInfo.tomorrowIso,
+                  trialstatus: res?.data?.trialStatus || 'rescheduled',
+                };
+              }
+              return item;
+            });
+            await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
+          }
+        }
+      } catch { }
+
+      setIsRescheduleModalVisible(false);
+      setIsRescheduleSuccessVisible(true);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Trial Rescheduled',
+        text2: res?.message || 'Gym trial rescheduled successfully to tomorrow',
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Reschedule Failed',
+        text2: err?.response?.data?.message || err?.message || 'Failed to reschedule gym trial',
+      });
+    }
+  };
+
   // If gym does not offer free trials (trial is null, trialAvailable is not explicitly true, or only contains { clientTrialBooking: [] }), do not show section
   const isTrialAvailable = Boolean(
     trial &&
@@ -824,6 +1057,15 @@ export default function GymFreeTrialSection({
     cachedClientId ||
     bookedPass?.passId ||
     '';
+
+  const isBookedPassRescheduled =
+    bookedPass?.trialstatus === 'rescheduled' ||
+    bookedPassItem?.statusBadgeLabel === 'Rescheduled';
+  const isBookedPassToday = Boolean(
+    bookedPass?.rawDate
+      ? bookedPass.rawDate === new Date().toISOString().split('T')[0]
+      : bookedPassItem?.isToday
+  );
 
   return (
     <View className="mt-6">
@@ -875,8 +1117,8 @@ export default function GymFreeTrialSection({
                 {bookedPass
                   ? 'PASS ACTIVE'
                   : quotaInfo.isQuotaFull
-                  ? 'QUOTA FULL'
-                  : 'TRY BEFORE YOU BUY'}
+                    ? 'QUOTA FULL'
+                    : 'TRY BEFORE YOU BUY'}
               </Text>
             </View>
 
@@ -895,10 +1137,10 @@ export default function GymFreeTrialSection({
             {bookedPass
               ? 'Your free trial is booked'
               : quotaInfo.isQuotaFull
-              ? 'Free trial quota reached'
-              : isTodayClosed
-              ? 'Free trial, bookable tomorrow'
-              : 'Free trial, bookable today'}
+                ? 'Free trial quota reached'
+                : isTodayClosed
+                  ? 'Free trial, bookable tomorrow'
+                  : 'Free trial, bookable today'}
           </Text>
 
           {/* Subtitle description */}
@@ -919,7 +1161,7 @@ export default function GymFreeTrialSection({
                 </Text>
               </TouchableOpacity>
               <Text className="mt-1.5 text-center text-[11px] font-semibold text-white/90">
-                Pass ID: {bookedPass.passId} • Active for {bookedPass.date}
+                Active for {bookedPass.date}
               </Text>
             </View>
           ) : quotaInfo.isQuotaFull ? (
@@ -958,234 +1200,226 @@ export default function GymFreeTrialSection({
             onPress={() => setIsBookingModalVisible(false)}
             className="flex-1 justify-end bg-black/60">
             <Pressable
-              onPress={(e) => e.stopPropagation()}
+              onPress={(e: any) => e.stopPropagation()}
               style={{ paddingBottom: Math.max(insets.bottom, 20) }}
               className="rounded-t-[32px] bg-white px-5 pt-3">
-            {/* Top Drag Handle */}
-            <View className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-300" />
+              {/* Top Drag Handle */}
+              <View className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-300" />
 
-            {/* Header: Title, Subtitle, Close Button */}
-            <View className="flex-row items-start justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="font-extrabold text-[19px] text-slate-900 tracking-tight">
-                  Book your free trial
-                </Text>
-                <Text className="mt-0.5 text-xs font-medium text-slate-500" numberOfLines={1}>
-                  {locationSubtitle}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setIsBookingModalVisible(false)}
-                activeOpacity={0.7}
-                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                <Ionicons name="close" size={18} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Trial Quota status badge */}
-            <View className="mt-3.5 flex-row items-center justify-between rounded-xl bg-slate-50 px-3.5 py-2.5 border border-slate-100">
-              <View className="flex-row items-center gap-2">
-                <Ionicons name="fitness-outline" size={16} color="#E23744" />
-                <Text className="text-xs font-semibold text-slate-700">6-Week Trial Limit</Text>
-              </View>
-              <Text className="text-xs font-extrabold text-slate-900">
-                {quotaInfo.used > 0
-                  ? `${quotaInfo.used} used • ${quotaInfo.remaining} left`
-                  : `${quotaInfo.remaining} of ${quotaInfo.max} trials left`}
-              </Text>
-            </View>
-
-            {/* Pick a Date Section */}
-            <Text className="mt-5 font-bold text-xs text-slate-900">Pick a date</Text>
-
-            <View className="mt-2.5 flex-row gap-3">
-              {/* Option 1: Today */}
-              <TouchableOpacity
-                disabled={isTodayClosed || isTodaySlotsFull || isTodayBookedAtThisGym}
-                onPress={() => setSelectedDateOption('today')}
-                activeOpacity={0.85}
-                className={`flex-1 rounded-2xl p-3.5 border ${
-                  isTodayClosed || isTodayBookedAtThisGym
-                    ? 'border-slate-200 bg-slate-100/70 opacity-60'
-                    : selectedDateOption === 'today'
-                    ? 'border-red-400 bg-red-50/40'
-                    : 'border-slate-200 bg-white'
-                }`}>
-                <View className="flex-row items-center justify-between">
-                  <Text
-                    className={`font-bold text-sm ${
-                      isTodayClosed || isTodayBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
-                    }`}>
-                    Today
+              {/* Header: Title, Subtitle, Close Button */}
+              <View className="flex-row items-start justify-between">
+                <View className="flex-1 pr-3">
+                  <Text className="font-extrabold text-[19px] text-slate-900 tracking-tight">
+                    Book your free trial
                   </Text>
-                  {isTodayBookedAtThisGym ? (
-                    <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
-                      <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
-                    </View>
-                  ) : isTodayClosed ? (
-                    <View className="rounded-full bg-slate-200 px-2 py-0.5">
-                      <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
-                    </View>
-                  ) : null}
+                  <Text className="mt-0.5 text-xs font-medium text-slate-500" numberOfLines={1}>
+                    {locationSubtitle}
+                  </Text>
                 </View>
-                <Text className="mt-0.5 text-xs text-slate-500 font-medium">
-                  {dateInfo.todayShort}
+
+                <TouchableOpacity
+                  onPress={() => setIsBookingModalVisible(false)}
+                  activeOpacity={0.7}
+                  className="h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                  <Ionicons name="close" size={18} color="#1E293B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Trial Quota status badge */}
+              <View className="mt-3.5 flex-row items-center justify-between rounded-xl bg-slate-50 px-3.5 py-2.5 border border-slate-100">
+                <View className="flex-row items-center gap-2">
+                  <Ionicons name="fitness-outline" size={16} color="#E23744" />
+                  <Text className="text-xs font-semibold text-slate-700">6-Week Trial Limit</Text>
+                </View>
+                <Text className="text-xs font-extrabold text-slate-900">
+                  {quotaInfo.used > 0
+                    ? `${quotaInfo.used} used • ${quotaInfo.remaining} left`
+                    : `${quotaInfo.remaining} of ${quotaInfo.max} trials left`}
                 </Text>
-                <Text
-                  className={`mt-1.5 text-[11px] font-semibold ${
-                    isTodayBookedAtThisGym
-                      ? 'text-emerald-700'
+              </View>
+
+              {/* Pick a Date Section */}
+              <Text className="mt-5 font-bold text-xs text-slate-900">Pick a date</Text>
+
+              <View className="mt-2.5 flex-row gap-3">
+                {/* Option 1: Today */}
+                <TouchableOpacity
+                  disabled={isTodayClosed || isTodaySlotsFull || isTodayBookedAtThisGym}
+                  onPress={() => setSelectedDateOption('today')}
+                  activeOpacity={0.85}
+                  className={`flex-1 rounded-2xl p-3.5 border ${isTodayClosed || isTodayBookedAtThisGym
+                      ? 'border-slate-200 bg-slate-100/70 opacity-60'
+                      : selectedDateOption === 'today'
+                        ? 'border-red-400 bg-red-50/40'
+                        : 'border-slate-200 bg-white'
+                    }`}>
+                  <View className="flex-row items-center justify-between">
+                    <Text
+                      className={`font-bold text-sm ${isTodayClosed || isTodayBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
+                        }`}>
+                      Today
+                    </Text>
+                    {isTodayBookedAtThisGym ? (
+                      <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
+                        <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
+                      </View>
+                    ) : isTodayClosed ? (
+                      <View className="rounded-full bg-slate-200 px-2 py-0.5">
+                        <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text className="mt-0.5 text-xs text-slate-500 font-medium">
+                    {dateInfo.todayShort}
+                  </Text>
+                  <Text
+                    className={`mt-1.5 text-[11px] font-semibold ${isTodayBookedAtThisGym
+                        ? 'text-emerald-700'
+                        : isTodayClosed
+                          ? 'text-slate-400'
+                          : isTodaySlotsFull
+                            ? 'text-rose-600'
+                            : 'text-rose-600'
+                      }`}>
+                    {isTodayBookedAtThisGym
+                      ? 'Already booked'
                       : isTodayClosed
-                      ? 'text-slate-400'
-                      : isTodaySlotsFull
-                      ? 'text-rose-600'
-                      : 'text-rose-600'
-                  }`}>
-                  {isTodayBookedAtThisGym
-                    ? 'Already booked'
-                    : isTodayClosed
-                    ? 'Gym Closed'
-                    : isTodaySlotsFull
-                    ? 'Slots full'
-                    : `${todaySlotsAvailable} slots left`}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Option 2: Tomorrow */}
-              <TouchableOpacity
-                disabled={isTomorrowClosed || isTomorrowSlotsFull || isTomorrowBookedAtThisGym}
-                onPress={() => setSelectedDateOption('tomorrow')}
-                activeOpacity={0.85}
-                className={`flex-1 rounded-2xl p-3.5 border ${
-                  isTomorrowClosed || isTomorrowBookedAtThisGym
-                    ? 'border-slate-200 bg-slate-100/70 opacity-60'
-                    : selectedDateOption === 'tomorrow'
-                    ? 'border-red-400 bg-red-50/40'
-                    : 'border-slate-200 bg-white'
-                }`}>
-                <View className="flex-row items-center justify-between">
-                  <Text
-                    className={`font-bold text-sm ${
-                      isTomorrowClosed || isTomorrowBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
-                    }`}>
-                    Tomorrow
+                        ? 'Gym Closed'
+                        : isTodaySlotsFull
+                          ? 'Slots full'
+                          : `${todaySlotsAvailable} slots left`}
                   </Text>
-                  {isTomorrowBookedAtThisGym ? (
-                    <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
-                      <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
-                    </View>
-                  ) : isTomorrowClosed ? (
-                    <View className="rounded-full bg-slate-200 px-2 py-0.5">
-                      <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text className="mt-0.5 text-xs text-slate-500 font-medium">
-                  {dateInfo.tomorrowShort}
-                </Text>
-                <Text
-                  className={`mt-1.5 text-[11px] font-semibold ${
-                    isTomorrowBookedAtThisGym
-                      ? 'text-emerald-700'
+                </TouchableOpacity>
+
+                {/* Option 2: Tomorrow */}
+                <TouchableOpacity
+                  disabled={isTomorrowClosed || isTomorrowSlotsFull || isTomorrowBookedAtThisGym}
+                  onPress={() => setSelectedDateOption('tomorrow')}
+                  activeOpacity={0.85}
+                  className={`flex-1 rounded-2xl p-3.5 border ${isTomorrowClosed || isTomorrowBookedAtThisGym
+                      ? 'border-slate-200 bg-slate-100/70 opacity-60'
+                      : selectedDateOption === 'tomorrow'
+                        ? 'border-red-400 bg-red-50/40'
+                        : 'border-slate-200 bg-white'
+                    }`}>
+                  <View className="flex-row items-center justify-between">
+                    <Text
+                      className={`font-bold text-sm ${isTomorrowClosed || isTomorrowBookedAtThisGym ? 'text-slate-400' : 'text-slate-900'
+                        }`}>
+                      Tomorrow
+                    </Text>
+                    {isTomorrowBookedAtThisGym ? (
+                      <View className="rounded-full bg-emerald-100 px-2 py-0.5 border border-emerald-300">
+                        <Text className="text-[9px] font-bold text-emerald-800">BOOKED</Text>
+                      </View>
+                    ) : isTomorrowClosed ? (
+                      <View className="rounded-full bg-slate-200 px-2 py-0.5">
+                        <Text className="text-[9px] font-bold text-slate-600">CLOSED</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text className="mt-0.5 text-xs text-slate-500 font-medium">
+                    {dateInfo.tomorrowShort}
+                  </Text>
+                  <Text
+                    className={`mt-1.5 text-[11px] font-semibold ${isTomorrowBookedAtThisGym
+                        ? 'text-emerald-700'
+                        : isTomorrowClosed
+                          ? 'text-slate-400'
+                          : isTomorrowSlotsFull
+                            ? 'text-rose-600'
+                            : 'text-emerald-600'
+                      }`}>
+                    {isTomorrowBookedAtThisGym
+                      ? 'Already booked'
                       : isTomorrowClosed
-                      ? 'text-slate-400'
-                      : isTomorrowSlotsFull
-                      ? 'text-rose-600'
-                      : 'text-emerald-600'
-                  }`}>
-                  {isTomorrowBookedAtThisGym
-                    ? 'Already booked'
-                    : isTomorrowClosed
-                    ? 'Gym Closed'
-                    : isTomorrowSlotsFull
-                    ? 'Slots full'
-                    : `${tomorrowSlotsAvailable} slots left`}
+                        ? 'Gym Closed'
+                        : isTomorrowSlotsFull
+                          ? 'Slots full'
+                          : `${tomorrowSlotsAvailable} slots left`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Breakdown Box */}
+              <View className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/90 p-4">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs text-slate-500 font-medium">Free trial session</Text>
+                  <Text className="text-xs font-bold text-slate-900">₹0</Text>
+                </View>
+
+                <View className="mt-2.5 flex-row items-center justify-between">
+                  <Text className="text-xs text-slate-500 font-medium">Trial allowance</Text>
+                  <Text className="text-xs font-bold text-slate-800">
+                    {quotaInfo.max} trials per {quotaInfo.periodWeeks} weeks
+                  </Text>
+                </View>
+
+                <View className="mt-2.5 flex-row items-center justify-between">
+                  <Text className="text-xs text-slate-500 font-medium">Valid</Text>
+                  <Text className="text-xs font-bold text-slate-800">
+                    {selectedDateOption === 'today' ? 'Today' : 'Tomorrow'} until {closingTime}
+                  </Text>
+                </View>
+
+                <View className="mt-2.5 flex-row items-center justify-between">
+                  <Text className="text-xs text-slate-500 font-medium">Check-in</Text>
+                  <Text className="text-xs font-bold text-slate-800">
+                    Show QR at front desk
+                  </Text>
+                </View>
+              </View>
+
+              {/* No-Show Policy Box with Checkbox */}
+              <TouchableOpacity
+                onPress={() => setPolicyAccepted(!policyAccepted)}
+                activeOpacity={0.85}
+                className="mt-4 flex-row items-start gap-3 rounded-2xl border border-red-200 bg-rose-50/20 p-3.5">
+                <View
+                  className={`h-5 w-5 items-center justify-center rounded-[5px] mt-0.5 ${policyAccepted ? 'bg-[#E23744]' : 'border border-slate-300 bg-white'
+                    }`}>
+                  {policyAccepted && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
+                <Text className="flex-1 text-[11.5px] leading-snug text-slate-600">
+                  No-show policy: this pass is valid only on the date I pick. If I don&apos;t visit,
+                  it expires and can&apos;t be reused.
                 </Text>
               </TouchableOpacity>
-            </View>
 
-            {/* Breakdown Box */}
-            <View className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/90 p-4">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs text-slate-500 font-medium">Free trial session</Text>
-                <Text className="text-xs font-bold text-slate-900">₹0</Text>
-              </View>
-
-              <View className="mt-2.5 flex-row items-center justify-between">
-                <Text className="text-xs text-slate-500 font-medium">Trial allowance</Text>
-                <Text className="text-xs font-bold text-slate-800">
-                  {quotaInfo.max} trials per {quotaInfo.periodWeeks} weeks
-                </Text>
-              </View>
-
-              <View className="mt-2.5 flex-row items-center justify-between">
-                <Text className="text-xs text-slate-500 font-medium">Valid</Text>
-                <Text className="text-xs font-bold text-slate-800">
-                  {selectedDateOption === 'today' ? 'Today' : 'Tomorrow'} until {closingTime}
-                </Text>
-              </View>
-
-              <View className="mt-2.5 flex-row items-center justify-between">
-                <Text className="text-xs text-slate-500 font-medium">Check-in</Text>
-                <Text className="text-xs font-bold text-slate-800">
-                  Show QR at front desk
-                </Text>
-              </View>
-            </View>
-
-            {/* No-Show Policy Box with Checkbox */}
-            <TouchableOpacity
-              onPress={() => setPolicyAccepted(!policyAccepted)}
-              activeOpacity={0.85}
-              className="mt-4 flex-row items-start gap-3 rounded-2xl border border-red-200 bg-rose-50/20 p-3.5">
-              <View
-                className={`h-5 w-5 items-center justify-center rounded-[5px] mt-0.5 ${
-                  policyAccepted ? 'bg-[#E23744]' : 'border border-slate-300 bg-white'
-                }`}>
-                {policyAccepted && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
-              </View>
-              <Text className="flex-1 text-[11.5px] leading-snug text-slate-600">
-                No-show policy: this pass is valid only on the date I pick. If I don't visit,
-                it expires and can't be reused.
-              </Text>
-            </TouchableOpacity>
-
-            {/* Confirm Free Trial Button */}
-            <TouchableOpacity
-              disabled={isBooking}
-              onPress={() => handleConfirmBooking(selectedDateOption)}
-              activeOpacity={0.85}
-              className={`mt-5 flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-sm shadow-[#E23744]/25 ${
-                isBooking ? 'opacity-70' : ''
-              }`}>
-              {isBooking ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text className="font-bold text-sm text-white">Confirm free trial • ₹0</Text>
-              )}
-            </TouchableOpacity>
+              {/* Confirm Free Trial Button */}
+              <TouchableOpacity
+                disabled={isBooking}
+                onPress={() => handleConfirmBooking(selectedDateOption)}
+                activeOpacity={0.85}
+                className={`mt-5 flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-sm shadow-[#E23744]/25 ${isBooking ? 'opacity-70' : ''
+                  }`}>
+                {isBooking ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text className="font-bold text-sm text-white">Confirm free trial • ₹0</Text>
+                )}
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
 
-        {/* In-Modal Toast to ensure notifications appear in front of the bottom sheet */}
-        {isBookingModalVisible && (
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 99999,
-              elevation: 99999,
-            }}>
-            <Toast topOffset={Math.max(insets.top, 40) + 12} />
-          </View>
-        )}
-      </View>
-    </Modal>
+          {/* In-Modal Toast to ensure notifications appear in front of the bottom sheet */}
+          {isBookingModalVisible && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99999,
+                elevation: 99999,
+              }}>
+              <Toast topOffset={Math.max(insets.top, 40) + 12} />
+            </View>
+          )}
+        </View>
+      </Modal>
 
       {/* ─── 3. Today's Slots Full Sheet Modal (Image 3) ───────────────────────── */}
       <Modal
@@ -1200,109 +1434,108 @@ export default function GymFreeTrialSection({
             onPress={() => setIsSlotsFullModalVisible(false)}
             className="flex-1 justify-end bg-black/60">
             <Pressable
-              onPress={(e) => e.stopPropagation()}
+              onPress={(e: any) => e.stopPropagation()}
               style={{ paddingBottom: Math.max(insets.bottom, 20) }}
               className="rounded-t-[32px] bg-white px-5 pt-3 items-center">
-            {/* Top Drag Handle */}
-            <View className="mb-4 h-1 w-12 rounded-full bg-slate-300" />
+              {/* Top Drag Handle */}
+              <View className="mb-4 h-1 w-12 rounded-full bg-slate-300" />
 
-            {/* Circular Calendar Icon */}
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-amber-50 border border-amber-100">
-              <Ionicons name="calendar" size={24} color="#B45309" />
-            </View>
-
-            {/* Title */}
-            <Text className="mt-3.5 font-extrabold text-[18px] text-slate-900 text-center">
-              {isTomorrowClosed ? 'Trial slots unavailable' : "Today's trial slots are full"}
-            </Text>
-
-            {/* Subtitle */}
-            <Text className="mt-1.5 px-3 text-center text-xs text-slate-500 leading-relaxed font-medium">
-              {isTomorrowClosed
-                ? `Today's trial sessions at ${gymName} are currently booked and the gym is closed tomorrow.`
-                : `All ${trial?.dailyTrialLimit || 3} free trial sessions at ${gymName} have been booked for today. The next open day is tomorrow.`}
-            </Text>
-
-            {/* Next Open Day Card if Tomorrow is open */}
-            {!isTomorrowClosed && (
-              <View className="mt-5 w-full flex-row items-center gap-3 rounded-2xl border border-red-300 bg-rose-50/40 p-3">
-                {/* Date Badge */}
-                <View className="min-w-[44px] items-center justify-center rounded-xl bg-[#E23744] px-2.5 py-1.5">
-                  <Text className="text-[10px] font-bold uppercase text-white">
-                    {dateInfo.tomorrowMonth}
-                  </Text>
-                  <Text className="font-extrabold text-base text-white leading-tight">
-                    {dateInfo.tomorrowDay}
-                  </Text>
-                </View>
-
-                <View className="flex-1">
-                  <Text className="font-bold text-xs text-slate-900">
-                    Tomorrow, {dateInfo.tomorrowShort}
-                  </Text>
-                  <Text className="mt-0.5 text-[11px] font-semibold text-emerald-600">
-                    {tomorrowSlotsAvailable} of {trial?.dailyTrialLimit || 3} slots open
-                  </Text>
-                </View>
+              {/* Circular Calendar Icon */}
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-amber-50 border border-amber-100">
+                <Ionicons name="calendar" size={24} color="#B45309" />
               </View>
-            )}
 
-            {/* Book for tomorrow instead button */}
-            {!isTomorrowClosed && (
-              <TouchableOpacity
-                disabled={isBooking}
-                onPress={() => handleConfirmBooking('tomorrow')}
-                activeOpacity={0.85}
-                className={`mt-4 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-sm ${
-                  isBooking ? 'opacity-70' : ''
-                }`}>
-                {isBooking ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text className="font-bold text-sm text-white">
-                    Book for tomorrow instead • ₹0
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {/* Not now dismissal */}
-            <TouchableOpacity
-              onPress={() => setIsSlotsFullModalVisible(false)}
-              activeOpacity={0.7}
-              className="mt-2 py-2.5">
-              <Text className="font-bold text-xs text-slate-700">Not now</Text>
-            </TouchableOpacity>
-
-            {/* Info Box */}
-            <View className="mt-4 w-full flex-row items-start gap-2.5 rounded-2xl bg-slate-50 p-3.5 border border-slate-100">
-              <Ionicons name="information-circle-outline" size={17} color="#64748B" />
-              <Text className="flex-1 text-[11px] text-slate-500 leading-snug">
-                Your trial is valid only on the date you book. If you don't visit, the pass is
-                marked expired.
+              {/* Title */}
+              <Text className="mt-3.5 font-extrabold text-[18px] text-slate-900 text-center">
+                {isTomorrowClosed ? 'Trial slots unavailable' : "Today's trial slots are full"}
               </Text>
-            </View>
-          </Pressable>
-        </Pressable>
 
-        {/* In-Modal Toast to ensure notifications appear in front of the slots modal */}
-        {isSlotsFullModalVisible && (
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 99999,
-              elevation: 99999,
-            }}>
-            <Toast topOffset={Math.max(insets.top, 40) + 12} />
-          </View>
-        )}
-      </View>
-    </Modal>
+              {/* Subtitle */}
+              <Text className="mt-1.5 px-3 text-center text-xs text-slate-500 leading-relaxed font-medium">
+                {isTomorrowClosed
+                  ? `Today's trial sessions at ${gymName} are currently booked and the gym is closed tomorrow.`
+                  : `All ${trial?.dailyTrialLimit || 3} free trial sessions at ${gymName} have been booked for today. The next open day is tomorrow.`}
+              </Text>
+
+              {/* Next Open Day Card if Tomorrow is open */}
+              {!isTomorrowClosed && (
+                <View className="mt-5 w-full flex-row items-center gap-3 rounded-2xl border border-red-300 bg-rose-50/40 p-3">
+                  {/* Date Badge */}
+                  <View className="min-w-[44px] items-center justify-center rounded-xl bg-[#E23744] px-2.5 py-1.5">
+                    <Text className="text-[10px] font-bold uppercase text-white">
+                      {dateInfo.tomorrowMonth}
+                    </Text>
+                    <Text className="font-extrabold text-base text-white leading-tight">
+                      {dateInfo.tomorrowDay}
+                    </Text>
+                  </View>
+
+                  <View className="flex-1">
+                    <Text className="font-bold text-xs text-slate-900">
+                      Tomorrow, {dateInfo.tomorrowShort}
+                    </Text>
+                    <Text className="mt-0.5 text-[11px] font-semibold text-emerald-600">
+                      {tomorrowSlotsAvailable} of {trial?.dailyTrialLimit || 3} slots open
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Book for tomorrow instead button */}
+              {!isTomorrowClosed && (
+                <TouchableOpacity
+                  disabled={isBooking}
+                  onPress={() => handleConfirmBooking('tomorrow')}
+                  activeOpacity={0.85}
+                  className={`mt-4 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-sm ${isBooking ? 'opacity-70' : ''
+                    }`}>
+                  {isBooking ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text className="font-bold text-sm text-white">
+                      Book for tomorrow instead • ₹0
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Not now dismissal */}
+              <TouchableOpacity
+                onPress={() => setIsSlotsFullModalVisible(false)}
+                activeOpacity={0.7}
+                className="mt-2 py-2.5">
+                <Text className="font-bold text-xs text-slate-700">Not now</Text>
+              </TouchableOpacity>
+
+              {/* Info Box */}
+              <View className="mt-4 w-full flex-row items-start gap-2.5 rounded-2xl bg-slate-50 p-3.5 border border-slate-100">
+                <Ionicons name="information-circle-outline" size={17} color="#64748B" />
+                <Text className="flex-1 text-[11px] text-slate-500 leading-snug">
+                  Your trial is valid only on the date you book. If you don&apos;t visit, the pass is
+                  marked expired.
+                </Text>
+              </View>
+            </Pressable>
+          </Pressable>
+
+          {/* In-Modal Toast to ensure notifications appear in front of the slots modal */}
+          {isSlotsFullModalVisible && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99999,
+                elevation: 99999,
+              }}>
+              <Toast topOffset={Math.max(insets.top, 40) + 12} />
+            </View>
+          )}
+        </View>
+      </Modal>
 
       {/* ─── 4. Your Trial Pass Screen Modal (Image 4) ─────────────────────────── */}
       <Modal
@@ -1418,9 +1651,7 @@ export default function GymFreeTrialSection({
                   )}
                 </View>
                 <Text className="mt-3 text-center text-xs font-medium text-slate-500">
-                  {activeClientId
-                    ? `Show this at the front desk • Pass ID: ${bookedPass?.passId || activeClientId}`
-                    : `Show this at the front desk • ${bookedPass?.passId || 'Trial Pass'}`}
+                  Show this to the front desk to check in
                 </Text>
               </View>
 
@@ -1513,8 +1744,8 @@ export default function GymFreeTrialSection({
             <View className="mt-4 flex-row items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5">
               <Ionicons name="warning-outline" size={17} color="#B45309" />
               <Text className="flex-1 text-[11.5px] leading-snug text-amber-900">
-                Valid only on this date. If you don't visit by closing time, the pass expires
-                and can't be reused.
+                Valid only on this date. If you don&apos;t visit by closing time, the pass expires
+                and can&apos;t be reused.
               </Text>
             </View>
 
@@ -1534,6 +1765,27 @@ export default function GymFreeTrialSection({
                 className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-3.5 shadow-xs">
                 <Ionicons name="calendar-outline" size={17} color="#1E293B" />
                 <Text className="font-bold text-xs text-slate-800">Add to calendar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Manage Pass: Reschedule & Cancel trial */}
+            <View className="mt-3 flex-row gap-3">
+              {(!isBookedPassRescheduled || isBookedPassToday) && (
+                <TouchableOpacity
+                  onPress={handleOpenRescheduleFromSection}
+                  activeOpacity={0.85}
+                  className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-3.5 shadow-xs">
+                  <Ionicons name="time-outline" size={17} color="#7C3AED" />
+                  <Text className="font-bold text-xs text-purple-700">Reschedule</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleOpenCancelFromSection}
+                activeOpacity={0.85}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 py-3.5 shadow-xs">
+                <Ionicons name="close-circle-outline" size={17} color="#E23744" />
+                <Text className="font-bold text-xs text-[#E23744]">Cancel trial</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1556,6 +1808,58 @@ export default function GymFreeTrialSection({
           )}
         </View>
       </Modal>
+
+      {/* ─── Reschedule Modal ─── */}
+      <TrialRescheduleModal
+        visible={isRescheduleModalVisible}
+        pass={bookedPassItem}
+        onClose={() => setIsRescheduleModalVisible(false)}
+        onConfirm={handleConfirmRescheduleFromSection}
+        isRescheduling={isRescheduling}
+      />
+
+      {/* ─── Reschedule Success Modal ─── */}
+      <TrialRescheduleSuccessModal
+        visible={isRescheduleSuccessVisible}
+        onClose={() => setIsRescheduleSuccessVisible(false)}
+        rescheduledPass={rescheduledPass}
+        dayInfo={getNextDayInfo(rescheduledPass?.rawDate)}
+        onViewNewPass={() => {
+          setIsRescheduleSuccessVisible(false);
+          setIsPassModalVisible(true);
+        }}
+        onAddToCalendar={handleAddToCalendar}
+      />
+
+      {/* ─── Cancel Modal ─── */}
+      <TrialCancelModal
+        visible={isCancelModalVisible}
+        onClose={() => setIsCancelModalVisible(false)}
+        cancellingPass={bookedPassItem}
+        selectedReason={selectedCancelReason}
+        onSelectReason={setSelectedCancelReason}
+        onConfirmCancel={handleConfirmCancelFromSection}
+        isCancelling={isCancelling}
+        onRescheduleInstead={() => {
+          setIsCancelModalVisible(false);
+          setIsRescheduleModalVisible(true);
+        }}
+      />
+
+      {/* ─── Cancel Success Modal ─── */}
+      <TrialCancelSuccessModal
+        visible={isCancelSuccessVisible}
+        onClose={() => setIsCancelSuccessVisible(false)}
+        cancelledPass={cancelledPass}
+        onBookAnotherDate={() => {
+          setIsCancelSuccessVisible(false);
+          setIsBookingModalVisible(true);
+        }}
+        onFindMoreGyms={() => {
+          setIsCancelSuccessVisible(false);
+          router.push('/(tabs)/search' as any);
+        }}
+      />
     </View>
   );
 }

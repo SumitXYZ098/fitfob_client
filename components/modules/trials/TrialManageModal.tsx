@@ -33,6 +33,15 @@ export default function TrialManageModal({
 
   if (!pass) return null;
 
+  const isRescheduled =
+    pass.statusBadgeLabel === 'Rescheduled' ||
+    (pass as any).trialStatus === 'rescheduled' ||
+    (pass as any).trialstatus === 'rescheduled';
+
+  // If a pass is already rescheduled for tomorrow/future: hide reschedule option.
+  // Once trialDate matches currentDate (pass.isToday === true), reschedule becomes visible.
+  const canReschedule = !isRescheduled || pass.isToday;
+
   return (
     <Modal
       visible={visible}
@@ -119,38 +128,40 @@ export default function TrialManageModal({
             </TouchableOpacity>
           </View>
 
-          {/* Option 1: Reschedule */}
-          <TouchableOpacity
-            onPress={onReschedule}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 12,
-            }}>
-            <View
+          {/* Option 1: Reschedule (Hidden if already rescheduled for tomorrow/future; visible on trial date or for initial bookings) */}
+          {canReschedule ? (
+            <TouchableOpacity
+              onPress={onReschedule}
+              activeOpacity={0.7}
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: '#F8FAFC',
-                borderWidth: 1,
-                borderColor: '#F1F5F9',
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
+                paddingVertical: 12,
               }}>
-              <Ionicons name="time-outline" size={20} color="#0F172A" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
-                Reschedule
-              </Text>
-              <Text style={{ fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 1 }}>
-                Move to another open day
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-          </TouchableOpacity>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Ionicons name="time-outline" size={20} color="#0F172A" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
+                  Reschedule
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 1 }}>
+                  Move to another open day
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+          ) : null}
 
           {/* Option 2: Get directions */}
           <TouchableOpacity

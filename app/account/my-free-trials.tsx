@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
-import { useClientGymTrials, useClientQrCode } from '@/hook/useClient';
+import { useClientGymTrials, useClientQrCode, useCancelGymTrial, useRescheduleGymTrial } from '@/hook/useClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { storageAPI } from '@/utility/storage';
 import { formatGymTitle, formatPersonName } from '@/components/GymCard';
@@ -52,7 +52,7 @@ const parseDateParts = (rawDateStr?: string, formattedDateStr?: string) => {
         day: String(d.getDate()).padStart(2, '0'),
       };
     }
-  } catch {}
+  } catch { }
 
   const match = target.match(/(\d{1,2})\s+([A-Za-z]+)/);
   if (match) {
@@ -76,23 +76,48 @@ const formatPassDate = (rawDateStr?: string, formattedDateStr?: string) => {
       const month = d.toLocaleDateString('en-US', { month: 'short' });
       return `${weekday}, ${day} ${month}`;
     }
-  } catch {}
+  } catch { }
   return formattedDateStr || 'Tue, 17 Nov';
 };
 
-// Helper to calculate "4h 18m" remaining
-const formatExpiresIn = (validUntil?: string) => {
+// Helper to calculate time remaining until closing time
+const formatExpiresIn = (validUntil?: string, rawDateStr?: string) => {
   try {
     const now = new Date();
-    const target = new Date();
-    target.setHours(22, 0, 0, 0); // 10:00 PM closing
+    let target = new Date();
+    if (rawDateStr) {
+      const parsed = new Date(rawDateStr);
+      if (!isNaN(parsed.getTime())) {
+        target = parsed;
+      }
+    }
+
+    let hour = 22;
+    let min = 0;
+    if (validUntil) {
+      const match = validUntil.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+      if (match) {
+        hour = parseInt(match[1], 10);
+        min = match[2] ? parseInt(match[2], 10) : 0;
+        const ampm = match[3]?.toUpperCase();
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+      }
+    }
+    target.setHours(hour, min, 0, 0);
+
     const diff = target.getTime() - now.getTime();
     if (diff > 0) {
-      const h = Math.floor(diff / (1000 * 60 * 60));
+      const totalHours = Math.floor(diff / (1000 * 60 * 60));
       const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      return `${h}h ${m}m`;
+      if (totalHours >= 24) {
+        const d = Math.floor(totalHours / 24);
+        const h = totalHours % 24;
+        return `${d}d ${h}h`;
+      }
+      return `${totalHours}h ${m}m`;
     }
-  } catch {}
+  } catch { }
   return '4h 18m';
 };
 
@@ -138,7 +163,7 @@ const formatCheckinNote = (info?: string | null, checkintime?: string | null) =>
         });
         return `Checked in at ${timeStr}`;
       }
-    } catch {}
+    } catch { }
   }
   if (info) return info;
   return 'Checked in at gym';
@@ -155,6 +180,8 @@ export default function MyFreeTrialsScreen() {
     refetch: refetchTrials,
   } = useClientGymTrials();
   const { data: qrData, isLoading: isQrLoading } = useClientQrCode();
+  const { mutateAsync: cancelTrialMutation, isPending: isCancelling } = useCancelGymTrial();
+  const { mutateAsync: rescheduleTrialMutation, isPending: isRescheduling } = useRescheduleGymTrial();
 
   const [selectedTab, setSelectedTab] = useState<'upcoming' | 'past'>('upcoming');
   const [storedTrials, setStoredTrials] = useState<any[]>([]);
@@ -171,7 +198,7 @@ export default function MyFreeTrialsScreen() {
   // Cancel flow states
   const [cancellingPass, setCancellingPass] = useState<TrialPassItem | null>(null);
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
-  const [selectedCancelReason, setSelectedCancelReason] = useState<string>('My plans changed');
+  const [selectedCancelReason, setSelectedCancelReason] = useState<string>('Change of schedule');
   const [isCancelSuccessVisible, setIsCancelSuccessVisible] = useState(false);
   const [cancelledPass, setCancelledPass] = useState<TrialPassItem | null>(null);
 
@@ -194,54 +221,76 @@ export default function MyFreeTrialsScreen() {
   const handleConfirmReschedule = async () => {
     if (!reschedulingPass) return;
     const targetPass = reschedulingPass;
-    const dayInfo = getNextDayInfo(targetPass.rawDate);
-
-    const updatedPass: TrialPassItem = {
-      ...targetPass,
-      date: dayInfo.tomorrowFormatted,
-      rawDate: dayInfo.tomorrowIso,
-      month: dayInfo.tomorrowMonth,
-      day: dayInfo.tomorrowDay,
-      validUntil: '10:00 PM',
-      statusNote: 'Valid tomorrow until 10:00 PM',
-    };
+    const docId = targetPass.documentId || targetPass.id;
 
     try {
-      const raw = await storageAPI.getItem('client_booked_trials');
-      if (raw) {
-        const list = JSON.parse(raw);
-        if (Array.isArray(list)) {
-          const updated = list.map((item: any) => {
-            if (
-              item.passId === targetPass.passId ||
-              item.id === targetPass.id ||
-              item.documentId === targetPass.id
-            ) {
-              return {
-                ...item,
-                date: dayInfo.tomorrowFormatted,
-                rawDate: dayInfo.tomorrowIso,
-                trialDate: dayInfo.tomorrowIso,
-              };
-            }
-            return item;
-          });
-          await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
-          setStoredTrials(updated);
-        }
-      }
-    } catch {}
+      const res = await rescheduleTrialMutation({ docId, payload: {} });
 
-    setRescheduledPass(updatedPass);
-    setIsRescheduleModalVisible(false);
-    setIsRescheduleSuccessVisible(true);
+      const newDate = res?.data?.trialDate;
+      const dayInfo = getNextDayInfo(newDate || targetPass.rawDate);
+
+      const updatedPass: TrialPassItem = {
+        ...targetPass,
+        date: dayInfo.tomorrowFormatted,
+        rawDate: newDate || dayInfo.tomorrowIso,
+        month: dayInfo.tomorrowMonth || targetPass.month,
+        day: dayInfo.tomorrowDay || targetPass.day,
+        validUntil: res?.data?.closingTime || '10:00 PM',
+        statusNote: res?.data?.info || `Valid tomorrow until ${res?.data?.closingTime || '10:00 PM'}`,
+      };
+
+      try {
+        const raw = await storageAPI.getItem('client_booked_trials');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((item: any) => {
+              if (
+                item.passId === targetPass.passId ||
+                item.id === targetPass.id ||
+                item.documentId === targetPass.documentId ||
+                item.documentId === targetPass.id
+              ) {
+                return {
+                  ...item,
+                  date: dayInfo.tomorrowFormatted,
+                  rawDate: newDate || dayInfo.tomorrowIso,
+                  trialDate: newDate || dayInfo.tomorrowIso,
+                  trialstatus: res?.data?.trialStatus || 'rescheduled',
+                };
+              }
+              return item;
+            });
+            await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
+            setStoredTrials(updated);
+          }
+        }
+      } catch { }
+
+      refetchTrials();
+      setRescheduledPass(updatedPass);
+      setIsRescheduleModalVisible(false);
+      setIsRescheduleSuccessVisible(true);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Trial Rescheduled',
+        text2: res?.message || 'Gym trial rescheduled successfully to tomorrow',
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Reschedule Failed',
+        text2: err?.response?.data?.message || err?.message || 'Failed to reschedule gym trial',
+      });
+    }
   };
 
   const handleAddToCalendar = () => {
     Toast.show({
       type: 'success',
       text1: 'Added to Calendar',
-      text2: `Trial at ${rescheduledPass?.gymName || 'Hit Fit Gym'} added to your calendar`,
+      text2: `Trial at ${rescheduledPass?.gymName || 'Gym'} added to your calendar`,
     });
   };
 
@@ -255,38 +304,57 @@ export default function MyFreeTrialsScreen() {
     const pass = selectedManagePass;
     setSelectedManagePass(null);
     setCancellingPass(pass);
-    setSelectedCancelReason('My plans changed');
+    setSelectedCancelReason('Change of schedule');
     setIsCancelModalVisible(true);
   };
 
   const handleConfirmCancel = async () => {
     if (!cancellingPass) return;
     const targetPass = cancellingPass;
+    const docId = targetPass.documentId || targetPass.id;
 
     try {
-      const raw = await storageAPI.getItem('client_booked_trials');
-      if (raw) {
-        const list = JSON.parse(raw);
-        if (Array.isArray(list)) {
-          const updated = list.map((item: any) => {
-            if (
-              item.passId === targetPass.passId ||
-              item.id === targetPass.id ||
-              item.documentId === targetPass.id
-            ) {
-              return { ...item, trialstatus: 'cancelled', status: 'cancelled' };
-            }
-            return item;
-          });
-          await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
-          setStoredTrials(updated);
-        }
-      }
-    } catch {}
+      const res = await cancelTrialMutation({ docId, reason: selectedCancelReason });
 
-    setCancelledPass(targetPass);
-    setIsCancelModalVisible(false);
-    setIsCancelSuccessVisible(true);
+      try {
+        const raw = await storageAPI.getItem('client_booked_trials');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((item: any) => {
+              if (
+                item.passId === targetPass.passId ||
+                item.id === targetPass.id ||
+                item.documentId === targetPass.documentId ||
+                item.documentId === targetPass.id
+              ) {
+                return { ...item, trialstatus: 'cancelled', status: 'cancelled' };
+              }
+              return item;
+            });
+            await storageAPI.setItem('client_booked_trials', JSON.stringify(updated));
+            setStoredTrials(updated);
+          }
+        }
+      } catch { }
+
+      refetchTrials();
+      setCancelledPass(targetPass);
+      setIsCancelModalVisible(false);
+      setIsCancelSuccessVisible(true);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Trial Cancelled',
+        text2: res?.message || 'Gym trial cancelled successfully. Slot reopened.',
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Cancellation Failed',
+        text2: err?.response?.data?.message || err?.message || 'Failed to cancel gym trial',
+      });
+    }
   };
 
   // Load booked passes and verified QR code from local storage
@@ -305,7 +373,7 @@ export default function MyFreeTrialsScreen() {
           setStoredTrials(parsed);
         }
       }
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -351,7 +419,7 @@ export default function MyFreeTrialsScreen() {
 
       if (cleaned.length !== storedTrials.length) {
         setStoredTrials(cleaned);
-        storageAPI.setItem('client_booked_trials', JSON.stringify(cleaned)).catch(() => {});
+        storageAPI.setItem('client_booked_trials', JSON.stringify(cleaned)).catch(() => { });
       }
     }
   }, [gymTrialsApiData, storedTrials]);
@@ -414,7 +482,7 @@ export default function MyFreeTrialsScreen() {
       if (!b) return null;
       const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
       const gymName = formatGymTitle(
-        String(b.clubName || b.gymName || ownerObj?.clubName || b.title || 'Check Fit')
+        String(b.clubName || b.gymName || ownerObj?.clubName || b.title || 'Gym')
       );
       const rawDate = String(b.trialDate || b.rawDate || todayStr);
       const passId = computePassId(b);
@@ -425,11 +493,14 @@ export default function MyFreeTrialsScreen() {
 
       const parts = parseDateParts(rawDate, b.date);
       const isPast = rawDate < todayStr;
+      const isToday = rawDate === todayStr;
       const statusRaw = String(b.trialStatus || b.trialstatus || b.status || '').toLowerCase().trim();
 
       let badge: 'booked' | 'checked_in' | 'expired' | 'cancelled' = 'booked';
       let label = 'Booked';
-      let note = `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`;
+      let note = isToday
+        ? `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`
+        : `Valid tomorrow until ${b.closingTime || b.validUntil || '10:00 PM'}`;
 
       if (statusRaw === 'completed' || statusRaw === 'checked_in' || statusRaw === 'attended') {
         badge = 'checked_in';
@@ -448,6 +519,10 @@ export default function MyFreeTrialsScreen() {
         badge = 'cancelled';
         label = 'Cancelled';
         note = b.info || 'Cancelled by you';
+      } else if (statusRaw === 'rescheduled') {
+        badge = 'booked';
+        label = 'Rescheduled';
+        note = b.info || `Valid tomorrow until ${b.closingTime || b.validUntil || '10:00 PM'}`;
       } else if (isPast) {
         badge = 'expired';
         label = 'Expired';
@@ -455,7 +530,9 @@ export default function MyFreeTrialsScreen() {
       } else {
         badge = 'booked';
         label = 'Booked';
-        note = b.info || `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`;
+        note = b.info || (isToday
+          ? `Valid today until ${b.closingTime || b.validUntil || '10:00 PM'}`
+          : `Valid tomorrow until ${b.closingTime || b.validUntil || '10:00 PM'}`);
       }
 
       let distanceDisplay: string | undefined = undefined;
@@ -470,9 +547,10 @@ export default function MyFreeTrialsScreen() {
 
       return {
         id: b.id || b.documentId || passId,
+        documentId: b.documentId,
         passId,
         gymName,
-        gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || 'Sector 91, Mohali',
+        gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || '',
         distance: distanceDisplay,
         latitude: lat,
         longitude: lng,
@@ -494,8 +572,8 @@ export default function MyFreeTrialsScreen() {
     const apiList = Array.isArray(gymTrialsApiData)
       ? gymTrialsApiData
       : Array.isArray((gymTrialsApiData as any)?.data)
-      ? (gymTrialsApiData as any).data
-      : [];
+        ? (gymTrialsApiData as any).data
+        : [];
     for (const item of apiList) {
       const p = normalizeItem(item);
       if (p) {
@@ -522,84 +600,9 @@ export default function MyFreeTrialsScreen() {
     realUpcoming.sort((a, b) => (a.rawDate || '').localeCompare(b.rawDate || ''));
     realPast.sort((a, b) => (b.rawDate || '').localeCompare(a.rawDate || ''));
 
-    const hasAnyRealData = realUpcoming.length > 0 || realPast.length > 0;
-
-    // 3. Fallbacks to guarantee the screen displays mockup if user has zero trials
-    const sampleUpcoming: TrialPassItem[] = [
-      {
-        id: 'sample-1',
-        passId: 'TRL-8492',
-        gymName: 'Hit Fit Gym',
-        gymAddress: 'Sector 22, Mohali',
-        distance: '1.2 km',
-        date: '17 Nov 2026',
-        rawDate: todayStr,
-        month: 'NOV',
-        day: '17',
-        validUntil: '10:00 PM',
-        statusNote: 'Valid today until 10:00 PM',
-        statusBadge: 'booked',
-        statusBadgeLabel: 'Booked',
-        guestName: user?.clientDetail?.name || user?.name || 'Shweta Rana',
-        qrCode: qrData?.data?.qrCode,
-        isToday: true,
-      },
-    ];
-
-    const samplePast: TrialPassItem[] = [
-      {
-        id: 'sample-past-1',
-        passId: 'TRL-5120',
-        gymName: 'Iron Paradise',
-        gymAddress: 'Phase 7, Mohali',
-        date: '12 Nov 2026',
-        rawDate: '2026-11-12',
-        month: 'NOV',
-        day: '12',
-        validUntil: '10:00 PM',
-        statusNote: 'Checked in at 7:42 AM',
-        statusBadge: 'checked_in',
-        statusBadgeLabel: 'Checked in',
-        guestName: user?.clientDetail?.name || user?.name || 'Shweta Rana',
-        qrCode: qrData?.data?.qrCode,
-      },
-      {
-        id: 'sample-past-2',
-        passId: 'TRL-3901',
-        gymName: 'PowerHouse Fitness',
-        gymAddress: 'Sector 35, Chandigarh',
-        date: '04 Nov 2026',
-        rawDate: '2026-11-04',
-        month: 'NOV',
-        day: '04',
-        validUntil: '10:00 PM',
-        statusNote: 'Not visited by closing time',
-        statusBadge: 'expired',
-        statusBadgeLabel: 'Expired',
-        guestName: user?.clientDetail?.name || user?.name || 'Shweta Rana',
-        qrCode: qrData?.data?.qrCode,
-      },
-      {
-        id: 'sample-past-3',
-        passId: 'TRL-2219',
-        gymName: 'Anytime Fitness',
-        gymAddress: 'Sector 17, Chandigarh',
-        date: '21 Oct 2026',
-        rawDate: '2026-10-21',
-        month: 'OCT',
-        day: '21',
-        validUntil: '10:00 PM',
-        statusNote: 'Cancelled by you',
-        statusBadge: 'cancelled',
-        statusBadgeLabel: 'Cancelled',
-        guestName: user?.clientDetail?.name || user?.name || 'Shweta Rana',
-        qrCode: qrData?.data?.qrCode,
-      },
-    ];
-
     return {
-      upcomingPasses: hasAnyRealData ? realUpcoming : sampleUpcoming,
-      pastPasses: hasAnyRealData ? realPast : samplePast,
+      upcomingPasses: realUpcoming,
+      pastPasses: realPast,
     };
   }, [gymTrialsApiData, storedTrials, qrData, cachedQrCode, user]);
 
@@ -642,7 +645,7 @@ export default function MyFreeTrialsScreen() {
             await Linking.openURL(nativeMapScheme);
             return;
           }
-        } catch {}
+        } catch { }
         Linking.openURL(webGoogleMapsUrl).catch(() => {
           Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
         });
@@ -657,7 +660,7 @@ export default function MyFreeTrialsScreen() {
         default: `https://www.google.com/maps/search/?api=1&query=${query}`,
       });
       Linking.openURL(url).catch(() => {
-        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => { });
       });
     }
   };
@@ -665,7 +668,7 @@ export default function MyFreeTrialsScreen() {
   const USER_ID = qrData?.data?.clientId || user?.clientDetail?.clientId || user?.id || 'CLIENT';
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FAFC]" edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: insets.top }}>
       {/* ─── 1. Top Header ────────────────────────────────────────────── */}
       <View className="px-5 pt-2 pb-3">
         <TouchableOpacity
@@ -690,13 +693,11 @@ export default function MyFreeTrialsScreen() {
           <TouchableOpacity
             onPress={() => setSelectedTab('upcoming')}
             activeOpacity={0.85}
-            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl ${
-              selectedTab === 'upcoming' ? 'bg-white shadow-xs' : ''
-            }`}>
-            <Text
-              className={`text-sm ${
-                selectedTab === 'upcoming' ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'
+            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl ${selectedTab === 'upcoming' ? 'bg-white shadow-xs' : ''
               }`}>
+            <Text
+              className={`text-sm ${selectedTab === 'upcoming' ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'
+                }`}>
               Upcoming
             </Text>
             <View className="ml-2 rounded-full bg-[#F6163C] px-2 py-0.5 min-w-[20px] items-center justify-center">
@@ -710,13 +711,11 @@ export default function MyFreeTrialsScreen() {
           <TouchableOpacity
             onPress={() => setSelectedTab('past')}
             activeOpacity={0.85}
-            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl ${
-              selectedTab === 'past' ? 'bg-white shadow-xs' : ''
-            }`}>
-            <Text
-              className={`text-sm ${
-                selectedTab === 'past' ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'
+            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl ${selectedTab === 'past' ? 'bg-white shadow-xs' : ''
               }`}>
+            <Text
+              className={`text-sm ${selectedTab === 'past' ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'
+                }`}>
               Past
             </Text>
             <View className="ml-2 rounded-full bg-slate-300 px-2 py-0.5 min-w-[20px] items-center justify-center">
@@ -752,7 +751,7 @@ export default function MyFreeTrialsScreen() {
             {/* ── TODAY / UPCOMING SECTION ── */}
             <View>
               <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 px-0.5">
-                TODAY
+                {upcomingPasses.some((p) => p.isToday) ? 'TODAY' : 'UPCOMING'}
               </Text>
 
               {upcomingPasses.length > 0 ? (
@@ -807,8 +806,16 @@ export default function MyFreeTrialsScreen() {
                           <Text className="text-[16px] font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
                             {pass.gymName}
                           </Text>
-                          <View className="rounded-full bg-blue-50 border border-blue-200/80 px-2.5 py-0.5">
-                            <Text className="text-xs font-bold text-blue-600">
+                          <View
+                            className={`rounded-full px-2.5 py-0.5 border ${pass.statusBadgeLabel === 'Rescheduled'
+                                ? 'bg-purple-50 border-purple-200/80'
+                                : 'bg-blue-50 border-blue-200/80'
+                              }`}>
+                            <Text
+                              className={`text-xs font-bold ${pass.statusBadgeLabel === 'Rescheduled'
+                                  ? 'text-purple-700'
+                                  : 'text-blue-600'
+                                }`}>
                               {pass.statusBadgeLabel}
                             </Text>
                           </View>
@@ -829,27 +836,29 @@ export default function MyFreeTrialsScreen() {
 
                     {/* Bottom Action Buttons */}
                     <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      {/* Show QR pass button */}
-                      <TouchableOpacity
-                        onPress={() => setSelectedQrPass(pass)}
-                        activeOpacity={0.88}
-                        style={{
-                          flex: 1,
-                          height: 48,
-                          borderRadius: 12,
-                          backgroundColor: '#E23744',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                        <Text
+                      {/* Show QR pass button: Only visible when trialDate matches currentDate (isToday); hidden when scheduled for tomorrow/future */}
+                      {pass.isToday ? (
+                        <TouchableOpacity
+                          onPress={() => setSelectedQrPass(pass)}
+                          activeOpacity={0.88}
                           style={{
-                            color: '#FFFFFF',
-                            fontSize: 14,
-                            fontWeight: '700',
+                            flex: 1,
+                            height: 48,
+                            borderRadius: 12,
+                            backgroundColor: '#E23744',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}>
-                          Show QR pass
-                        </Text>
-                      </TouchableOpacity>
+                          <Text
+                            style={{
+                              color: '#FFFFFF',
+                              fontSize: 14,
+                              fontWeight: '700',
+                            }}>
+                            Show QR pass
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
 
                       {/* Direction button */}
                       <TouchableOpacity
@@ -863,8 +872,9 @@ export default function MyFreeTrialsScreen() {
                         }
                         activeOpacity={0.85}
                         style={{
+                          flex: pass.isToday ? undefined : 1,
                           height: 48,
-                          paddingHorizontal: 14,
+                          paddingHorizontal: 16,
                           borderRadius: 12,
                           backgroundColor: '#FEF2F2',
                           borderWidth: 1,
@@ -1204,6 +1214,7 @@ export default function MyFreeTrialsScreen() {
         pass={reschedulingPass}
         onClose={() => setIsRescheduleModalVisible(false)}
         onConfirm={handleConfirmReschedule}
+        isRescheduling={isRescheduling}
       />
 
       {/* ─── 8. Trial Rescheduled Success Screen (Separate Component) ── */}
@@ -1224,6 +1235,7 @@ export default function MyFreeTrialsScreen() {
         selectedReason={selectedCancelReason}
         onSelectReason={setSelectedCancelReason}
         onConfirmCancel={handleConfirmCancel}
+        isCancelling={isCancelling}
         onRescheduleInstead={(pass) => {
           setReschedulingPass(pass);
           setIsRescheduleModalVisible(true);
@@ -1241,6 +1253,6 @@ export default function MyFreeTrialsScreen() {
         }}
         onFindMoreGyms={() => router.push('/(tabs)')}
       />
-    </SafeAreaView>
+    </View>
   );
 }

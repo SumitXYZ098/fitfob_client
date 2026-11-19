@@ -31,7 +31,7 @@ export default function TrialQrScreen() {
       .then((val) => {
         if (val) setCachedQrCode(val);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const params = useLocalSearchParams<{
@@ -81,7 +81,7 @@ export default function TrialQrScreen() {
             await Linking.openURL(nativeMapScheme);
             return;
           }
-        } catch {}
+        } catch { }
         Linking.openURL(webGoogleMapsUrl).catch(() => {
           Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
         });
@@ -96,16 +96,15 @@ export default function TrialQrScreen() {
         default: `https://www.google.com/maps/search/?api=1&query=${query}`,
       });
       Linking.openURL(url).catch(() => {
-        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => { });
       });
     }
   };
 
-  const gymName = params.gymName || 'Hit Fit Gym';
-  const gymAddress = params.gymAddress || 'Sector 22, Mohali';
-  const passId = params.passId || 'TRL-20871';
+  const gymName = params.gymName || 'Gym';
+  const gymAddress = params.gymAddress || '';
   const guestName = formatPersonName(
-    params.guestName || user?.clientDetail?.name || user?.name || 'Hardeep Singh'
+    params.guestName || user?.clientDetail?.name || user?.name || 'Guest'
   );
 
   const formattedDate = (() => {
@@ -117,22 +116,33 @@ export default function TrialQrScreen() {
         const month = d.toLocaleDateString('en-US', { month: 'short' });
         return `${weekday}, ${day} ${month}`;
       }
-    } catch {}
+    } catch { }
     return params.date || 'Tue, 17 Nov';
   })();
 
   const expiresIn = (() => {
     try {
       const now = new Date();
-      const target = new Date();
+      let target = new Date();
+      if (params.date) {
+        const parsed = new Date(params.date);
+        if (!isNaN(parsed.getTime())) {
+          target = parsed;
+        }
+      }
       target.setHours(22, 0, 0, 0);
       const diff = target.getTime() - now.getTime();
       if (diff > 0) {
-        const h = Math.floor(diff / (1000 * 60 * 60));
+        const totalHours = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        return `${h}h ${m}m`;
+        if (totalHours >= 24) {
+          const d = Math.floor(totalHours / 24);
+          const h = totalHours % 24;
+          return `${d}d ${h}h`;
+        }
+        return `${totalHours}h ${m}m`;
       }
-    } catch {}
+    } catch { }
     return '4h 18m';
   })();
 
@@ -295,7 +305,9 @@ export default function TrialQrScreen() {
                 }}
               />
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>
-                Active · ready to scan
+                {(params as any).status === 'rescheduled'
+                  ? 'Rescheduled · ready to scan'
+                  : 'Active · ready to scan'}
               </Text>
             </View>
           </View>
@@ -337,24 +349,15 @@ export default function TrialQrScreen() {
                     fontWeight: '600',
                     color: '#94A3B8',
                   }}>
-                  Pass ID: {passId}
+                  Scan to verify trial pass
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Pass ID & Front Desk Subtext */}
+          {/* Front Desk Subtext */}
           <View style={{ alignItems: 'center' }}>
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: '900',
-                color: '#0F172A',
-                letterSpacing: 2,
-              }}>
-              {passId}
-            </Text>
-            <Text style={{ fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 4 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B', marginTop: 4 }}>
               Show this to the front desk to check in
             </Text>
           </View>

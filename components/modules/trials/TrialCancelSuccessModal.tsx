@@ -27,7 +27,7 @@ export default function TrialCancelSuccessModal({
   onBookAnotherDate,
   onFindMoreGyms,
 }: TrialCancelSuccessModalProps) {
-  const gymTitle = cancelledPass?.gymName || 'Hit Fit Gym';
+  const gymTitle = cancelledPass?.gymName || 'Gym';
   const formattedDate = formatPassDate(cancelledPass?.rawDate, cancelledPass?.date);
 
   return (
@@ -124,19 +124,6 @@ export default function TrialCancelSuccessModal({
                     textDecorationLine: 'line-through',
                   }}>
                   {formattedDate}
-                </Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 12, fontWeight: '500', color: '#64748B' }}>Pass ID</Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '700',
-                    color: '#0F172A',
-                    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-                  }}>
-                  {cancelledPass?.passId || 'TRL-20871'}
                 </Text>
               </View>
 

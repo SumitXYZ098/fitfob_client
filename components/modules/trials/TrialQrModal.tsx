@@ -128,12 +128,12 @@ export default function TrialQrModal({
                 <Text
                   style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 }}
                   numberOfLines={1}>
-                  {pass.gymName || 'Hit Fit Gym'}
+                  {pass.gymName || 'Gym'}
                 </Text>
                 <Text
                   style={{ fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 2 }}
                   numberOfLines={1}>
-                  {pass.gymAddress || 'Sector 22, Mohali'}
+                  {pass.gymAddress || ''}
                 </Text>
 
                 {/* Get Direction Pill */}
@@ -206,7 +206,11 @@ export default function TrialQrModal({
                   }}
                 />
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>
-                  Active · ready to scan
+                  {pass.statusBadgeLabel === 'Rescheduled'
+                    ? 'Rescheduled · ready to scan'
+                    : pass.isToday
+                    ? 'Active · ready to scan'
+                    : 'Booked · ready to scan'}
                 </Text>
               </View>
             </View>
@@ -248,24 +252,15 @@ export default function TrialQrModal({
                       fontWeight: '600',
                       color: '#94A3B8',
                     }}>
-                    Pass ID: {pass.passId || 'TRL-0014'}
+                    Scan to verify trial pass
                   </Text>
                 </View>
               )}
             </View>
 
-            {/* Pass ID & Front Desk Subtext */}
+            {/* Front Desk Subtext */}
             <View style={{ alignItems: 'center' }}>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: '900',
-                  color: '#0F172A',
-                  letterSpacing: 2,
-                }}>
-                {pass.passId || 'TRL-20871'}
-              </Text>
-              <Text style={{ fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 4 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B', marginTop: 4 }}>
                 Show this to the front desk to check in
               </Text>
             </View>
@@ -310,7 +305,7 @@ export default function TrialQrModal({
                 <Text
                   style={{ fontSize: 13, fontWeight: '700', color: '#E23744', marginTop: 3 }}
                   numberOfLines={1}>
-                  {formatExpiresIn(pass.validUntil)}
+                  {formatExpiresIn(pass.validUntil, pass.rawDate)}
                 </Text>
               </View>
             </View>

@@ -30,11 +30,17 @@ import {
   ClientSubscriptionsResponse,
   bookGymTrial,
   getClientGymTrials,
+  cancelGymTrial,
+  rescheduleGymTrial,
   BookGymTrialPayload,
   BookGymTrialResponse,
   GymTrialData,
   GymTrialQuota,
   ClientTrialItem,
+  CancelGymTrialPayload,
+  CancelGymTrialResponse,
+  RescheduleGymTrialPayload,
+  RescheduleGymTrialResponse,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -465,6 +471,34 @@ export const useClientGymTrials = () => {
   });
 };
 
+export const useCancelGymTrial = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, reason }: { docId: string | number; reason?: string }) =>
+      cancelGymTrial(docId, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gym-trials'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
+    },
+  });
+};
+
+export const useRescheduleGymTrial = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, payload }: { docId: string | number; payload?: RescheduleGymTrialPayload }) =>
+      rescheduleGymTrial(docId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gym-trials'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
+    },
+  });
+};
+
 export type {
   CheckinItem,
   MyCheckinsResponse,
@@ -479,6 +513,10 @@ export type {
   GymTrialData,
   GymTrialQuota,
   ClientTrialItem,
+  CancelGymTrialPayload,
+  CancelGymTrialResponse,
+  RescheduleGymTrialPayload,
+  RescheduleGymTrialResponse,
 };
 
 

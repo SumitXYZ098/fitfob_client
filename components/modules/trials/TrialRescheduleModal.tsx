@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrialPassItem, getNextDayInfo } from './types';
@@ -9,6 +9,7 @@ export interface TrialRescheduleModalProps {
   pass: TrialPassItem | null;
   onClose: () => void;
   onConfirm: () => void;
+  isRescheduling?: boolean;
 }
 
 export default function TrialRescheduleModal({
@@ -16,6 +17,7 @@ export default function TrialRescheduleModal({
   pass,
   onClose,
   onConfirm,
+  isRescheduling = false,
 }: TrialRescheduleModalProps) {
   const insets = useSafeAreaInsets();
 
@@ -41,7 +43,7 @@ export default function TrialRescheduleModal({
           justifyContent: 'flex-end',
         }}>
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={(e: any) => e.stopPropagation()}
           style={{
             backgroundColor: '#FFFFFF',
             borderTopLeftRadius: 28,
@@ -92,7 +94,7 @@ export default function TrialRescheduleModal({
                   color: '#94A3B8',
                   marginTop: 3,
                 }}>
-                {pass.gymName || 'Hit Fit Gym'} · {pass.gymAddress || 'Sector 22, Mohali'}
+                {pass.gymName || 'Gym'}{pass.gymAddress ? ` · ${pass.gymAddress}` : ''}
               </Text>
             </View>
 
@@ -275,11 +277,12 @@ export default function TrialRescheduleModal({
           {/* Confirm Reschedule Button */}
           <TouchableOpacity
             onPress={onConfirm}
+            disabled={isRescheduling}
             activeOpacity={0.88}
             style={{
               height: 50,
               borderRadius: 16,
-              backgroundColor: '#E23744',
+              backgroundColor: isRescheduling ? '#FDA4AF' : '#E23744',
               alignItems: 'center',
               justifyContent: 'center',
               shadowColor: '#E23744',
@@ -288,9 +291,13 @@ export default function TrialRescheduleModal({
               shadowRadius: 8,
               elevation: 3,
             }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
-              Confirm reschedule
-            </Text>
+            {isRescheduling ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                Confirm reschedule
+              </Text>
+            )}
           </TouchableOpacity>
 
           {/* Keep current date Button */}

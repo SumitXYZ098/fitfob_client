@@ -34,6 +34,8 @@ export const ENDPOINTS = {
   CLIENT_SUBSCRIPTIONS: `${BASE_URL}/api/client-details/me/subscriptions`,
   GYM_TRIALS: `${BASE_URL}/api/gym-trials`,
   MY_TRIALS: `${BASE_URL}/api/client/my-trials`,
+  CANCEL_TRIAL: (docId: string | number) => `${BASE_URL}/api/client/my-trials/${docId}/cancel`,
+  RESCHEDULE_TRIAL: (docId: string | number) => `${BASE_URL}/api/client/my-trials/${docId}/reschedule`,
 
   // Notifications
   REGISTER_DEVICE_TOKEN: `${BASE_URL}/api/device-tokens/register`,
