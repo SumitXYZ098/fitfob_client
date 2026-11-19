@@ -7,6 +7,7 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,7 +42,64 @@ export default function TrialQrScreen() {
     guestName?: string;
     validUntil?: string;
     qrCode?: string;
+    latitude?: string;
+    longitude?: string;
+    distance?: string;
   }>();
+
+  const handleOpenDirections = () => {
+    const lat =
+      params.latitude !== undefined && params.latitude !== null && !isNaN(Number(params.latitude))
+        ? Number(params.latitude)
+        : null;
+    const lng =
+      params.longitude !== undefined && params.longitude !== null && !isNaN(Number(params.longitude))
+        ? Number(params.longitude)
+        : null;
+    const encodedName = encodeURIComponent(gymName.trim());
+
+    if (lat !== null && lng !== null) {
+      const googleMapsAppUrl = Platform.select({
+        ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+        android: `google.navigation:q=${lat},${lng}&mode=d`,
+      });
+
+      const nativeMapScheme = Platform.select({
+        ios: `maps://app?daddr=${lat},${lng}&q=${encodedName}`,
+        android: `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`,
+      });
+
+      const webGoogleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving`;
+
+      const openNavigation = async () => {
+        try {
+          if (googleMapsAppUrl && (await Linking.canOpenURL(googleMapsAppUrl))) {
+            await Linking.openURL(googleMapsAppUrl);
+            return;
+          }
+          if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {
+            await Linking.openURL(nativeMapScheme);
+            return;
+          }
+        } catch {}
+        Linking.openURL(webGoogleMapsUrl).catch(() => {
+          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+        });
+      };
+
+      openNavigation();
+    } else {
+      const query = encodeURIComponent(`${gymName} ${gymAddress}`.trim());
+      const url = Platform.select({
+        ios: `maps:0,0?q=${query}`,
+        android: `geo:0,0?q=${query}`,
+        default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+      });
+      Linking.openURL(url).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+      });
+    }
+  };
 
   const gymName = params.gymName || 'Hit Fit Gym';
   const gymAddress = params.gymAddress || 'Sector 22, Mohali';
@@ -173,6 +231,29 @@ export default function TrialQrScreen() {
                 numberOfLines={1}>
                 {gymAddress}
               </Text>
+
+              {/* Get Direction Pill */}
+              <TouchableOpacity
+                onPress={handleOpenDirections}
+                activeOpacity={0.8}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  alignSelf: 'flex-start',
+                  backgroundColor: '#FEF2F2',
+                  borderWidth: 1,
+                  borderColor: '#FEE2E2',
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 10,
+                  marginTop: 6,
+                }}>
+                <Ionicons name="navigate" size={12} color="#E23744" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#E23744' }}>
+                  Get Direction{params.distance ? ` · ${params.distance}` : ''}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Price Pill */}
@@ -323,25 +404,33 @@ export default function TrialQrScreen() {
             </View>
           </View>
         </View>
-
-        {/* Brightness Boost Indicator Pill */}
-        <View style={{ alignItems: 'center', marginTop: 18 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.18)',
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.22)',
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 24,
-            }}>
-           
-           
-          </View>
-        </View>
       </ScrollView>
+
+      {/* Get Direction CTA Button */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 }}>
+        <TouchableOpacity
+          onPress={handleOpenDirections}
+          activeOpacity={0.85}
+          style={{
+            height: 48,
+            borderRadius: 16,
+            backgroundColor: '#FFFFFF',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            elevation: 3,
+          }}>
+          <Ionicons name="navigate" size={16} color="#E23744" />
+          <Text style={{ color: '#E23744', fontSize: 14, fontWeight: '800' }}>
+            Get Direction to Gym{params.distance ? ` (${params.distance})` : ''}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Bottom Action Buttons */}
       <View

@@ -257,9 +257,10 @@ export default function GymFreeTrialSection({
   // Synchronize pass details from backend clientTrialBooking (Source of Truth)
   useEffect(() => {
     if (existingGymBooking) {
-      const passId = `TRL-${String(existingGymBooking.documentId || existingGymBooking.id || 'PASS')
-        .slice(-4)
-        .toUpperCase()}`;
+      const passId =
+        typeof existingGymBooking.id === 'number' && existingGymBooking.id > 0
+          ? `TRL-${String(existingGymBooking.id).padStart(4, '0')}`
+          : `TRL-${String(existingGymBooking.documentId || 'PASS').slice(-4).toUpperCase()}`;
       setBookedPass({
         id: typeof existingGymBooking.id === 'number' ? existingGymBooking.id : undefined,
         documentId: existingGymBooking.documentId,
@@ -292,7 +293,10 @@ export default function GymFreeTrialSection({
               const ownerObj = typeof b.club_owner === 'object' ? b.club_owner : null;
               const ownerDocId = String(ownerObj?.documentId || b.club_owner || '');
               const ownerName = String(ownerObj?.clubName || (ownerDocId === gymId ? gymName : 'Partner Gym'));
-              const bPassId = `TRL-${String(b.documentId || b.id || 'PASS').slice(-4).toUpperCase()}`;
+              const bPassId =
+                typeof b.id === 'number' && b.id > 0
+                  ? `TRL-${String(b.id).padStart(4, '0')}`
+                  : `TRL-${String(b.documentId || 'PASS').slice(-4).toUpperCase()}`;
               return {
                 id: typeof b.id === 'number' ? b.id : undefined,
                 documentId: b.documentId,
@@ -607,7 +611,10 @@ export default function GymFreeTrialSection({
       });
 
       const trialData = response.data;
-      const passId = trialData.documentId || `TRL-${trialData.id}`;
+      const passId =
+        trialData.id
+          ? `TRL-${String(trialData.id).padStart(4, '0')}`
+          : `TRL-${String(trialData.documentId || 'PASS').slice(-4).toUpperCase()}`;
       const passDate = dateOption === 'today' ? dateInfo.todayFull : dateInfo.tomorrowFull;
 
       const serverQuota = response.quota;

@@ -29,6 +29,8 @@ export interface TrialPassItem {
   gymName: string;
   gymAddress: string;
   distance?: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   date: string;
   rawDate?: string;
   month: string;
@@ -377,12 +379,101 @@ export default function MyFreeTrialsScreen() {
     loadStoredTrials();
   }, [loadStoredTrials]);
 
+  // Prune any stored trials that are now confirmed in the backend API response
+  useEffect(() => {
+    if (Array.isArray(gymTrialsApiData) && gymTrialsApiData.length > 0 && storedTrials.length > 0) {
+      const apiDocIds = new Set(
+        gymTrialsApiData.map((a: any) => String(a.documentId || '')).filter(Boolean)
+      );
+      const apiNumericIds = new Set(
+        gymTrialsApiData
+      );
+      const apiGymDates = new Set(
+        gymTrialsApiData.map((a: any) => {
+          const name = formatGymTitle(String(a.clubName || a.gymName || ''))
+            .toLowerCase()
+            .replace(/\s+(gym|fitness|club)$/i, '')
+            .trim();
+          return `${name}_${a.trialDate}`;
+        })
+      );
+
+      const cleaned = storedTrials.filter((st: any) => {
+        const docId = String(st.documentId || '').trim();
+        const numId = typeof st.id === 'number' ? st.id : parseInt(String(st.id), 10);
+        const name = formatGymTitle(String(st.gymName || st.clubName || ''))
+          .toLowerCase()
+          .replace(/\s+(gym|fitness|club)$/i, '')
+          .trim();
+        const gymDate = `${name}_${st.rawDate || st.trialDate}`;
+
+        const isKnown =
+          (docId && apiDocIds.has(docId)) ||
+          (!isNaN(numId) && numId > 0 && apiNumericIds.has(numId)) ||
+          apiGymDates.has(gymDate);
+        return !isKnown;
+      });
+
+      if (cleaned.length !== storedTrials.length) {
+        setStoredTrials(cleaned);
+        storageAPI.setItem('client_booked_trials', JSON.stringify(cleaned)).catch(() => {});
+      }
+    }
+  }, [gymTrialsApiData, storedTrials]);
+
   // Consolidate real passes and fallbacks
   const { upcomingPasses, pastPasses } = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const realUpcoming: TrialPassItem[] = [];
     const realPast: TrialPassItem[] = [];
-    const seen = new Set<string>();
+
+    // Comprehensive deduplication tracking across IDs, document IDs, Pass IDs, and Gym+Date
+    const seenDocIds = new Set<string>();
+    const seenNumericIds = new Set<number>();
+    const seenGymDates = new Set<string>();
+    const seenPassIds = new Set<string>();
+
+    const computePassId = (b: any): string => {
+      if (typeof b.id === 'number' && b.id > 0) {
+        return `TRL-${String(b.id).padStart(4, '0')}`;
+      }
+      if (b.passId && typeof b.passId === 'string' && /^TRL-\w+$/i.test(b.passId)) {
+        return b.passId;
+      }
+      if (b.documentId && typeof b.documentId === 'string' && b.documentId.length >= 4) {
+        return `TRL-${b.documentId.slice(-4).toUpperCase()}`;
+      }
+      return 'TRL-PASS';
+    };
+
+    const isDuplicateAndRegister = (
+      item: any,
+      gymName: string,
+      rawDate: string,
+      passId: string
+    ): boolean => {
+      const docId = item.documentId ? String(item.documentId).trim() : '';
+      const numId = typeof item.id === 'number' && item.id > 0 ? item.id : undefined;
+      const cleanGym = gymName
+        .toLowerCase()
+        .replace(/\s+(gym|fitness|club)$/i, '')
+        .trim();
+      const gymDateKey = `${cleanGym}_${rawDate}`;
+
+      // Check if duplicate of an already registered pass
+      if (docId && seenDocIds.has(docId)) return true;
+      if (numId !== undefined && seenNumericIds.has(numId)) return true;
+      if (cleanGym && rawDate && seenGymDates.has(gymDateKey)) return true;
+      if (passId && passId !== 'TRL-PASS' && seenPassIds.has(passId)) return true;
+
+      // Register new unique pass
+      if (docId) seenDocIds.add(docId);
+      if (numId !== undefined) seenNumericIds.add(numId);
+      if (cleanGym && rawDate) seenGymDates.add(gymDateKey);
+      if (passId && passId !== 'TRL-PASS') seenPassIds.add(passId);
+
+      return false;
+    };
 
     const normalizeItem = (b: any): TrialPassItem | null => {
       if (!b) return null;
@@ -391,14 +482,11 @@ export default function MyFreeTrialsScreen() {
         String(b.clubName || b.gymName || ownerObj?.clubName || b.title || 'Check Fit')
       );
       const rawDate = String(b.trialDate || b.rawDate || todayStr);
-      const passId =
-        b.passId ||
-        (b.id
-          ? `TRL-${String(b.id).padStart(4, '0')}`
-          : `TRL-${String(b.documentId || 'PASS').slice(-4).toUpperCase()}`);
-      const key = `${passId}_${rawDate}_${gymName}`;
-      if (seen.has(key)) return null;
-      seen.add(key);
+      const passId = computePassId(b);
+
+      if (isDuplicateAndRegister(b, gymName, rawDate, passId)) {
+        return null; // Skip duplicate!
+      }
 
       const parts = parseDateParts(rawDate, b.date);
       const isPast = rawDate < todayStr;
@@ -437,8 +525,13 @@ export default function MyFreeTrialsScreen() {
 
       let distanceDisplay: string | undefined = undefined;
       if (b.distance !== null && b.distance !== undefined && b.distance !== '') {
-        distanceDisplay = `${b.distance} ${b.distanceUnit || 'km'}`.trim();
+        const num = typeof b.distance === 'number' ? b.distance : parseFloat(String(b.distance));
+        const formattedNum = !isNaN(num) ? num.toFixed(1) : b.distance;
+        distanceDisplay = `${formattedNum} ${b.distanceUnit || 'km'}`.trim();
       }
+
+      const lat = b.latitude || b.lat || ownerObj?.latitude || ownerObj?.lat || null;
+      const lng = b.longitude || b.lng || ownerObj?.longitude || ownerObj?.lng || null;
 
       return {
         id: b.id || b.documentId || passId,
@@ -446,6 +539,8 @@ export default function MyFreeTrialsScreen() {
         gymName,
         gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || 'Sector 91, Mohali',
         distance: distanceDisplay,
+        latitude: lat,
+        longitude: lng,
         date: formatPassDate(rawDate, b.date),
         rawDate,
         month: parts.month,
@@ -460,21 +555,7 @@ export default function MyFreeTrialsScreen() {
       };
     };
 
-    // 1. Storage passes (user locally scheduled / cancelled)
-    for (const item of storedTrials) {
-      const p = normalizeItem(item);
-      if (p) {
-        if (p.statusBadge === 'booked' && !p.isToday && p.rawDate && p.rawDate < todayStr) {
-          p.statusBadge = 'expired';
-          p.statusBadgeLabel = 'Expired';
-          p.statusNote = 'Not visited by closing time';
-        }
-        if (p.statusBadge === 'booked') realUpcoming.push(p);
-        else realPast.push(p);
-      }
-    }
-
-    // 2. API passes from /api/client/my-trials
+    // 1. Process API passes FIRST (Database Source of Truth)
     const apiList = Array.isArray(gymTrialsApiData)
       ? gymTrialsApiData
       : Array.isArray((gymTrialsApiData as any)?.data)
@@ -483,6 +564,20 @@ export default function MyFreeTrialsScreen() {
     for (const item of apiList) {
       const p = normalizeItem(item);
       if (p) {
+        if (p.statusBadge === 'booked') realUpcoming.push(p);
+        else realPast.push(p);
+      }
+    }
+
+    // 2. Process local storage passes SECOND (only keeps unsynced/optimistic bookings)
+    for (const item of storedTrials) {
+      const p = normalizeItem(item);
+      if (p) {
+        if (p.statusBadge === 'booked' && !p.isToday && p.rawDate && p.rawDate < todayStr) {
+          p.statusBadge = 'expired';
+          p.statusBadgeLabel = 'Expired';
+          p.statusNote = 'Not visited by closing time';
+        }
         if (p.statusBadge === 'booked') realUpcoming.push(p);
         else realPast.push(p);
       }
@@ -573,16 +668,63 @@ export default function MyFreeTrialsScreen() {
     };
   }, [gymTrialsApiData, storedTrials, qrData, cachedQrCode, user]);
 
-  const handleOpenDirections = (gymName: string, address?: string) => {
-    const query = encodeURIComponent(`${gymName} ${address || ''}`.trim());
-    const url = Platform.select({
-      ios: `maps:0,0?q=${query}`,
-      android: `geo:0,0?q=${query}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
-    });
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
-    });
+  const handleOpenDirections = (
+    gymName: string,
+    address?: string,
+    latitude?: number | string | null,
+    longitude?: number | string | null
+  ) => {
+    const lat =
+      latitude !== undefined && latitude !== null && !isNaN(Number(latitude))
+        ? Number(latitude)
+        : null;
+    const lng =
+      longitude !== undefined && longitude !== null && !isNaN(Number(longitude))
+        ? Number(longitude)
+        : null;
+    const encodedName = encodeURIComponent(gymName.trim());
+
+    if (lat !== null && lng !== null) {
+      const googleMapsAppUrl = Platform.select({
+        ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+        android: `google.navigation:q=${lat},${lng}&mode=d`,
+      });
+
+      const nativeMapScheme = Platform.select({
+        ios: `maps://app?daddr=${lat},${lng}&q=${encodedName}`,
+        android: `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`,
+      });
+
+      const webGoogleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving`;
+
+      const openNavigation = async () => {
+        try {
+          if (googleMapsAppUrl && (await Linking.canOpenURL(googleMapsAppUrl))) {
+            await Linking.openURL(googleMapsAppUrl);
+            return;
+          }
+          if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {
+            await Linking.openURL(nativeMapScheme);
+            return;
+          }
+        } catch {}
+        Linking.openURL(webGoogleMapsUrl).catch(() => {
+          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+        });
+      };
+
+      openNavigation();
+    } else {
+      const query = encodeURIComponent(`${gymName} ${address || ''}`.trim());
+      const url = Platform.select({
+        ios: `maps:0,0?q=${query}`,
+        android: `geo:0,0?q=${query}`,
+        default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+      });
+      Linking.openURL(url).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+      });
+    }
   };
 
   const USER_ID = qrData?.data?.clientId || user?.clientDetail?.clientId || user?.id || 'CLIENT';
@@ -771,6 +913,35 @@ export default function MyFreeTrialsScreen() {
                             fontWeight: '700',
                           }}>
                           Show QR pass
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Direction button */}
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleOpenDirections(
+                            pass.gymName,
+                            pass.gymAddress,
+                            pass.latitude,
+                            pass.longitude
+                          )
+                        }
+                        activeOpacity={0.85}
+                        style={{
+                          height: 48,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          backgroundColor: '#FEF2F2',
+                          borderWidth: 1,
+                          borderColor: '#FEE2E2',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}>
+                        <Ionicons name="navigate" size={15} color="#E23744" />
+                        <Text style={{ color: '#E23744', fontSize: 13, fontWeight: '700' }}>
+                          Direction
                         </Text>
                       </TouchableOpacity>
 
@@ -1158,6 +1329,36 @@ export default function MyFreeTrialsScreen() {
                     numberOfLines={1}>
                     {selectedQrPass?.gymAddress || 'Sector 22, Mohali'}
                   </Text>
+
+                  {/* Get Direction Pill */}
+                  <TouchableOpacity
+                    onPress={() =>
+                      handleOpenDirections(
+                        selectedQrPass?.gymName || '',
+                        selectedQrPass?.gymAddress,
+                        selectedQrPass?.latitude,
+                        selectedQrPass?.longitude
+                      )
+                    }
+                    activeOpacity={0.8}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      alignSelf: 'flex-start',
+                      backgroundColor: '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: '#FEE2E2',
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 10,
+                      marginTop: 6,
+                    }}>
+                    <Ionicons name="navigate" size={12} color="#E23744" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#E23744' }}>
+                      Get Direction{selectedQrPass?.distance ? ` · ${selectedQrPass.distance}` : ''}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Price Pill */}
@@ -1339,6 +1540,39 @@ export default function MyFreeTrialsScreen() {
             </View>
           </ScrollView>
 
+          {/* Get Direction CTA Button */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 }}>
+            <TouchableOpacity
+              onPress={() =>
+                handleOpenDirections(
+                  selectedQrPass?.gymName || '',
+                  selectedQrPass?.gymAddress,
+                  selectedQrPass?.latitude,
+                  selectedQrPass?.longitude
+                )
+              }
+              activeOpacity={0.85}
+              style={{
+                height: 48,
+                borderRadius: 16,
+                backgroundColor: '#FFFFFF',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.12,
+                shadowRadius: 8,
+                elevation: 3,
+              }}>
+              <Ionicons name="navigate" size={16} color="#E23744" />
+              <Text style={{ color: '#E23744', fontSize: 14, fontWeight: '800' }}>
+                Get Direction to Gym{selectedQrPass?.distance ? ` (${selectedQrPass.distance})` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Bottom Action Buttons */}
           <View
             style={{
@@ -1517,7 +1751,12 @@ export default function MyFreeTrialsScreen() {
                 if (selectedManagePass) {
                   const pass = selectedManagePass;
                   setSelectedManagePass(null);
-                  handleOpenDirections(pass.gymName, pass.gymAddress);
+                  handleOpenDirections(
+                    pass.gymName,
+                    pass.gymAddress,
+                    pass.latitude,
+                    pass.longitude
+                  );
                 }
               }}
               activeOpacity={0.7}
@@ -2489,7 +2728,7 @@ export default function MyFreeTrialsScreen() {
                     justifyContent: 'center',
                   }}>
                   <Image
-                    source={require('@/assets/images/gym_trial_cancelled_friendly_3d.jpg')}
+                    source={require('@/assets/images/gym_trial_cancelled_user_choice_3d.png')}
                     style={{ width: '100%', height: '100%' }}
                     resizeMode="contain"
                   />

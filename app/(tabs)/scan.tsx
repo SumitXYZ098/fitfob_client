@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -55,6 +56,9 @@ export interface BookedTrialPass {
   gymName: string;
   gymAddress?: string;
   gymCity?: string;
+  distance?: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   date: string;
   rawDate?: string;
   validUntil?: string;
@@ -64,6 +68,92 @@ export interface BookedTrialPass {
   gymId?: string;
   qrCode?: string;
 }
+
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+const formatPrice = (amount?: number | string) => {
+  if (amount === undefined || amount === null) return 'N/A';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return `₹${amount}`;
+  return `₹${num.toLocaleString('en-IN')}`;
+};
+
+const capitalize = (text?: string) => {
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const handleOpenDirections = (
+  gymName: string,
+  address?: string,
+  latitude?: number | string | null,
+  longitude?: number | string | null
+) => {
+  const lat =
+    latitude !== undefined && latitude !== null && !isNaN(Number(latitude))
+      ? Number(latitude)
+      : null;
+  const lng =
+    longitude !== undefined && longitude !== null && !isNaN(Number(longitude))
+      ? Number(longitude)
+      : null;
+  const encodedName = encodeURIComponent(gymName.trim());
+
+  if (lat !== null && lng !== null) {
+    const googleMapsAppUrl = Platform.select({
+      ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+      android: `google.navigation:q=${lat},${lng}&mode=d`,
+    });
+
+    const nativeMapScheme = Platform.select({
+      ios: `maps://app?daddr=${lat},${lng}&q=${encodedName}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`,
+    });
+
+    const webGoogleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving`;
+
+    const openNavigation = async () => {
+      try {
+        if (googleMapsAppUrl && (await Linking.canOpenURL(googleMapsAppUrl))) {
+          await Linking.openURL(googleMapsAppUrl);
+          return;
+        }
+        if (nativeMapScheme && (await Linking.canOpenURL(nativeMapScheme))) {
+          await Linking.openURL(nativeMapScheme);
+          return;
+        }
+      } catch {}
+      Linking.openURL(webGoogleMapsUrl).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+      });
+    };
+
+    openNavigation();
+  } else {
+    const query = encodeURIComponent(`${gymName} ${address || ''}`.trim());
+    const url = Platform.select({
+      ios: `maps:0,0?q=${query}`,
+      android: `geo:0,0?q=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    });
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+    });
+  }
+};
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -135,25 +225,41 @@ export default function ScanScreen() {
         ownerObj?.clubName || b.gymName || b.clubName || b.title || 'Partner Gym'
       );
       const passId =
-        b.passId ||
-        `TRL-${String(b.documentId || b.id || 'PASS').slice(-4).toUpperCase()}`;
+        (b.passId && typeof b.passId === 'string' && b.passId.trim())
+          ? b.passId.trim()
+          : (b.id !== undefined && b.id !== null && !isNaN(Number(b.id)))
+          ? `TRL-${String(b.id).padStart(4, '0')}`
+          : `TRL-${String(b.documentId || 'PASS').slice(-4).toUpperCase()}`;
       const rawDate = b.trialDate || b.rawDate;
       const key = `${passId}_${rawDate}_${gymName}`;
       if (seen.has(key)) return null;
       seen.add(key);
+
+      let distanceDisplay: string | undefined = undefined;
+      if (b.distance !== null && b.distance !== undefined && b.distance !== '') {
+        const num = typeof b.distance === 'number' ? b.distance : parseFloat(String(b.distance));
+        const formattedNum = !isNaN(num) ? num.toFixed(1) : b.distance;
+        distanceDisplay = `${formattedNum} ${b.distanceUnit || 'km'}`.trim();
+      }
+
+      const lat = b.latitude || b.lat || ownerObj?.latitude || ownerObj?.lat || null;
+      const lng = b.longitude || b.lng || ownerObj?.longitude || ownerObj?.lng || null;
 
       return {
         id: b.id,
         documentId: b.documentId,
         passId,
         gymName,
-        gymAddress: b.gymAddress || ownerObj?.address || '',
+        gymAddress: b.clubAddress || b.gymAddress || ownerObj?.address || '',
         gymCity: b.gymCity || ownerObj?.city || '',
+        distance: distanceDisplay,
+        latitude: lat,
+        longitude: lng,
         date: b.date || (rawDate ? formatDate(rawDate) : 'Upcoming'),
         rawDate,
-        validUntil: b.validUntil || 'Closing Time',
+        validUntil: b.closingTime || b.validUntil || 'Closing Time',
         guestName: b.guestName || data?.data?.name || 'Guest',
-        trialstatus: b.trialstatus || 'booked',
+        trialstatus: b.trialStatus || b.trialstatus || 'booked',
         qrCode: b.qrCode || data?.data?.qrCode,
       };
     };
@@ -237,33 +343,6 @@ export default function ScanScreen() {
       text1: 'ID Copied',
       text2: 'User ID copied to clipboard!',
     });
-  };
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      return d.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatPrice = (amount?: number | string) => {
-    if (amount === undefined || amount === null) return 'N/A';
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (isNaN(num)) return `₹${amount}`;
-    return `₹${num.toLocaleString('en-IN')}`;
-  };
-
-  const capitalize = (text?: string) => {
-    if (!text) return '';
-    return text.charAt(0).toUpperCase() + text.slice(1);
   };
 
   return (
@@ -723,16 +802,30 @@ export default function ScanScreen() {
                     </View>
 
                     {/* Card Bottom CTA */}
-                    <TouchableOpacity
-                      onPress={() => setSelectedTrialModal(trialPass)}
-                      activeOpacity={0.7}
-                      className="mt-3.5 flex-row items-center justify-between border-t border-slate-100 pt-3">
-                      <View className="flex-row items-center gap-1.5">
+                    <View className="mt-3.5 flex-row items-center justify-between border-t border-slate-100 pt-3">
+                      <TouchableOpacity
+                        onPress={() => setSelectedTrialModal(trialPass)}
+                        activeOpacity={0.7}
+                        className="flex-1 flex-row items-center gap-1.5">
                         <Ionicons name="qr-code-outline" size={16} color="#F6163C" />
                         <Text className="font-bold text-xs text-[#F6163C]">View Trial Ticket & QR</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color="#F6163C" />
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleOpenDirections(
+                            trialPass.gymName,
+                            trialPass.gymAddress,
+                            trialPass.latitude,
+                            trialPass.longitude
+                          )
+                        }
+                        activeOpacity={0.8}
+                        className="flex-row items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-1.5 border border-rose-200/60">
+                        <Ionicons name="navigate" size={13} color="#E23744" />
+                        <Text className="font-bold text-xs text-[#E23744]">Direction</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))
               ) : selectedTab === 'trial' ? (
@@ -827,6 +920,24 @@ export default function ScanScreen() {
                     <Text className="mt-0.5 text-xs text-white/90 font-medium">
                       {selectedTrialModal?.gymAddress || selectedTrialModal?.gymCity || 'Partner Club'}
                     </Text>
+
+                    {/* Get Direction Pill */}
+                    <TouchableOpacity
+                      onPress={() =>
+                        handleOpenDirections(
+                          selectedTrialModal?.gymName || '',
+                          selectedTrialModal?.gymAddress,
+                          selectedTrialModal?.latitude,
+                          selectedTrialModal?.longitude
+                        )
+                      }
+                      activeOpacity={0.8}
+                      className="mt-2 flex-row items-center gap-1.5 self-start rounded-xl bg-white/20 px-2.5 py-1">
+                      <Ionicons name="navigate" size={12} color="#FFFFFF" />
+                      <Text className="font-bold text-xs text-white">
+                        Get Direction{selectedTrialModal?.distance ? ` · ${selectedTrialModal.distance}` : ''}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                   <View className="rounded-full bg-white px-3 py-1 shadow-xs">
                     <Text className="text-[11px] font-extrabold text-[#E23744]">FREE • ₹0</Text>
@@ -897,6 +1008,24 @@ export default function ScanScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Get Direction CTA Button */}
+            <TouchableOpacity
+              onPress={() =>
+                handleOpenDirections(
+                  selectedTrialModal?.gymName || '',
+                  selectedTrialModal?.gymAddress,
+                  selectedTrialModal?.latitude,
+                  selectedTrialModal?.longitude
+                )
+              }
+              activeOpacity={0.85}
+              className="mt-3.5 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3.5 shadow-xs">
+              <Ionicons name="navigate" size={16} color="#E23744" />
+              <Text className="font-bold text-sm text-[#E23744]">
+                Get Direction to Gym{selectedTrialModal?.distance ? ` (${selectedTrialModal.distance})` : ''}
+              </Text>
+            </TouchableOpacity>
 
             {/* Done button */}
             <TouchableOpacity
