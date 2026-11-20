@@ -111,7 +111,6 @@ export default function GymFreeTrialSection({
   const { mutateAsync: bookTrial, isPending: isBooking } = useBookGymTrial();
   const getQrMutation = useGetQr();
   const [cachedQrCode, setCachedQrCode] = useState<string | null>(null);
-  const [cachedClientId, setCachedClientId] = useState<string | null>(null);
 
   // Dynamic slot availability from backend response
   const isTodayClosed = trial?.today === 'closed';
@@ -165,12 +164,10 @@ export default function GymFreeTrialSection({
   useEffect(() => {
     (async () => {
       try {
-        const [savedQr, savedId] = await Promise.all([
+        const [savedQr] = await Promise.all([
           storageAPI.getItem('client_qr_code'),
-          storageAPI.getItem('client_id'),
         ]);
         if (savedQr) setCachedQrCode(savedQr);
-        if (savedId) setCachedClientId(savedId);
 
         if (user?.token) {
           getQrMutation.mutateAsync().then((res) => {
@@ -181,7 +178,6 @@ export default function GymFreeTrialSection({
               storageAPI.setItem('client_qr_code', qr).catch(() => { });
             }
             if (cid) {
-              setCachedClientId(cid);
               storageAPI.setItem('client_id', cid).catch(() => { });
             }
           }).catch(() => { });
@@ -201,7 +197,6 @@ export default function GymFreeTrialSection({
           storageAPI.setItem('client_qr_code', qr).catch(() => { });
         }
         if (cid) {
-          setCachedClientId(cid);
           storageAPI.setItem('client_id', cid).catch(() => { });
         }
       }).catch(() => { });
@@ -731,13 +726,6 @@ export default function GymFreeTrialSection({
         onTrialBooked(trialData);
       }
 
-      setTimeout(() => {
-        Toast.show({
-          type: 'success',
-          text1: response.message || 'Free Trial Booked! 🎉',
-          text2: `Pass confirmed for ${dateOption === 'today' ? 'Today' : 'Tomorrow'} (${usedInPeriod} of ${maxInPeriod} used)`,
-        });
-      }, 350);
     } catch (err: any) {
       const errorMsg =
         err?.response?.data?.message ||
@@ -794,13 +782,6 @@ export default function GymFreeTrialSection({
         setIsSlotsFullModalVisible(false);
         setIsPassModalVisible(true);
 
-        setTimeout(() => {
-          Toast.show({
-            type: 'info',
-            text1: 'Trial Already Booked 🎟️',
-            text2: `You already have an active pass for ${passDate}. Showing your pass.`,
-          });
-        }, 350);
         return;
       }
 
@@ -1051,12 +1032,6 @@ export default function GymFreeTrialSection({
     bookedPass?.qrCode ||
     getQrMutation.data?.data?.qrCode ||
     cachedQrCode;
-
-  const activeClientId =
-    getQrMutation.data?.data?.clientId ||
-    cachedClientId ||
-    bookedPass?.passId ||
-    '';
 
   const isBookedPassRescheduled =
     bookedPass?.trialstatus === 'rescheduled' ||

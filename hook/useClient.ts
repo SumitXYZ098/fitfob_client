@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import {
   clientBasicDetails,
   clientBodyInfo,
@@ -155,7 +155,7 @@ export const useCheckUserStep = () => {
   });
 };
 
-export const useGetQr = () => {
+export const useGetQr  = () => {
   return useMutation({
     mutationFn: getQr,
     onError: (error: any) => {
@@ -166,7 +166,9 @@ export const useGetQr = () => {
 };
 
 // Auto-fetching Query hook for the client's verified QR code from /api/client-details/me/qr
-export const useClientQrCode = () => {
+export const useClientQrCode = (
+  options?: Omit<UseQueryOptions<any, Error>, 'queryKey' | 'queryFn'>
+) => {
   const { user } = useAuthStore();
   return useQuery({
     queryKey: ['client-verified-qr'],
@@ -185,6 +187,7 @@ export const useClientQrCode = () => {
     enabled: !!user?.token,
     staleTime: 1000 * 60 * 5, // 5 minutes fresh
     refetchOnMount: 'always',
+    ...options,
   });
 };
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import apiInstance from './apiInstance';
 import { ENDPOINTS } from './endpoint';
 

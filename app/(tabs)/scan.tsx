@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
@@ -17,7 +18,8 @@ import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import { Container } from '@/components/modules/Container';
-import { useGetQr, useClientGymTrials } from '@/hook/useClient';
+import { keepPreviousData } from '@tanstack/react-query';
+import { useClientQrCode } from '@/hook/useClient';
 import { storageAPI } from '@/utility/storage';
 
 export interface GymMembership {
@@ -156,7 +158,7 @@ const handleOpenDirections = (
           await Linking.openURL(nativeMapScheme);
           return;
         }
-      } catch {}
+      } catch { }
       Linking.openURL(webGoogleMapsUrl).catch(() => {
         Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
       });
@@ -171,70 +173,53 @@ const handleOpenDirections = (
       default: `https://www.google.com/maps/search/?api=1&query=${query}`,
     });
     Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {});
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => { });
     });
   }
 };
 
 export default function ScanScreen() {
   const router = useRouter();
-  const getQrMutation = useGetQr();
-  const { isPending, data } = getQrMutation;
-  const { data: gymTrialsApiData, refetch: refetchGymTrials } = useClientGymTrials();
+  const { isPending, isRefetching, data, refetch: refetchQr } = useClientQrCode({
+    refetchInterval: 1000 * 10 * 1, // 5 minutes fresh
+    placeholderData: keepPreviousData,
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'all' | 'local' | 'outdoor' | 'trial'>('all');
-  const [storedTrials, setStoredTrials] = useState<BookedTrialPass[]>([]);
   const [selectedTrialModal, setSelectedTrialModal] = useState<BookedTrialPass | null>(null);
 
-  const USER_ID = data?.data?.clientId || 'N/A';
+  const USER_ID = data?.clientId || 'N/A';
   const isLoading = isPending || refreshing;
-
-  // Restore booked trial passes stored locally
-  const loadStoredTrials = useCallback(async () => {
-    try {
-      const saved = await storageAPI.getItem('client_booked_trials');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setStoredTrials(parsed);
-        }
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    loadStoredTrials();
-  }, [loadStoredTrials]);
 
   // Persist fetched QR code and Client ID for trial ticket cards across the app
   useEffect(() => {
-    if (data?.data?.qrCode) {
-      storageAPI.setItem('client_qr_code', data.data.qrCode).catch(() => {});
+    if (data?.qrCode) {
+      storageAPI.setItem('client_qr_code', data.qrCode).catch(() => { });
     }
-    if (data?.data?.clientId) {
-      storageAPI.setItem('client_id', data.data.clientId).catch(() => {});
+    if (data?.clientId) {
+      storageAPI.setItem('client_id', data.clientId).catch(() => { });
     }
-  }, [data?.data]);
+  }, [data]);
 
   const gymMembership: GymMembership | undefined =
-    data?.data?.gymMembership ||
-    (data?.data?.subscription?.local_subscription
+    data?.gymMembership ||
+    (data?.subscription?.local_subscription
       ? {
-          customerPrice: data.data.subscription.local_subscription.price,
-          duration: data.data.subscription.local_subscription.monthDuration,
-          endDate: data.data.subscription.local_subscription.endDate,
-          membershipStatus: data.data.subscription.local_subscription.subscriptionStatus,
-          plan: data.data.subscription.local_subscription.planName,
-          startDate: data.data.subscription.local_subscription.startDate,
-        }
+        customerPrice: data.subscription.local_subscription.price,
+        duration: data.subscription.local_subscription.monthDuration,
+        endDate: data.subscription.local_subscription.endDate,
+        membershipStatus: data.subscription.local_subscription.subscriptionStatus,
+        plan: data.subscription.local_subscription.planName,
+        startDate: data.subscription.local_subscription.startDate,
+      }
       : undefined);
 
   const outdoorSub: OutdoorSubscription | undefined =
-    data?.data?.outdoorMembership ||
-    data?.data?.outdoorPass ||
-    data?.data?.subscription?.outdoor_subscription;
+    data?.outdoorMembership ||
+    data?.outdoorPass ||
+    data?.subscription?.outdoor_subscription;
 
-  // Consolidate trial passes from API and local storage
+  // Trial passes from GET_QR endpoint response only (real API data)
   const trialPasses = useMemo<BookedTrialPass[]>(() => {
     const list: BookedTrialPass[] = [];
     const seen = new Set<string>();
@@ -254,18 +239,15 @@ export default function ScanScreen() {
       );
 
       const rawDate = b.trialDate || b.rawDate;
-      const isToday = Boolean(
-        b.isToday === true ||
-          (rawDate && rawDate === new Date().toISOString().split('T')[0])
-      );
-      const isTomorrow = Boolean(b.isTomorrow === true);
+      const isToday = b.isToday === true;
+      const isTomorrow = b.isTomorrow === true;
 
       // Clean pass key for deduplication
       const key = b.documentId
         ? String(b.documentId)
         : b.id !== undefined && b.id !== null
-        ? `trial_${b.id}`
-        : `${gymName}_${rawDate}`;
+          ? `trial_${b.id}`
+          : `${gymName}_${rawDate}`;
 
       if (seen.has(key)) return null;
       seen.add(key);
@@ -280,15 +262,12 @@ export default function ScanScreen() {
       const lat = b.latitude || b.lat || ownerObj?.latitude || ownerObj?.lat || null;
       const lng = b.longitude || b.lng || ownerObj?.longitude || ownerObj?.lng || null;
 
-      let dateDisplay = 'Upcoming';
-      if (isTomorrow) {
-        dateDisplay = `Tomorrow (${formatDate(rawDate)})`;
-      } else if (isToday) {
-        dateDisplay = `Today (${formatDate(rawDate)})`;
-      } else if (rawDate) {
-        dateDisplay = formatDate(rawDate);
-      } else if (b.date) {
-        dateDisplay = b.date;
+      const formattedDate = rawDate ? formatDate(rawDate) : '';
+      let dateDisplay = formattedDate || 'Upcoming';
+      if (isToday) {
+        dateDisplay = formattedDate ? `Today (${formattedDate})` : 'Today';
+      } else if (isTomorrow) {
+        dateDisplay = formattedDate ? `Tomorrow (${formattedDate})` : 'Tomorrow';
       }
 
       return {
@@ -304,20 +283,20 @@ export default function ScanScreen() {
         date: dateDisplay,
         rawDate,
         validUntil: b.closingTime || b.validUntil || '10:00 PM',
-        guestName: b.guestName || data?.data?.name || 'Guest',
+        guestName: b.guestName || data?.name || 'Guest',
         trialstatus: b.trialStatus || b.trialstatus || 'booked',
         isToday,
         isTomorrow,
-        qrCode: b.qrCode || data?.data?.qrCode,
+        qrCode: b.qrCode || data?.qrCode,
       };
     };
 
-    // 1. Passes from GET_QR endpoint response (prioritizing new gymTrials response field)
+    // Only load passes from GET_QR endpoint response
     const qrTrials =
-      data?.data?.gymTrials ||
-      data?.data?.clientTrialBooking ||
-      data?.data?.trialBooking ||
-      data?.data?.trials ||
+      data?.gymTrials ||
+      data?.clientTrialBooking ||
+      data?.trialBooking ||
+      data?.trials ||
       [];
     if (Array.isArray(qrTrials)) {
       for (const item of qrTrials) {
@@ -326,53 +305,33 @@ export default function ScanScreen() {
       }
     }
 
-    // 2. Passes from /api/gym-trials endpoint
-    const apiTrials = Array.isArray(gymTrialsApiData)
-      ? gymTrialsApiData
-      : Array.isArray((gymTrialsApiData as any)?.data)
-      ? (gymTrialsApiData as any).data
-      : [];
-    if (Array.isArray(apiTrials)) {
-      for (const item of apiTrials) {
-        const p = normalizePass(item);
-        if (p) list.push(p);
-      }
-    }
-
-    // 3. Passes from client_booked_trials in local storage
-    for (const item of storedTrials) {
-      const p = normalizePass(item);
-      if (p) list.push(p);
-    }
-
     return list;
-  }, [data?.data, gymTrialsApiData, storedTrials]);
+  }, [data]);
 
   const hasGym = Boolean(
     gymMembership &&
-      (gymMembership.membershipStatus === 'active' || Boolean(gymMembership.plan))
+    (gymMembership.membershipStatus === 'active' || Boolean(gymMembership.plan))
   );
   const hasOutdoor = Boolean(
     outdoorSub &&
-      (outdoorSub.subscriptionStatus === 'active' || Boolean(outdoorSub.planName))
+    (outdoorSub.subscriptionStatus === 'active' || Boolean(outdoorSub.planName))
   );
-  const hasTrial = trialPasses.length > 0;
-  const activeCount = (hasGym ? 1 : 0) + (hasOutdoor ? 1 : 0) + trialPasses.length;
+  const activeCount = (hasGym ? 1 : 0) + (hasOutdoor ? 1 : 0);
 
   const handleReload = useCallback(async () => {
     try {
-      await Promise.allSettled([getQrMutation.mutateAsync(), refetchGymTrials(), loadStoredTrials()]);
-    } catch {}
-  }, [getQrMutation, refetchGymTrials, loadStoredTrials]);
+      await refetchQr();
+    } catch { }
+  }, [refetchQr]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.allSettled([getQrMutation.mutateAsync(), refetchGymTrials(), loadStoredTrials()]);
-    } catch {} finally {
+      await refetchQr();
+    } catch { } finally {
       setRefreshing(false);
     }
-  }, [getQrMutation, refetchGymTrials, loadStoredTrials]);
+  }, [refetchQr]);
 
   useEffect(() => {
     handleReload();
@@ -443,9 +402,9 @@ export default function ScanScreen() {
               <ActivityIndicator size="large" color="#F6163C" />
               <Text className="mt-3 font-medium text-xs text-slate-400">Loading QR Code...</Text>
             </View>
-          ) : data?.data?.qrCode ? (
+          ) : data?.qrCode ? (
             <Image
-              source={{ uri: data.data.qrCode }}
+              source={{ uri: data.qrCode }}
               style={{ width: 244, height: 244 }}
               resizeMode="contain"
             />
@@ -494,11 +453,6 @@ export default function ScanScreen() {
           <View className="flex-row items-center justify-between pb-3">
             <View className="flex-row items-center gap-2">
               <Text className="font-extrabold text-base text-slate-900">Your Subscriptions</Text>
-              {activeCount > 0 && (
-                <View className="rounded-full bg-slate-100 px-2.5 py-0.5 border border-slate-200">
-                  <Text className="text-[11px] font-bold text-slate-600">{activeCount} Active</Text>
-                </View>
-              )}
             </View>
           </View>
 
@@ -507,13 +461,11 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('all')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'all' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'all' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'all' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'all' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 All
               </Text>
             </TouchableOpacity>
@@ -521,13 +473,11 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('local')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'local' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'local' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'local' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'local' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 Gym
               </Text>
             </TouchableOpacity>
@@ -535,13 +485,11 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('outdoor')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'outdoor' ? 'bg-white shadow-xs' : ''
-              }`}>
-              <Text
-                className={`text-xs font-bold ${
-                  selectedTab === 'outdoor' ? 'text-slate-900' : 'text-slate-500'
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'outdoor' ? 'bg-white shadow-xs' : ''
                 }`}>
+              <Text
+                className={`text-xs font-bold ${selectedTab === 'outdoor' ? 'text-slate-900' : 'text-slate-500'
+                  }`}>
                 Outdoor
               </Text>
             </TouchableOpacity>
@@ -549,14 +497,12 @@ export default function ScanScreen() {
             <TouchableOpacity
               onPress={() => setSelectedTab('trial')}
               activeOpacity={0.8}
-              className={`flex-1 items-center justify-center rounded-xl py-2 ${
-                selectedTab === 'trial' ? 'bg-white shadow-xs' : ''
-              }`}>
+              className={`flex-1 items-center justify-center rounded-xl py-2 ${selectedTab === 'trial' ? 'bg-white shadow-xs' : ''
+                }`}>
               <View className="flex-row items-center gap-1">
                 <Text
-                  className={`text-xs font-bold ${
-                    selectedTab === 'trial' ? 'text-slate-900' : 'text-slate-500'
-                  }`}>
+                  className={`text-xs font-bold ${selectedTab === 'trial' ? 'text-slate-900' : 'text-slate-500'
+                    }`}>
                   Trials
                 </Text>
                 {trialPasses.length > 0 && (
@@ -591,24 +537,21 @@ export default function ScanScreen() {
 
                     {/* Status Badge */}
                     <View
-                      className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border ${
-                        gymMembership.membershipStatus === 'active'
-                          ? 'border-emerald-200 bg-emerald-50'
-                          : 'border-slate-200 bg-slate-50'
-                      }`}>
+                      className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 border ${gymMembership.membershipStatus === 'active'
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-slate-200 bg-slate-50'
+                        }`}>
                       <View
-                        className={`h-2 w-2 rounded-full ${
-                          gymMembership.membershipStatus === 'active'
-                            ? 'bg-emerald-500'
-                            : 'bg-slate-400'
-                        }`}
+                        className={`h-2 w-2 rounded-full ${gymMembership.membershipStatus === 'active'
+                          ? 'bg-emerald-500'
+                          : 'bg-slate-400'
+                          }`}
                       />
                       <Text
-                        className={`text-[11px] font-bold uppercase ${
-                          gymMembership.membershipStatus === 'active'
-                            ? 'text-emerald-700'
-                            : 'text-slate-600'
-                        }`}>
+                        className={`text-[11px] font-bold uppercase ${gymMembership.membershipStatus === 'active'
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                          }`}>
                         {gymMembership.membershipStatus || 'Inactive'}
                       </Text>
                     </View>
@@ -799,7 +742,7 @@ export default function ScanScreen() {
                           <Text className="text-[10px] font-extrabold uppercase tracking-wider text-[#F6163C]">
                             FREE TRIAL PASS
                           </Text>
-                          <Text className="font-bold text-base text-slate-900" numberOfLines={1}>
+                          <Text className="font-bold text-base text-slate-900 capitalize" numberOfLines={1}>
                             {trialPass.gymName}
                           </Text>
                         </View>
@@ -842,7 +785,7 @@ export default function ScanScreen() {
                       <View className="w-[47%]">
                         <Text className="text-[11px] font-medium text-slate-400">Guest</Text>
                         <Text className="mt-0.5 font-bold text-xs text-slate-800" numberOfLines={1}>
-                          {trialPass.guestName || data?.data?.name || 'Guest'}
+                          {trialPass.guestName || data?.name || 'Guest'}
                         </Text>
                       </View>
 
@@ -856,13 +799,13 @@ export default function ScanScreen() {
 
                     {/* Card Bottom CTA */}
                     <View className="mt-3.5 flex-row items-center justify-between border-t border-slate-100 pt-3">
-                      <TouchableOpacity
+                      {!trialPass.isTomorrow && <TouchableOpacity
                         onPress={() => setSelectedTrialModal(trialPass)}
                         activeOpacity={0.7}
                         className="flex-1 flex-row items-center gap-1.5">
                         <Ionicons name="qr-code-outline" size={16} color="#F6163C" />
                         <Text className="font-bold text-xs text-[#F6163C]">View Trial Ticket & QR</Text>
-                      </TouchableOpacity>
+                      </TouchableOpacity>}
 
                       <TouchableOpacity
                         onPress={() =>
@@ -900,7 +843,7 @@ export default function ScanScreen() {
           )}
 
           {/* ── Empty State if No Subscriptions & No Trials at all ──────────── */}
-          {!hasGym && !hasOutdoor && trialPasses.length === 0 && (
+          {selectedTab === 'all' && !hasGym && !hasOutdoor && trialPasses.length === 0 && (
             <View className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 items-center">
               <Ionicons name="card-outline" size={38} color="#94A3B8" />
               <Text className="mt-2.5 font-bold text-sm text-slate-800">No Active Passes</Text>
@@ -938,181 +881,180 @@ export default function ScanScreen() {
           <Pressable
             onPress={() => setSelectedTrialModal(null)}
             className="flex-1 justify-end bg-black/60">
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="rounded-t-[32px] bg-white px-5 pt-3 pb-8">
-            {/* Drag Handle */}
-            <View className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-300" />
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              className="rounded-t-[32px] bg-white px-5 pt-3 pb-8">
+              {/* Drag Handle */}
+              <View className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-300" />
 
-            {/* Modal Header */}
-            <View className="flex-row items-center justify-between pb-3">
-              <Text className="font-extrabold text-lg text-slate-900">Trial Check-In Pass</Text>
-              <TouchableOpacity
-                onPress={() => setSelectedTrialModal(null)}
-                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                <Ionicons name="close" size={20} color="#475569" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Check-In Notice Banner */}
-            <View className="mb-3 flex-row items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
-              <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
-              <Text className="text-xs font-bold text-emerald-800">
-                Show this QR code at the entrance desk to check in
-              </Text>
-            </View>
-
-            {/* Ticket Card */}
-            <View className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
-              <View className="bg-[#E23744] p-4">
-                <View className="flex-row items-start justify-between">
-                  <View className="flex-1 pr-3">
-                    <Text className="font-extrabold text-[17px] text-white tracking-tight">
-                      {selectedTrialModal?.gymName}
-                    </Text>
-                    <Text className="mt-0.5 text-xs text-white/90 font-medium">
-                      {selectedTrialModal?.gymAddress || selectedTrialModal?.gymCity || 'Partner Club'}
-                    </Text>
-
-                    {/* Get Direction Pill */}
-                    <TouchableOpacity
-                      onPress={() =>
-                        handleOpenDirections(
-                          selectedTrialModal?.gymName || '',
-                          selectedTrialModal?.gymAddress,
-                          selectedTrialModal?.latitude,
-                          selectedTrialModal?.longitude
-                        )
-                      }
-                      activeOpacity={0.8}
-                      className="mt-2 flex-row items-center gap-1.5 self-start rounded-xl bg-white/20 px-2.5 py-1">
-                      <Ionicons name="navigate" size={12} color="#FFFFFF" />
-                      <Text className="font-bold text-xs text-white">
-                        Get Direction{selectedTrialModal?.distance ? ` · ${selectedTrialModal.distance}` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View className="rounded-full bg-white px-3 py-1 shadow-xs">
-                    <Text className="text-[11px] font-extrabold text-[#E23744]">FREE • ₹0</Text>
-                  </View>
-                </View>
+              {/* Modal Header */}
+              <View className="flex-row items-center justify-between pb-3">
+                <Text className="font-extrabold text-lg text-slate-900">Trial Check-In Pass</Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedTrialModal(null)}
+                  className="h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                  <Ionicons name="close" size={20} color="#475569" />
+                </TouchableOpacity>
               </View>
 
-              {/* QR Code Section */}
-              <View className="items-center px-4 pt-5 pb-3">
-                <View className="h-52 w-52 items-center justify-center rounded-2xl bg-white p-2 border border-slate-100 shadow-xs">
-                  {isLoading && !data?.data?.qrCode && !selectedTrialModal?.qrCode ? (
-                    <View className="items-center justify-center">
-                      <ActivityIndicator size="large" color="#E23744" />
-                      <Text className="mt-2 text-xs font-semibold text-slate-400">
-                        Generating QR Code...
-                      </Text>
-                    </View>
-                  ) : data?.data?.qrCode || selectedTrialModal?.qrCode ? (
-                    <Image
-                      source={{ uri: selectedTrialModal?.qrCode || data?.data?.qrCode }}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View className="items-center justify-center">
-                      <Ionicons name="qr-code-outline" size={64} color="#CBD5E1" />
-                      <Text className="mt-2 text-center text-xs font-medium text-slate-400">
-                        Scan QR at front desk
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text className="mt-3 text-center text-xs font-medium text-slate-500">
-                  User ID: {USER_ID}
+              {/* Check-In Notice Banner */}
+              <View className="mb-3 flex-row items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+                <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+                <Text className="text-xs font-bold text-emerald-800">
+                  Show this QR code at the entrance desk to check in
                 </Text>
               </View>
 
-              {/* Details */}
-              <View className="border-t border-slate-100 bg-slate-50/80 p-4">
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-1 pr-2">
-                    <Text className="text-[11px] font-medium text-slate-400">Date</Text>
-                    <Text className="mt-0.5 font-bold text-xs text-slate-900">
-                      {selectedTrialModal?.date}
-                    </Text>
-                  </View>
-                  <View className="flex-1 items-end pl-2">
-                    <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
-                    <Text className="mt-0.5 font-bold text-xs text-slate-900">
-                      {selectedTrialModal?.validUntil || '10:00 PM'}
-                    </Text>
+              {/* Ticket Card */}
+              <View className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
+                <View className="bg-[#E23744] p-4">
+                  <View className="flex-row items-start justify-between">
+                    <View className="flex-1 pr-3">
+                      <Text className="font-extrabold text-[17px] text-white tracking-tight">
+                        {selectedTrialModal?.gymName}
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-white/90 font-medium">
+                        {selectedTrialModal?.gymAddress || selectedTrialModal?.gymCity || 'Partner Club'}
+                      </Text>
+
+                      {/* Get Direction Pill */}
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleOpenDirections(
+                            selectedTrialModal?.gymName || '',
+                            selectedTrialModal?.gymAddress,
+                            selectedTrialModal?.latitude,
+                            selectedTrialModal?.longitude
+                          )
+                        }
+                        activeOpacity={0.8}
+                        className="mt-2 flex-row items-center gap-1.5 self-start rounded-xl bg-white/20 px-2.5 py-1">
+                        <Ionicons name="navigate" size={12} color="#FFFFFF" />
+                        <Text className="font-bold text-xs text-white">
+                          Get Direction{selectedTrialModal?.distance ? ` · ${selectedTrialModal.distance}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View className="rounded-full bg-white px-3 py-1 shadow-xs">
+                      <Text className="text-[11px] font-extrabold text-[#E23744]">FREE • ₹0</Text>
+                    </View>
                   </View>
                 </View>
 
-                <View className="mt-3 flex-row items-center justify-between border-t border-slate-200/60 pt-2.5">
-                  <View className="flex-1 pr-2">
-                    <Text className="text-[11px] font-medium text-slate-400">Guest</Text>
-                    <Text className="mt-0.5 font-bold text-xs text-slate-900">
-                      {selectedTrialModal?.guestName || data?.data?.name || 'Guest'}
-                    </Text>
+                {/* QR Code Section */}
+                <View className="items-center px-4 pt-5 pb-3">
+                  <View className="h-52 w-52 items-center justify-center rounded-2xl bg-white p-2 border border-slate-100 shadow-xs">
+                    {isLoading && !data?.qrCode && !selectedTrialModal?.qrCode ? (
+                      <View className="items-center justify-center">
+                        <ActivityIndicator size="large" color="#E23744" />
+                        <Text className="mt-2 text-xs font-semibold text-slate-400">
+                          Generating QR Code...
+                        </Text>
+                      </View>
+                    ) : data?.qrCode || selectedTrialModal?.qrCode ? (
+                      <Image
+                        source={{ uri: selectedTrialModal?.qrCode || data?.qrCode }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View className="items-center justify-center">
+                        <Ionicons name="qr-code-outline" size={64} color="#CBD5E1" />
+                        <Text className="mt-2 text-center text-xs font-medium text-slate-400">
+                          Scan QR at front desk
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <View className="flex-1 items-end pl-2">
-                    <Text className="text-[11px] font-medium text-slate-400">Status</Text>
-                    <Text
-                      className={`mt-0.5 font-bold text-xs uppercase ${
-                        selectedTrialModal?.trialstatus?.toLowerCase() === 'rescheduled'
+                  <Text className="mt-3 text-center text-xs font-medium text-slate-500">
+                    User ID: {USER_ID}
+                  </Text>
+                </View>
+
+                {/* Details */}
+                <View className="border-t border-slate-100 bg-slate-50/80 p-4">
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-2">
+                      <Text className="text-[11px] font-medium text-slate-400">Date</Text>
+                      <Text className="mt-0.5 font-bold text-xs text-slate-900">
+                        {selectedTrialModal?.date}
+                      </Text>
+                    </View>
+                    <View className="flex-1 items-end pl-2">
+                      <Text className="text-[11px] font-medium text-slate-400">Valid Until</Text>
+                      <Text className="mt-0.5 font-bold text-xs text-slate-900">
+                        {selectedTrialModal?.validUntil || '10:00 PM'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View className="mt-3 flex-row items-center justify-between border-t border-slate-200/60 pt-2.5">
+                    <View className="flex-1 pr-2">
+                      <Text className="text-[11px] font-medium text-slate-400">Guest</Text>
+                      <Text className="mt-0.5 font-bold text-xs text-slate-900">
+                        {selectedTrialModal?.guestName || data?.name || 'Guest'}
+                      </Text>
+                    </View>
+                    <View className="flex-1 items-end pl-2">
+                      <Text className="text-[11px] font-medium text-slate-400">Status</Text>
+                      <Text
+                        className={`mt-0.5 font-bold text-xs uppercase ${selectedTrialModal?.trialstatus?.toLowerCase() === 'rescheduled'
                           ? 'text-purple-600'
                           : 'text-blue-600'
-                      }`}>
-                      {selectedTrialModal?.trialstatus || 'Booked'}
-                    </Text>
+                          }`}>
+                        {selectedTrialModal?.trialstatus || 'Booked'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
 
-            {/* Get Direction CTA Button */}
-            <TouchableOpacity
-              onPress={() =>
-                handleOpenDirections(
-                  selectedTrialModal?.gymName || '',
-                  selectedTrialModal?.gymAddress,
-                  selectedTrialModal?.latitude,
-                  selectedTrialModal?.longitude
-                )
-              }
-              activeOpacity={0.85}
-              className="mt-3.5 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3.5 shadow-xs">
-              <Ionicons name="navigate" size={16} color="#E23744" />
-              <Text className="font-bold text-sm text-[#E23744]">
-                Get Direction to Gym{selectedTrialModal?.distance ? ` (${selectedTrialModal.distance})` : ''}
-              </Text>
-            </TouchableOpacity>
+              {/* Get Direction CTA Button */}
+              <TouchableOpacity
+                onPress={() =>
+                  handleOpenDirections(
+                    selectedTrialModal?.gymName || '',
+                    selectedTrialModal?.gymAddress,
+                    selectedTrialModal?.latitude,
+                    selectedTrialModal?.longitude
+                  )
+                }
+                activeOpacity={0.85}
+                className="mt-3.5 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3.5 shadow-xs">
+                <Ionicons name="navigate" size={16} color="#E23744" />
+                <Text className="font-bold text-sm text-[#E23744]">
+                  Get Direction to Gym{selectedTrialModal?.distance ? ` (${selectedTrialModal.distance})` : ''}
+                </Text>
+              </TouchableOpacity>
 
-            {/* Done button */}
-            <TouchableOpacity
-              onPress={() => setSelectedTrialModal(null)}
-              activeOpacity={0.88}
-              className="mt-4 w-full items-center justify-center rounded-2xl bg-[#E23744] py-3.5 shadow-xs">
-              <Text className="font-bold text-sm text-white">Done</Text>
-            </TouchableOpacity>
+              {/* Done button */}
+              <TouchableOpacity
+                onPress={() => setSelectedTrialModal(null)}
+                activeOpacity={0.88}
+                className="mt-4 w-full items-center justify-center rounded-2xl bg-[#E23744] py-3.5 shadow-xs">
+                <Text className="font-bold text-sm text-white">Done</Text>
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
 
-        {/* In-Modal Toast to ensure notifications appear in front of the sheet */}
-        {Boolean(selectedTrialModal) && (
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 99999,
-              elevation: 99999,
-            }}>
-            <Toast topOffset={50} />
-          </View>
-        )}
-      </View>
-    </Modal>
+          {/* In-Modal Toast to ensure notifications appear in front of the sheet */}
+          {Boolean(selectedTrialModal) && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99999,
+                elevation: 99999,
+              }}>
+              <Toast topOffset={50} />
+            </View>
+          )}
+        </View>
+      </Modal>
     </Container>
   );
 }
