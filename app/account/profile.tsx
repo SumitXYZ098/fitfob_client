@@ -159,6 +159,17 @@ export default function ProfileScreen() {
       route: '/(tabs)/membership',
     },
     {
+      id: 'gym-pass-claim',
+      title: 'Claim Gym Pass (Invite Flow)',
+      iconName: 'qr-code-outline',
+      badge: (
+        <View className="mr-2 px-2 py-0.5 items-center justify-center rounded-full bg-[#10B981]">
+          <Text className="font-bold text-[10px] text-white">NEW</Text>
+        </View>
+      ),
+      route: '/account/gym-pass-claim',
+    },
+    {
       id: 'free-trials',
       title: 'Free Trials',
       iconName: 'ticket-outline',
