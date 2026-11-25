@@ -5,11 +5,29 @@ import StylizedQrPassCode from './StylizedQrPassCode';
 
 interface DigitalEntryQrStepProps {
   onBack: () => void;
+  memberName?: string;
+  memberId?: string;
+  passNumber?: string;
+  gymName?: string;
+  onDone?: () => void;
 }
 
 export default function DigitalEntryQrStep({
   onBack,
+  memberName = 'Rohit Sharma',
+  memberId,
+  passNumber,
+  gymName = 'PowerHouse Gym',
+  onDone,
 }: DigitalEntryQrStepProps) {
+  const initials =
+    memberName
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w[0].toUpperCase())
+      .slice(0, 2)
+      .join('') || 'FF';
+
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -59,7 +77,7 @@ export default function DigitalEntryQrStep({
         }}>
         {/* Gym Title & Plan Subtitle */}
         <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', letterSpacing: -0.2 }}>
-          PowerHouse Gym
+          {gymName}
         </Text>
         <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 3 }}>
           6–Month Gold · Valid till 23 May 2027
@@ -136,15 +154,15 @@ export default function DigitalEntryQrStep({
               marginRight: 12,
             }}>
             <Text style={{ fontSize: 14, fontWeight: '900', color: '#E23744' }}>
-              RS
+              {initials}
             </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-              Rohit Sharma
+              {memberName}
             </Text>
             <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 }}>
-              Member ID: FF-20481
+              Member ID: {memberId || (passNumber ? `Pass #${passNumber}` : 'FF-20481')}
             </Text>
           </View>
         </View>
@@ -168,6 +186,31 @@ export default function DigitalEntryQrStep({
           Turn up screen brightness for a faster scan
         </Text>
       </View>
+
+      {/* Action / Done CTA */}
+      {onDone ? (
+        <View style={{ marginTop: 20 }}>
+          <TouchableOpacity
+            onPress={onDone}
+            activeOpacity={0.88}
+            style={{
+              height: 50,
+              borderRadius: 16,
+              backgroundColor: '#E23744',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#E23744',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              elevation: 4,
+            }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+              Done · Go to Passes
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

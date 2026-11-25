@@ -7,6 +7,9 @@ interface WelcomePhoneStepProps {
   onChangePhone: (val: string) => void;
   onSendOtp: () => void;
   onBack: () => void;
+  passNumber?: string;
+  inviteCode?: string;
+  isPrefilled?: boolean;
 }
 
 export default function WelcomePhoneStep({
@@ -14,6 +17,9 @@ export default function WelcomePhoneStep({
   onChangePhone,
   onSendOtp,
   onBack,
+  passNumber,
+  inviteCode,
+  isPrefilled,
 }: WelcomePhoneStepProps) {
   return (
     <ScrollView
@@ -74,8 +80,31 @@ export default function WelcomePhoneStep({
           Verify your phone number to access your gym membership.
         </Text>
 
+        {/* Invite Pass Code Badge if present */}
+        {(inviteCode || passNumber) ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+              backgroundColor: '#FEF2F2',
+              borderWidth: 1,
+              borderColor: '#FECDD3',
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              marginTop: 14,
+              gap: 6,
+            }}>
+            <Ionicons name="ticket-outline" size={16} color="#E23744" />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#E23744' }}>
+              Pass #{passNumber || inviteCode}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Phone Number Field */}
-        <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 28, marginBottom: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155', marginTop: (inviteCode || passNumber) ? 18 : 28, marginBottom: 8 }}>
           Phone Number
         </Text>
 
@@ -100,6 +129,7 @@ export default function WelcomePhoneStep({
             keyboardType="phone-pad"
             placeholder="Enter phone number"
             placeholderTextColor="#94A3B8"
+            maxLength={14}
             style={{
               flex: 1,
               fontSize: 15,
@@ -108,13 +138,20 @@ export default function WelcomePhoneStep({
               paddingVertical: 0,
             }}
           />
-          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+          {phone.replace(/\D/g, '').length >= 10 && (
+            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+          )}
         </View>
 
         {/* Green pre-filled note */}
-        <Text style={{ fontSize: 11, fontWeight: '600', color: '#10B981', marginTop: 6 }}>
-          Pre-filled from your invite link
-        </Text>
+        {isPrefilled ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+            <Ionicons name="checkmark-circle" size={13} color="#10B981" />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#10B981' }}>
+              Pre-filled from your invite link
+            </Text>
+          </View>
+        ) : null}
 
         {/* Feature / Benefit Cards */}
         <View

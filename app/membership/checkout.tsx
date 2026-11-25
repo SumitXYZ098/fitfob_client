@@ -99,7 +99,7 @@ export default function MembershipCheckoutRoute() {
   };
 
   const handleViewEntryQr = () => {
-    router.push('/account/gym-pass-claim' as any);
+    router.push('/(tab)/scan' as any);
   };
 
   const handleBack = () => {

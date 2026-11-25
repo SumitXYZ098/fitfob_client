@@ -7,11 +7,17 @@ import Svg, { Rect, Circle } from 'react-native-svg';
 interface ClaimMembershipStepProps {
   onClaim: () => void;
   onBack: () => void;
+  memberName?: string;
+  passNumber?: string;
+  gymName?: string;
 }
 
 export default function ClaimMembershipStep({
   onClaim,
   onBack,
+  memberName = 'Rohit',
+  passNumber,
+  gymName = 'PowerHouse Gym',
 }: ClaimMembershipStepProps) {
   return (
     <ScrollView
@@ -42,7 +48,7 @@ export default function ClaimMembershipStep({
 
         {/* Top Greeting */}
         <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>
-          Hi Rohit
+          Hi {memberName}
         </Text>
         <Text
           style={{
@@ -75,10 +81,10 @@ export default function ClaimMembershipStep({
           />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
-              Good news, Rohit!
+              Good news, {memberName}!
             </Text>
             <Text style={{ fontSize: 12, fontWeight: '500', color: '#047857', marginTop: 2, lineHeight: 18 }}>
-              PowerHouse Gym has linked your active membership to Fitfob.
+              {gymName} has linked your active membership to Fitfob.
             </Text>
           </View>
         </View>

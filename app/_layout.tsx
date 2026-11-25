@@ -73,6 +73,7 @@ export default function Layout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="gym" options={{ headerShown: false }} />
+          <Stack.Screen name="invite" options={{ headerShown: false }} />
         </Stack>
         <Toast />
       </QueryClientProvider>

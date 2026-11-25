@@ -314,13 +314,13 @@ export default function ProfileScreen() {
                     <Text className="font-bold text-xl text-white">
                       {formatPersonName(
                         user?.clientDetail?.name ||
-                          user?.name ||
-                          user?.fullName ||
-                          (user?.username &&
+                        user?.name ||
+                        user?.fullName ||
+                        (user?.username &&
                           !user.username.includes('phone.user') &&
                           !user.username.startsWith('+')
-                            ? user.username
-                            : 'Member')
+                          ? user.username
+                          : 'Member')
                       )}
                     </Text>
                     <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" className="ml-1.5" />
@@ -344,16 +344,15 @@ export default function ProfileScreen() {
                     {activeSubscription?.clubName
                       ? formatGymTitle(activeSubscription.clubName)
                       : activeSubscription?.plan
-                      ? formatPlanName(activeSubscription.plan)
-                      : 'No Active Membership'}
+                        ? formatPlanName(activeSubscription.plan)
+                        : 'No Active Membership'}
                   </Text>
                   <Text className="mt-1 font-medium text-xs leading-tight text-white/80" numberOfLines={2}>
                     {activeSubscription
-                      ? `${formatPlanName(activeSubscription.plan)}${
-                          activeSubscription.endDate
-                            ? ` • Valid until ${formatDate(activeSubscription.endDate)}`
-                            : ' • Unlimited Access'
-                        }`
+                      ? `${formatPlanName(activeSubscription.plan)}${activeSubscription.endDate
+                        ? ` • Valid until ${formatDate(activeSubscription.endDate)}`
+                        : ' • Unlimited Access'
+                      }`
                       : 'Explore clubs and get unlimited gym access'}
                   </Text>
                 </View>
@@ -362,9 +361,9 @@ export default function ProfileScreen() {
                   <Text className="font-semibold text-xs text-slate-700">
                     {activeSubscription
                       ? (activeSubscription.membershipStatus
-                          ? activeSubscription.membershipStatus.charAt(0).toUpperCase() +
-                            activeSubscription.membershipStatus.slice(1).toLowerCase()
-                          : 'Subscribed')
+                        ? activeSubscription.membershipStatus.charAt(0).toUpperCase() +
+                        activeSubscription.membershipStatus.slice(1).toLowerCase()
+                        : 'Subscribed')
                       : 'Explore'}
                   </Text>
                 </View>
@@ -402,9 +401,8 @@ export default function ProfileScreen() {
             onPress={handleLogout}
             disabled={isLoggingOut}
             activeOpacity={0.8}
-            className={`flex-row items-center justify-center rounded-2xl border border-slate-100 bg-[#F8FAFC] py-4 ${
-              isLoggingOut ? 'opacity-60' : ''
-            }`}>
+            className={`flex-row items-center justify-center rounded-2xl border border-slate-100 bg-[#F8FAFC] py-4 ${isLoggingOut ? 'opacity-60' : ''
+              }`}>
             {isLoggingOut ? (
               <ActivityIndicator size="small" color="#64748B" />
             ) : (
