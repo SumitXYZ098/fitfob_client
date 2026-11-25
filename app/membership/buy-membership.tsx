@@ -197,6 +197,26 @@ export default function BuyMembershipScreen() {
     });
   };
 
+  const handlePayAtGym = () => {
+    setIsAddOnModalOpen(false);
+    router.push({
+      pathname: '/membership/checkout' as any,
+      params: {
+        gymName,
+        gymLocation: 'Phase 7, Mohali',
+        selectedPlanName: planTitle,
+        selectedPlanPrice: planPrice,
+        duration: planDuration,
+        initialMode: 'gym',
+        planDocumentId:
+          selectedClubPlan?.documentId ||
+          (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
+          selectedClubPlan?.plan,
+        gymContract: selectedContract,
+      },
+    });
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* 1. Top Header Bar */}
@@ -499,6 +519,18 @@ export default function BuyMembershipScreen() {
               className="mt-3 w-full items-center justify-center bg-slate-100 py-3.5">
               <Text className="font-semibold text-[15px] text-slate-700">
                 Skip for now
+              </Text>
+            </TouchableOpacity>
+
+            {/* Pay at Gym Button */}
+            <TouchableOpacity
+              onPress={handlePayAtGym}
+              activeOpacity={0.8}
+              style={{ borderRadius: 16 }}
+              className="mt-3 w-full flex-row items-center justify-center border border-slate-200 bg-white py-3.5">
+              <Ionicons name="storefront-outline" size={17} color="#0F172A" style={{ marginRight: 6 }} />
+              <Text className="font-bold text-[15px] text-slate-800">
+                Pay at Gym
               </Text>
             </TouchableOpacity>
           </View>
