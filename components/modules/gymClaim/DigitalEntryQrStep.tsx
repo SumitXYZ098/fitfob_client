@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StylizedQrPassCode from './StylizedQrPassCode';
 
@@ -9,24 +9,48 @@ interface DigitalEntryQrStepProps {
   memberId?: string;
   passNumber?: string;
   gymName?: string;
+  planName?: string;
+  endDate?: string;
+  qrCode?: string;
   onDone?: () => void;
+}
+
+function formatMembershipDate(dateStr?: string): string {
+  if (!dateStr) return 'Active';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch {
+    return dateStr;
+  }
 }
 
 export default function DigitalEntryQrStep({
   onBack,
-  memberName = 'Rohit Sharma',
+  memberName = '',
   memberId,
   passNumber,
-  gymName = 'PowerHouse Gym',
+  gymName = '',
+  planName = '',
+  endDate,
+  qrCode,
   onDone,
 }: DigitalEntryQrStepProps) {
-  const initials =
-    memberName
-      .split(' ')
-      .filter(Boolean)
-      .map((w) => w[0].toUpperCase())
-      .slice(0, 2)
-      .join('') || 'FF';
+  const initials = memberName
+    ? memberName
+        .split(' ')
+        .filter(Boolean)
+        .map((w) => w[0].toUpperCase())
+        .slice(0, 2)
+        .join('')
+    : 'FF';
+
+  const formattedEndDate = endDate ? formatMembershipDate(endDate) : '';
+  const planSubtitle = [planName, formattedEndDate ? `Valid till ${formattedEndDate}` : '']
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <ScrollView
@@ -77,11 +101,13 @@ export default function DigitalEntryQrStep({
         }}>
         {/* Gym Title & Plan Subtitle */}
         <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', letterSpacing: -0.2 }}>
-          {gymName}
+          {gymName || 'Club Pass'}
         </Text>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 3 }}>
-          6–Month Gold · Valid till 23 May 2027
-        </Text>
+        {planSubtitle ? (
+          <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 3 }}>
+            {planSubtitle}
+          </Text>
+        ) : null}
 
         {/* Active Pill Badge */}
         <View
@@ -111,8 +137,16 @@ export default function DigitalEntryQrStep({
           </Text>
         </View>
 
-        {/* Stylized QR Code Graphic with Fitfob Center Badge */}
-        <StylizedQrPassCode size={210} />
+        {/* QR Code graphic (API qrCode or Stylized QR) */}
+        {qrCode ? (
+          <Image
+            source={{ uri: qrCode }}
+            style={{ width: 210, height: 210, borderRadius: 16 }}
+            resizeMode="contain"
+          />
+        ) : (
+          <StylizedQrPassCode size={210} />
+        )}
 
         {/* Instructions below QR */}
         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', marginTop: 14 }}>
@@ -159,11 +193,13 @@ export default function DigitalEntryQrStep({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-              {memberName}
+              {memberName || 'Member'}
             </Text>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 }}>
-              Member ID: {memberId || (passNumber ? `Pass #${passNumber}` : 'FF-20481')}
-            </Text>
+            {(memberId || passNumber) ? (
+              <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 }}>
+                {memberId ? `Member ID: ${memberId}` : `Pass #${passNumber}`}
+              </Text>
+            ) : null}
           </View>
         </View>
       </View>

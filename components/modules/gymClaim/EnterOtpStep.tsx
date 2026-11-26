@@ -9,6 +9,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,6 +23,7 @@ interface EnterOtpStepProps {
   onEditPhone: () => void;
   onVerify: () => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 export default function EnterOtpStep({
@@ -34,6 +36,7 @@ export default function EnterOtpStep({
   onEditPhone,
   onVerify,
   onBack,
+  isLoading,
 }: EnterOtpStepProps) {
   const otpInputs = useRef<any[]>([]);
 
@@ -210,6 +213,7 @@ export default function EnterOtpStep({
           <View style={{ paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 8 : 12 }}>
             <TouchableOpacity
               onPress={onVerify}
+              disabled={isLoading}
               activeOpacity={0.88}
               style={{
                 height: 52,
@@ -217,15 +221,20 @@ export default function EnterOtpStep({
                 backgroundColor: '#E23744',
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: isLoading ? 0.75 : 1,
                 shadowColor: '#E23744',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
                 elevation: 4,
               }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-                Verify & Login
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                  Verify & Login
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

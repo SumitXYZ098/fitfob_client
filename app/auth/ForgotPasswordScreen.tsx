@@ -11,7 +11,15 @@ import { KeyboardAwareScrollView } from '@pietile-native-kit/keyboard-aware-scro
 import { useForgotSendOtp } from '@/hook/useAuth';
 
 const forgotPasswordSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Please enter a valid email address'),
+  identifier: z
+    .string()
+    .min(1, 'Email or Phone is required')
+    .refine((val) => {
+      const clean = val.trim();
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
+      const isPhone = /^\+?[0-9]{8,15}$/.test(clean.replace(/[\s-]/g, ''));
+      return isEmail || isPhone;
+    }, 'Please enter a valid email or phone number'),
 });
 
 type ForgotFormData = z.infer<typeof forgotPasswordSchema>;
@@ -28,17 +36,29 @@ export default function ForgotPasswordScreen() {
     formState: { errors },
   } = useForm<ForgotFormData>({
     resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: { email: '' },
+    defaultValues: { identifier: '' },
   });
 
   const onSubmit = (data: ForgotFormData) => {
+    const clean = data.identifier.trim();
+    const formattedIdentifier = clean.includes('@')
+      ? clean.toLowerCase()
+      : clean.startsWith('+')
+      ? clean
+      : clean.replace(/\D/g, '').length === 10
+      ? `+91${clean.replace(/\D/g, '')}`
+      : clean;
+
     sendOtp(
-      { identifier: data.email.toLowerCase().trim() },
+      { identifier: formattedIdentifier },
       {
         onSuccess: () => {
           router.push({
             pathname: '/auth/ForgotOtpScreen',
-            params: { email: data.email.toLowerCase().trim() },
+            params: {
+              identifier: formattedIdentifier,
+              email: formattedIdentifier,
+            },
           });
         },
       }
@@ -85,37 +105,42 @@ export default function ForgotPasswordScreen() {
             <Text
               className="mt-3 text-base text-slate-400"
               style={{ fontFamily: 'PlusJakartaSans-Medium' }}>
-              Please enter your email to reset the password
+              Please enter your email or phone number to reset your password
             </Text>
           </View>
 
           {/* Input Section */}
           <View className="mt-10">
-            <Text className="mb-2 ml-1 font-medium text-sm text-slate-400">Email Address</Text>
+            <Text className="mb-2 ml-1 font-medium text-sm text-slate-400">
+              Email Address or Phone Number
+            </Text>
             <Controller
               control={control}
-              name="email"
+              name="identifier"
               render={({ field: { onChange, onBlur, value } }) => (
                 <View
                   className={`h-14 justify-center rounded-2xl border ${
-                    errors.email ? 'border-red-500' : 'border-slate-200'
+                    errors.identifier ? 'border-red-500' : 'border-slate-200'
                   } bg-white px-4`}>
                   <TextInput
-                    placeholder="Enter Gmail"
+                    placeholder="Enter email or phone number"
                     placeholderTextColor="#CBD5E1"
                     onBlur={onBlur}
                     onChangeText={onChange}
                     value={value}
                     className="h-full text-base text-slate-900"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     keyboardType="email-address"
                     editable={!isPending}
                   />
                 </View>
               )}
             />
-            {errors.email && (
-              <Text className="ml-1 mt-1 text-xs text-red-500">{errors.email.message}</Text>
+            {errors.identifier && (
+              <Text className="ml-1 mt-1 text-xs text-red-500">
+                {errors.identifier.message}
+              </Text>
             )}
           </View>
 
@@ -126,7 +151,7 @@ export default function ForgotPasswordScreen() {
           <View className="mb-6">
             <Button
               title={isPending ? 'Sending...' : 'Reset Password'}
-              onPress={handleSubmit(onSubmit)}
+              onPress={() => handleSubmit(onSubmit)()}
               disabled={isPending}
             />
           </View>

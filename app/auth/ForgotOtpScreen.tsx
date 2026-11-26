@@ -10,7 +10,9 @@ import { useForgotResendOtp, useForgotVerifyOtp } from '@/hook/useAuth';
 
 export default function ForgotOtpScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams();
+  const { email, identifier: paramIdentifier } = useLocalSearchParams();
+  const rawIdentifier = ((paramIdentifier as string) || (email as string) || '').trim();
+  const identifier = rawIdentifier.includes('@') ? rawIdentifier.toLowerCase() : rawIdentifier;
 
   const { mutate: resendOtp, isPending: isResending } = useForgotResendOtp();
   const { mutate: verifyOtp, isPending: isVerifying } = useForgotVerifyOtp();
@@ -18,7 +20,7 @@ export default function ForgotOtpScreen() {
   const [timer, setTimer] = useState(60);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<any[]>([]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -62,11 +64,6 @@ export default function ForgotOtpScreen() {
 
   const handleVerify = () => {
     const otpString = otp.join('').trim();
-    const identifier = ((email as string) || '').toLowerCase().trim();
-
-    console.log('--- FORGOT PASSWORD VERIFY START ---');
-    console.log('Identifier:', identifier);
-    console.log('OTP:', otpString);
 
     verifyOtp(
       {
@@ -75,19 +72,16 @@ export default function ForgotOtpScreen() {
       },
       {
         onSuccess: (data) => {
-          console.log(data, 'Vergiy otp');
-          console.log('✅ Forgot OTP Verified. Token:', data?.resetToken);
-
           if (data?.resetToken) {
             router.push({
               pathname: '/auth/CreateNewPassword',
               params: {
+                identifier: identifier,
                 email: identifier,
                 resetToken: data.resetToken,
               },
             });
           } else {
-            console.warn('⚠️ API Success but missing fields in response:', data);
             router.replace('/auth/Login');
           }
         },
@@ -105,9 +99,9 @@ export default function ForgotOtpScreen() {
   };
 
   const handleResend = () => {
-    if (!email) return;
+    if (!identifier) return;
     resendOtp(
-      { identifier: (email as string).toLowerCase().trim() },
+      { identifier: identifier },
       {
         onSuccess: () => {
           setTimer(60);
@@ -129,15 +123,15 @@ export default function ForgotOtpScreen() {
             <Text
               className="font-bold text-[32px] leading-tight text-slate-900"
               style={{ fontFamily: 'PlusJakartaSans-Bold' }}>
-              Check Your Email
+              Verification Code
             </Text>
             <Text
               className="mt-3 text-base leading-6 text-slate-400"
               style={{ fontFamily: 'PlusJakartaSans-Medium' }}>
-              We sent a reset link to{' '}
-              <Text className="font-semibold text-[#F6163C]">{email || 'xyztest@gmail.com'}</Text>
+              We sent a verification code to{' '}
+              <Text className="font-semibold text-[#F6163C]">{identifier || 'your account'}</Text>
               {'\n'}
-              enter 6 digit code that mentioned in the email
+              Enter the 6-digit code to reset your password
             </Text>
           </View>
 

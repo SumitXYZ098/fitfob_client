@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect, Circle } from 'react-native-svg';
@@ -10,15 +10,43 @@ interface ClaimMembershipStepProps {
   memberName?: string;
   passNumber?: string;
   gymName?: string;
+  planName?: string;
+  startDate?: string;
+  endDate?: string;
+  clubAddress?: string;
+  isLoading?: boolean;
+}
+
+function formatMembershipDate(dateStr?: string): string {
+  if (!dateStr) return 'Active';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch {
+    return dateStr;
+  }
 }
 
 export default function ClaimMembershipStep({
   onClaim,
   onBack,
-  memberName = 'Rohit',
+  memberName = '',
   passNumber,
-  gymName = 'PowerHouse Gym',
+  gymName = '',
+  planName = '',
+  startDate,
+  endDate,
+  clubAddress,
+  isLoading,
 }: ClaimMembershipStepProps) {
+  const firstName = memberName ? memberName.split(' ')[0] : '';
+  const formattedEndDate = endDate ? formatMembershipDate(endDate) : '';
+  const daysLeft = endDate
+    ? Math.max(0, Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
+
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -48,7 +76,7 @@ export default function ClaimMembershipStep({
 
         {/* Top Greeting */}
         <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>
-          Hi {memberName}
+          Hi{firstName ? ` ${firstName}` : ''}
         </Text>
         <Text
           style={{
@@ -81,10 +109,10 @@ export default function ClaimMembershipStep({
           />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
-              Good news, {memberName}!
+              Good news{firstName ? `, ${firstName}` : ''}!
             </Text>
             <Text style={{ fontSize: 12, fontWeight: '500', color: '#047857', marginTop: 2, lineHeight: 18 }}>
-              {gymName} has linked your active membership to Fitfob.
+              {gymName ? `${gymName} has linked your active membership to Fitfob.` : 'Your active gym membership is linked to Fitfob.'}
             </Text>
           </View>
         </View>
@@ -154,10 +182,10 @@ export default function ClaimMembershipStep({
 
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 }}>
-                  PowerHouse Gym
+                  {gymName || 'Club Pass'}
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '500', color: 'rgba(255, 255, 255, 0.85)', marginTop: 2 }}>
-                  Phase 7, Mohali
+                  {clubAddress || (passNumber ? `Pass #${passNumber}` : 'Active Membership')}
                 </Text>
               </View>
             </View>
@@ -198,7 +226,7 @@ export default function ClaimMembershipStep({
               MEMBER
             </Text>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: -0.2 }}>
-              Rohit Sharma
+              {memberName || 'Member'}
             </Text>
           </View>
 
@@ -223,7 +251,7 @@ export default function ClaimMembershipStep({
                 PLAN
               </Text>
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginTop: 3 }}>
-                6–Month Gold
+                {planName || 'Active Plan'}
               </Text>
             </View>
 
@@ -232,7 +260,7 @@ export default function ClaimMembershipStep({
                 VALID TILL
               </Text>
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginTop: 3 }}>
-                23 May 2027
+                {formattedEndDate || 'Active'}
               </Text>
             </View>
           </View>
@@ -254,12 +282,14 @@ export default function ClaimMembershipStep({
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="time-outline" size={17} color="#E23744" style={{ marginRight: 10 }} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
-              187 days left on your plan
-            </Text>
-          </View>
+          {daysLeft !== null && daysLeft > 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="time-outline" size={17} color="#E23744" style={{ marginRight: 10 }} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
+                {daysLeft} days left on your plan
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -267,6 +297,7 @@ export default function ClaimMembershipStep({
       <View style={{ marginTop: 28 }}>
         <TouchableOpacity
           onPress={onClaim}
+          disabled={isLoading}
           activeOpacity={0.88}
           style={{
             height: 52,
@@ -276,16 +307,23 @@ export default function ClaimMembershipStep({
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
+            opacity: isLoading ? 0.75 : 1,
             shadowColor: '#E23744',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
             shadowRadius: 8,
             elevation: 4,
           }}>
-          <Ionicons name="qr-code" size={18} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-            Claim My Membership & View QR
-          </Text>
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <>
+              <Ionicons name="qr-code" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                Claim My Membership & View QR
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>

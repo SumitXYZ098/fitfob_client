@@ -1,25 +1,25 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface WelcomePhoneStepProps {
   phone: string;
   onChangePhone: (val: string) => void;
   onSendOtp: () => void;
-  onBack: () => void;
   passNumber?: string;
   inviteCode?: string;
   isPrefilled?: boolean;
+  isLoading?: boolean;
 }
 
 export default function WelcomePhoneStep({
   phone,
   onChangePhone,
   onSendOtp,
-  onBack,
   passNumber,
   inviteCode,
   isPrefilled,
+  isLoading,
 }: WelcomePhoneStepProps) {
   return (
     <ScrollView
@@ -32,22 +32,6 @@ export default function WelcomePhoneStep({
         paddingBottom: 24,
       }}>
       <View>
-        {/* Top Header with Back button */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity
-            onPress={onBack}
-            activeOpacity={0.7}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              backgroundColor: '#F8FAFC',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-            <Ionicons name="chevron-back" size={22} color="#0F172A" />
-          </TouchableOpacity>
-        </View>
 
         {/* Fitfob Logo Centered */}
         <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 26, marginBottom: 8 }}>
@@ -129,6 +113,7 @@ export default function WelcomePhoneStep({
             keyboardType="phone-pad"
             placeholder="Enter phone number"
             placeholderTextColor="#94A3B8"
+            editable={!isPrefilled}
             maxLength={14}
             style={{
               flex: 1,
@@ -218,6 +203,7 @@ export default function WelcomePhoneStep({
       <View style={{ marginTop: 32 }}>
         <TouchableOpacity
           onPress={onSendOtp}
+          disabled={isLoading}
           activeOpacity={0.88}
           style={{
             height: 52,
@@ -225,15 +211,20 @@ export default function WelcomePhoneStep({
             backgroundColor: '#E23744',
             alignItems: 'center',
             justifyContent: 'center',
+            opacity: isLoading ? 0.75 : 1,
             shadowColor: '#E23744',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
             shadowRadius: 8,
             elevation: 4,
           }}>
-          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-            Send OTP
-          </Text>
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+              Send OTP
+            </Text>
+          )}
         </TouchableOpacity>
 
         <Text
@@ -244,7 +235,7 @@ export default function WelcomePhoneStep({
             textAlign: 'center',
             marginTop: 12,
           }}>
-          By continuing you agree to Fitfob's Terms & Privacy Policy
+          By continuing you agree to Fitfob&apos;s Terms & Privacy Policy
         </Text>
       </View>
     </ScrollView>

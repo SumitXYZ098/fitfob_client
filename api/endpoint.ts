@@ -47,4 +47,9 @@ export const ENDPOINTS = {
 
   // Visits & Check-ins
   MY_CHECKINS: `${BASE_URL}/api/client/my-checkins`,
+
+  // Offline / Existing Member Invite & Claim
+  OFFLINE_MEMBER_SEND_OTP: `${BASE_URL}/api/send-otp`,
+  OFFLINE_MEMBER_VERIFY_OTP: `${BASE_URL}/api/verify-otp`,
+  CLAIM_MEMBERSHIP: (docId: string | number) => `${BASE_URL}/api/client/claim-membership/${docId}`,
 };

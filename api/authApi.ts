@@ -67,10 +67,15 @@ export const loginUserApi = async (payload: any) => {
 
 // Forgot password APIs Flow
 
+const normalizeIdentifier = (val: string) => {
+  const clean = (val || '').trim();
+  return clean.includes('@') ? clean.toLowerCase() : clean;
+};
+
 // 1. Send OTP (Forgot Password)
 export const forgotSendOtpApi = async (payload: { identifier: string }) => {
   const response = await api.post(ENDPOINTS.FORGOT_SEND_OTP, {
-    identifier: payload.identifier.toLowerCase().trim(),
+    identifier: normalizeIdentifier(payload.identifier),
   });
   return response.data;
 };
@@ -78,20 +83,15 @@ export const forgotSendOtpApi = async (payload: { identifier: string }) => {
 // 2. Resend OTP (Forgot Password)
 export const forgotResendOtpApi = async (payload: { identifier: string }) => {
   const response = await api.post(ENDPOINTS.FORGOT_RESEND_OTP, {
-    identifier: payload.identifier.toLowerCase().trim(),
+    identifier: normalizeIdentifier(payload.identifier),
   });
   return response.data;
 };
 
 // 3. Verify OTP (Forgot Password)
 export const forgotVerifyOtpApi = async (payload: { identifier: string; otp: string }) => {
-  // console.log('🚀 Payload being sent to Backend:', {
-  //   identifier: payload.identifier.toLowerCase().trim(),
-  //   otp: String(payload.otp).trim(),
-  // });
-
   const response = await api.post(ENDPOINTS.FORGOT_VERIFY_OTP, {
-    identifier: payload.identifier.toLowerCase().trim(),
+    identifier: normalizeIdentifier(payload.identifier),
     otp: String(payload.otp).trim(),
   });
   return response.data;
@@ -102,7 +102,7 @@ export const forgotVerifyOtpApi = async (payload: { identifier: string; otp: str
 export const resetPasswordApi = async (payload: any) => {
   try {
     const finalPayload = {
-      identifier: payload.identifier,
+      identifier: normalizeIdentifier(payload.identifier),
       password: payload.password,
       confirmPassword: payload.confirmPassword,
       resetToken: payload.resetToken,

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { useAuthStore } from '@/store/useAuthStore';
 import apiInstance from './apiInstance';
 import { ENDPOINTS } from './endpoint';
 
@@ -203,8 +204,7 @@ export const clientResendOtp = async (payload?: {
   phoneNumber?: string;
   email?: string;
 }) => {
-  const targetIdentifier =
-    payload?.identifier || payload?.phoneNumber || payload?.email || '';
+  const targetIdentifier = payload?.identifier || payload?.phoneNumber || payload?.email || '';
 
   // console.log('📡 clientResendOtp called with identifier:', targetIdentifier);
 
@@ -262,7 +262,7 @@ export const clientResendOtp = async (payload?: {
     );
     throw err;
   }
-}
+};
 
 // Search nearby gyms (club owners)
 export const searchNearbyGyms = async (params: {
@@ -318,9 +318,7 @@ export const getGymDetail = async (id: string) => {
   try {
     const url = `${ENDPOINTS.GET_CLUB_DETAIL}/${id}`;
     const response = await apiInstance.get(url);
-    console.log(`📋 [RAW GYM TAIL RESPONSE from server for ${id}]:`,
-      response.data.trial
-    );
+    console.log(`📋 [RAW GYM TAIL RESPONSE from server for ${id}]:`, response.data.trial);
     return response.data;
   } catch (error) {
     console.error('❌ Error fetching gym detail:', error);
@@ -385,7 +383,10 @@ export const removeFavorite = async (clubDocumentId: string) => {
         console.log('✅ Removed from favorites successfully (DELETE):', delResp.data);
         return delResp.data;
       } catch (delErr: any) {
-        console.error('❌ Error removing favorite (DELETE):', delErr?.response?.data || delErr.message);
+        console.error(
+          '❌ Error removing favorite (DELETE):',
+          delErr?.response?.data || delErr.message
+        );
         throw delErr;
       }
     }
@@ -428,7 +429,10 @@ export const getMyCheckins = async (): Promise<MyCheckinsResponse> => {
         const res = await apiInstance.get(fallbackUrl);
         return res.data;
       } catch (fallbackErr: any) {
-        console.error('❌ Fallback checkins request failed:', fallbackErr?.response?.data || fallbackErr.message);
+        console.error(
+          '❌ Fallback checkins request failed:',
+          fallbackErr?.response?.data || fallbackErr.message
+        );
         throw fallbackErr;
       }
     }
@@ -490,7 +494,11 @@ export const getOutdoorMembershipPlans = async (params?: {
       if (params?.latitude !== undefined && params?.latitude !== null && params?.latitude !== '') {
         queryParts.push(`latitude=${encodeURIComponent(params.latitude.toString())}`);
       }
-      if (params?.longitude !== undefined && params?.longitude !== null && params?.longitude !== '') {
+      if (
+        params?.longitude !== undefined &&
+        params?.longitude !== null &&
+        params?.longitude !== ''
+      ) {
         queryParts.push(`longitude=${encodeURIComponent(params.longitude.toString())}`);
       }
     }
@@ -515,7 +523,10 @@ export const getOutdoorMembershipPlans = async (params?: {
       console.log('ℹ️ No outdoor membership plans found (404/400), returning empty list');
       return [];
     }
-    console.error('❌ Error fetching outdoor membership plans:', error?.response?.data || error.message);
+    console.error(
+      '❌ Error fetching outdoor membership plans:',
+      error?.response?.data || error.message
+    );
     return [];
   }
 };
@@ -536,12 +547,18 @@ export const createMembershipCheckoutBuy = async (
   payload: MembershipCheckoutBuyPayload
 ): Promise<MembershipCheckoutBuyResponse> => {
   try {
-    console.log('💳 Initiating membership checkout buy with payload:', JSON.stringify(payload, null, 2));
+    console.log(
+      '💳 Initiating membership checkout buy with payload:',
+      JSON.stringify(payload, null, 2)
+    );
     const response = await apiInstance.post(ENDPOINTS.MEMBERSHIP_CHECKOUT_BUY, payload);
     console.log('✅ Checkout buy response:', JSON.stringify(response.data, null, 2));
     return response.data?.data || response.data;
   } catch (error: any) {
-    console.error('❌ Error creating membership checkout order:', error?.response?.data || error.message);
+    console.error(
+      '❌ Error creating membership checkout order:',
+      error?.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -568,7 +585,10 @@ export const getClientSubscriptions = async (): Promise<ClientSubscriptionsRespo
     const response = await apiInstance.get(ENDPOINTS.CLIENT_SUBSCRIPTIONS);
     return response.data;
   } catch (error: any) {
-    console.error('❌ Error fetching client subscriptions:', error?.response?.data || error.message);
+    console.error(
+      '❌ Error fetching client subscriptions:',
+      error?.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -604,16 +624,17 @@ export interface BookGymTrialResponse {
 }
 
 // Book a free trial for a club: POST /api/gym-trials
-export const bookGymTrial = async (
-  payload: BookGymTrialPayload
-): Promise<BookGymTrialResponse> => {
+export const bookGymTrial = async (payload: BookGymTrialPayload): Promise<BookGymTrialResponse> => {
   try {
     console.log('🎟️ Booking gym trial with payload:', payload);
     const response = await apiInstance.post(ENDPOINTS.GYM_TRIALS, payload);
     console.log('✅ Gym trial booked successfully:', response.data);
     return response.data;
   } catch (error: any) {
-    console.warn('ℹ️ Gym trial booking response notice:', error?.response?.data?.message || error?.response?.data || error.message);
+    console.warn(
+      'ℹ️ Gym trial booking response notice:',
+      error?.response?.data?.message || error?.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -717,10 +738,7 @@ export const rescheduleGymTrial = async (
 ): Promise<RescheduleGymTrialResponse> => {
   try {
     console.log(`🔄 Rescheduling gym trial ${docId} with payload:`, payload);
-    const response = await apiInstance.post(
-      ENDPOINTS.RESCHEDULE_TRIAL(docId),
-      payload || {}
-    );
+    const response = await apiInstance.post(ENDPOINTS.RESCHEDULE_TRIAL(docId), payload || {});
     console.log('✅ Gym trial rescheduled successfully:', response.data);
     return response.data;
   } catch (error: any) {
@@ -729,5 +747,78 @@ export const rescheduleGymTrial = async (
   }
 };
 
+// Offline Member / Existing Member Send OTP: POST /api/send-otp
+export interface SendOfflineMemberOtpResponse {
+  success: boolean;
+  message: string;
+  identifier: string;
+  role: string;
+  isOfflineMember?: boolean;
+}
 
+export const sendOfflineMemberOtp = async (
+  identifier: string
+): Promise<SendOfflineMemberOtpResponse> => {
+  try {
+    const clean = identifier.replace(/\D/g, '').slice(-10);
+    const response = await apiInstance.post(ENDPOINTS.OFFLINE_MEMBER_SEND_OTP, {
+      identifier: clean,
+      role: 'client',
+    });
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};
 
+// Offline Member / Existing Member Verify OTP: POST /api/verify-otp
+export interface VerifyOfflineMemberOtpResponse {
+  jwt: string;
+  user: any;
+  pendingClaim?: {
+    id: number;
+    documentId: string;
+    gymName: string;
+    planName: string;
+    startDate: string;
+    endDate: string;
+    claimStatus: string;
+    claimUrl?: string;
+  };
+  message?: string;
+}
+
+export const verifyOfflineMemberOtp = async (
+  identifier: string,
+  otp: string
+): Promise<VerifyOfflineMemberOtpResponse> => {
+  try {
+    const digits = identifier.replace(/\D/g, '');
+    const formattedId =
+      digits.startsWith('91') && digits.length === 12
+        ? `+${digits}`
+        : digits.length === 10
+          ? `+91${digits}`
+          : identifier.startsWith('+')
+            ? identifier
+            : `+91${digits.slice(-10)}`;
+
+    const response = await apiInstance.post(ENDPOINTS.OFFLINE_MEMBER_VERIFY_OTP, {
+      identifier: formattedId,
+      otp: otp.trim(),
+    });
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+// Claim Member Pass: POST /api/client/claim-membership/:docId
+export const claimMembershipApi = async (documentId: string | number) => {
+  try {
+    const response = await apiInstance.post(ENDPOINTS.CLAIM_MEMBERSHIP(documentId), {});
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};

@@ -29,7 +29,7 @@ const newPasswordSchema = z
 type NewPasswordData = z.infer<typeof newPasswordSchema>;
 
 export default function CreateNewPassword() {
-  const { email, resetToken } = useLocalSearchParams();
+  const { email, identifier: paramIdentifier, resetToken } = useLocalSearchParams();
 
   const { mutate: resetPassword, isPending } = useResetPassword();
 
@@ -47,10 +47,12 @@ export default function CreateNewPassword() {
 
   const onSubmit = (data: NewPasswordData) => {
     // Force params to be strings (handles string | string[] from useLocalSearchParams)
-    const emailStr = Array.isArray(email) ? email[0] : email;
+    const rawId = Array.isArray(paramIdentifier)
+      ? paramIdentifier[0]
+      : paramIdentifier || (Array.isArray(email) ? email[0] : email);
     const tokenStr = Array.isArray(resetToken) ? resetToken[0] : resetToken;
 
-    if (!tokenStr || !emailStr) {
+    if (!tokenStr || !rawId) {
       Toast.show({
         type: 'error',
         text1: 'Session Expired',
@@ -59,14 +61,16 @@ export default function CreateNewPassword() {
       return;
     }
 
+    const cleanId = decodeURIComponent(String(rawId)).trim();
+    const formattedId = cleanId.includes('@') ? cleanId.toLowerCase() : cleanId;
+
     const payload = {
-      identifier: decodeURIComponent(String(emailStr)).toLowerCase().trim(),
+      identifier: formattedId,
       password: data.password,
       confirmPassword: data.confirmPassword,
       resetToken: decodeURIComponent(String(tokenStr)),
     };
 
-    console.log('🚀 SUBMITTING PASSWORD RESET:', payload);
     resetPassword(payload);
   };
 
@@ -172,7 +176,7 @@ export default function CreateNewPassword() {
           <View className="mb-6">
             <Button
               title={isPending ? 'Updating...' : 'Continue'}
-              onPress={handleSubmit(onSubmit)}
+              onPress={() => handleSubmit(onSubmit)()}
               disabled={isPending}
             />
           </View>
