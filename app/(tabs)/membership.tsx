@@ -14,7 +14,11 @@ import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import Svg, { Path } from 'react-native-svg';
-import { useClientSubscriptions, ClientSubscriptionItem } from '@/hook/useClient';
+import {
+  useClientSubscriptions,
+  useClientPendingApprovals,
+  ClientSubscriptionItem,
+} from '@/hook/useClient';
 import { useOutdoorPassStore } from '@/store/useOutdoorPassStore';
 import GradientDivider from '@/components/GradientDivider';
 
@@ -22,6 +26,14 @@ export default function MembershipScreen() {
   const router = useRouter();
   const { togglePausePass } = useOutdoorPassStore();
   const { data: subscriptionsData, isLoading, refetch, isRefetching } = useClientSubscriptions();
+  const { data: pendingApprovalsData } = useClientPendingApprovals();
+  const hasPendingApproval = Boolean(pendingApprovalsData?.hasPendingApproval);
+  const pendingApproval = useMemo(() => {
+    if (!pendingApprovalsData?.hasPendingApproval) return null;
+    const item = pendingApprovalsData.pendingApprovals;
+    if (Array.isArray(item)) return item[0] || null;
+    return item || null;
+  }, [pendingApprovalsData]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'active' | 'expired' | 'all'>('active');
 
@@ -217,6 +229,42 @@ export default function MembershipScreen() {
           paddingTop: 10,
           paddingBottom: 120,
         }}>
+        {/* Pending Approval Banner */}
+        {hasPendingApproval && pendingApproval && (
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: '/membership/checkout' as any,
+                params: {
+                  initialStep: 'pending',
+                  documentId: pendingApproval.documentId,
+                },
+              })
+            }
+            activeOpacity={0.88}
+            className="mb-4 flex-row items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-xs">
+            <View className="flex-row items-center gap-3 flex-1 pr-3">
+              <View className="h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+                <Ionicons name="time" size={20} color="#D97706" />
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="font-bold text-sm text-slate-900" numberOfLines={1}>
+                    {pendingApproval.gymName || 'Gym Approval'}
+                  </Text>
+                  <View className="rounded-full bg-amber-200 px-2 py-0.5">
+                    <Text className="text-[10px] font-bold text-amber-800">Pending</Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-slate-500 mt-0.5" numberOfLines={1}>
+                  {pendingApproval.planName || 'Membership'} • ₹{pendingApproval.amountDue || 0}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#D97706" />
+          </TouchableOpacity>
+        )}
+
         {/* Loading Spinner */}
         {isLoading && !refreshing ? (
           <View className="py-20 items-center justify-center">

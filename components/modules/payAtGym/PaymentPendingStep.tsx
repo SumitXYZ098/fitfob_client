@@ -1,13 +1,16 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { CheckoutDetails } from './CheckoutScreen';
+import { useClientPendingApprovals } from '@/hook/useClient';
 
 interface PaymentPendingStepProps {
   details: CheckoutDetails;
   requestDate?: string;
+  isCancelling?: boolean;
   onViewDirections: () => void;
-  onCancelRequest: () => void;
+  onCancelRequest: (documentId?: string | number) => void;
   onBack: () => void;
   // Simulation actions for design testing
   onSimulateDecline?: () => void;
@@ -17,22 +20,93 @@ interface PaymentPendingStepProps {
 export default function PaymentPendingStep({
   details,
   requestDate = '23 Nov 2026, 1:45 PM',
+  isCancelling = false,
   onViewDirections,
   onCancelRequest,
   onBack,
   onSimulateDecline,
   onSimulateApprove,
 }: PaymentPendingStepProps) {
-  const formattedPrice =
-    typeof details.price === 'number'
-      ? `₹${details.price.toLocaleString('en-IN')}`
-      : details.price.startsWith('₹')
-      ? details.price
-      : `₹${details.price}`;
+  const router = useRouter();
 
-  const gymDisplay = details.gymLocation
-    ? `${details.gymName}, ${details.gymLocation}`
-    : `${details.gymName}, Phase 7`;
+  // Poll pending approvals status every 5 seconds
+  const { data: approvalsData, isLoading } = useClientPendingApprovals({
+    refetchInterval: 5000,
+  });
+
+  // When response hasPendingApproval is false, redirect to /(tabs)/membership
+  useEffect(() => {
+    if (!isLoading && approvalsData && approvalsData.hasPendingApproval === false) {
+      router.replace('/(tabs)/membership');
+    }
+  }, [isLoading, approvalsData, router]);
+
+  // Extract pending approval record if returned
+  const pendingApproval = useMemo(() => {
+    if (!approvalsData?.hasPendingApproval) return null;
+    const item = approvalsData.pendingApprovals;
+    if (Array.isArray(item)) return item[0] || null;
+    return item || null;
+  }, [approvalsData]);
+
+  const resolvedGymName = pendingApproval?.gymName || details.gymName;
+  const resolvedGymLocation = pendingApproval?.gymAddress || details.gymLocation;
+  const resolvedPlanName = pendingApproval?.planName || details.planName;
+  const resolvedPrice =
+    pendingApproval?.amountDue !== undefined ? pendingApproval.amountDue : details.price;
+
+  const formatRequestDate = (dateStr?: string) => {
+    if (!dateStr) return undefined;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const resolvedRequestDate =
+    formatRequestDate(pendingApproval?.requestedAt) ||
+    pendingApproval?.timeAgo ||
+    requestDate;
+
+  const formattedPrice =
+    typeof resolvedPrice === 'number'
+      ? `₹${resolvedPrice.toLocaleString('en-IN')}`
+      : String(resolvedPrice).startsWith('₹')
+      ? String(resolvedPrice)
+      : `₹${resolvedPrice}`;
+
+  const gymDisplay = resolvedGymLocation
+    ? `${resolvedGymName}, ${resolvedGymLocation}`
+    : resolvedGymName;
+
+  const handleDirections = () => {
+    if (
+      pendingApproval?.gymLocation &&
+      Array.isArray(pendingApproval.gymLocation) &&
+      pendingApproval.gymLocation.length >= 2
+    ) {
+      // API location coordinates: [lng, lat]
+      const [lng, lat] = pendingApproval.gymLocation;
+      const mapUrl = Platform.select({
+        ios: `maps:0,0?q=${lat},${lng}`,
+        android: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(resolvedGymName)})`,
+        default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+      });
+      Linking.openURL(mapUrl).catch(() => onViewDirections());
+      return;
+    }
+    onViewDirections();
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -111,7 +185,7 @@ export default function PaymentPendingStep({
                 lineHeight: 20,
                 paddingHorizontal: 12,
               }}>
-              Pay at the {details.gymName} reception. Your QR code unlocks as soon as the gym approves.
+              Pay at the {resolvedGymName} reception. Your QR code unlocks as soon as the gym approves.
             </Text>
           </View>
 
@@ -193,7 +267,7 @@ export default function PaymentPendingStep({
                   Plan
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
-                  {details.planName}
+                  {resolvedPlanName}
                 </Text>
               </View>
 
@@ -228,7 +302,7 @@ export default function PaymentPendingStep({
                   Requested
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
-                  {requestDate}
+                  {resolvedRequestDate}
                 </Text>
               </View>
             </View>
@@ -268,7 +342,7 @@ export default function PaymentPendingStep({
         {/* Bottom Actions */}
         <View style={{ marginTop: 24 }}>
           <TouchableOpacity
-            onPress={onViewDirections}
+            onPress={handleDirections}
             activeOpacity={0.88}
             style={{
               height: 52,
@@ -291,16 +365,25 @@ export default function PaymentPendingStep({
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={onCancelRequest}
+            onPress={() => {
+              if (isCancelling) return;
+              onCancelRequest(pendingApproval?.documentId || pendingApproval?.id);
+            }}
+            disabled={isCancelling}
             activeOpacity={0.7}
             style={{
               paddingVertical: 14,
               alignItems: 'center',
               justifyContent: 'center',
+              opacity: isCancelling ? 0.6 : 1,
             }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>
-              Cancel Request
-            </Text>
+            {isCancelling ? (
+              <ActivityIndicator size="small" color="#64748B" />
+            ) : (
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>
+                Cancel Request
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>

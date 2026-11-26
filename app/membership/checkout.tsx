@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Linking, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Linking, Platform, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import {
@@ -10,28 +10,46 @@ import {
   MembershipSuccessStep,
   CheckoutDetails,
 } from '@/components/modules/payAtGym';
+import { usePayAtGym, useCancelPayAtGym, PayAtGymData } from '@/hook/useClient';
 
 type StepType = 'checkout' | 'pending' | 'declined' | 'success';
 
 export default function MembershipCheckoutRoute() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
 
   // Read params passed from GymDetail or fallback to mockup defaults
   const gymName = (params.gymName as string) || (params.title as string) || 'PowerHouse Gym';
-  const gymLocation = (params.gymLocation as string) || (params.address as string) || 'Phase 7, Mohali';
+  const gymLocation =
+    (params.gymLocation as string) ||
+    (params.gymAddress as string) ||
+    (params.address as string) ||
+    'Phase 7, Mohali';
   const planName = (params.selectedPlanName as string) || (params.planName as string) || '3–Month Pro';
   const rawPrice = params.selectedPlanPrice || params.price || '4500';
-  const price = typeof rawPrice === 'string' ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) || 4500 : (rawPrice as number);
+  const price =
+    typeof rawPrice === 'string'
+      ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) || 4500
+      : (rawPrice as unknown as number);
 
-  const details: CheckoutDetails = {
-    gymName,
-    gymLocation,
-    planName,
-    price,
-    duration: (params.duration as string) || '3 Months',
-  };
+  const duration = (params.duration as string) || '3 Months';
+
+  const clubOwner =
+    (params.club_owner as string) ||
+    (params.clubOwner as string) ||
+    (params.clubOwnerId as string) ||
+    (params.ownerId as string) ||
+    (params.gymId as string) ||
+    '';
+
+  const planPriceId =
+    (params.membership_plan_price as string) ||
+    (params.planDocumentId as string) ||
+    (params.selectedPlanId as string) ||
+    (params.planId as string) ||
+    (params.planKey as string) ||
+    (params.duration as string) ||
+    '';
 
   const initialMode = (params.initialMode as 'online' | 'gym') || 'gym';
 
@@ -42,7 +60,19 @@ export default function MembershipCheckoutRoute() {
     return 'checkout';
   });
 
-  const [lastPaymentMethod, setLastPaymentMethod] = useState<'Online (UPI)' | 'Verified by Gym'>('Online (UPI)');
+  const [lastPaymentMethod] = useState<'Online (UPI)' | 'Verified by Gym'>('Verified by Gym');
+  const [pendingData, setPendingData] = useState<PayAtGymData | null>(null);
+
+  const { mutate: payAtGym, isPending: isPayingAtGym } = usePayAtGym();
+  const { mutate: cancelPayAtGym, isPending: isCancellingPayAtGym } = useCancelPayAtGym();
+
+  const details: CheckoutDetails = {
+    gymName: pendingData?.gymName || gymName,
+    gymLocation: pendingData?.gymAddress || gymLocation,
+    planName: pendingData?.planName || planName,
+    price: pendingData?.amountDue !== undefined ? pendingData.amountDue : price,
+    duration,
+  };
 
   // Handlers for user actions
   const handlePayOnline = () => {
@@ -65,16 +95,78 @@ export default function MembershipCheckoutRoute() {
   };
 
   const handlePayAtGym = () => {
-    Toast.show({
-      type: 'info',
-      text1: 'Request Sent! 📩',
-      text2: `Gym notified for ${planName}`,
-    });
-    setCurrentStep('pending');
+    if (!clubOwner) {
+      Toast.show({
+        type: 'error',
+        text1: 'Gym Information Missing',
+        text2: 'Unable to identify the gym owner. Please return and select the gym again.',
+      });
+      return;
+    }
+
+    if (!planPriceId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Plan Information Missing',
+        text2: 'Please select a valid membership plan.',
+      });
+      return;
+    }
+
+    payAtGym(
+      {
+        club_owner: clubOwner,
+        membership_plan_price: planPriceId,
+      },
+      {
+        onSuccess: (res) => {
+          if (res?.data) {
+            setPendingData(res.data);
+          }
+          Toast.show({
+            type: 'success',
+            text1: 'Request Submitted! 📩',
+            text2:
+              res?.message ||
+              'Please visit the gym reception to pay via Cash or UPI and activate your pass.',
+          });
+          setCurrentStep('pending');
+        },
+        onError: (err: any) => {
+          const errMsg =
+            err?.response?.data?.error?.message ||
+            err?.response?.data?.message ||
+            err?.message ||
+            'Failed to submit payment request. Please try again.';
+          Toast.show({
+            type: 'error',
+            text1: 'Request Failed',
+            text2: errMsg,
+          });
+        },
+      }
+    );
+  };
+
+  const formatRequestDate = (dateStr?: string) => {
+    if (!dateStr) return undefined;
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
   const handleViewDirections = () => {
-    const query = encodeURIComponent(`${gymName} ${gymLocation}`);
+    const query = encodeURIComponent(`${details.gymName} ${details.gymLocation}`);
     const mapUrl = Platform.select({
       ios: `maps:0,0?q=${query}`,
       android: `geo:0,0?q=${query}`,
@@ -84,18 +176,66 @@ export default function MembershipCheckoutRoute() {
       Toast.show({
         type: 'info',
         text1: 'Directions',
-        text2: `Opening directions to ${gymName}`,
+        text2: `Opening directions to ${details.gymName}`,
       });
     });
   };
 
-  const handleCancelRequest = () => {
-    Toast.show({
-      type: 'info',
-      text1: 'Request Cancelled',
-      text2: 'Your pay-at-gym request was cancelled',
-    });
-    setCurrentStep('checkout');
+  const handleCancelRequest = (explicitDocId?: string | number) => {
+    const docId =
+      explicitDocId ||
+      pendingData?.documentId ||
+      pendingData?.id ||
+      (params.documentId as string) ||
+      (params.payAtGymDocumentId as string) ||
+      '';
+
+    if (!docId) {
+      Toast.show({
+        type: 'info',
+        text1: 'Request Cancelled',
+        text2: 'Your pay-at-gym request was cancelled',
+      });
+      setCurrentStep('checkout');
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Payment Request',
+      'Are you sure you want to cancel your pay-at-gym request?',
+      [
+        { text: 'Keep Request', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: () => {
+            cancelPayAtGym(docId, {
+              onSuccess: (res) => {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Request Cancelled',
+                  text2: res?.message || 'Your pay-at-gym request was cancelled successfully.',
+                });
+                setPendingData(null);
+                setCurrentStep('declined');
+              },
+              onError: (err: any) => {
+                const errMsg =
+                  err?.response?.data?.error?.message ||
+                  err?.response?.data?.message ||
+                  err?.message ||
+                  'Failed to cancel request. Please try again.';
+                Toast.show({
+                  type: 'error',
+                  text1: 'Cancellation Failed',
+                  text2: errMsg,
+                });
+              },
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleViewEntryQr = () => {
@@ -118,6 +258,7 @@ export default function MembershipCheckoutRoute() {
           <CheckoutScreen
             details={details}
             initialMode={initialMode}
+            isLoading={isPayingAtGym}
             onPayOnline={handlePayOnline}
             onPayAtGym={handlePayAtGym}
             onBack={handleBack}
@@ -127,6 +268,8 @@ export default function MembershipCheckoutRoute() {
         {currentStep === 'pending' && (
           <PaymentPendingStep
             details={details}
+            requestDate={formatRequestDate(pendingData?.requestedAt)}
+            isCancelling={isCancellingPayAtGym}
             onViewDirections={handleViewDirections}
             onCancelRequest={handleCancelRequest}
             onBack={handleBack}
@@ -136,9 +279,8 @@ export default function MembershipCheckoutRoute() {
         {currentStep === 'declined' && (
           <RequestDeclinedStep
             details={details}
-            onPayOnlineNow={handlePayOnline}
-            onSendNewRequest={() => setCurrentStep('checkout')}
-            onBack={handleBack}
+            onSendNewRequest={() => router.push('/(tabs)' as any)}
+            onBack={() => router.push('/(tabs)' as any)}
           />
         )}
 

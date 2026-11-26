@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatPlanNameAndDuration, formatGymTitle } from '@/components/GymCard';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import GradientDivider from '@/components/GradientDivider';
+import Toast from 'react-native-toast-message';
+import { useClientPendingApprovals } from '@/hook/useClient';
 
 type DurationTab = 'monthly' | '3months' | '6months' | 'annual';
 
@@ -118,6 +120,16 @@ export default function BuyMembershipScreen() {
   });
   const [isAddOnModalOpen, setIsAddOnModalOpen] = useState(false);
 
+  // Check client pending approvals
+  const { data: pendingApprovalsData } = useClientPendingApprovals();
+  const hasPendingApproval = Boolean(pendingApprovalsData?.hasPendingApproval);
+  const pendingApproval = useMemo(() => {
+    if (!pendingApprovalsData?.hasPendingApproval) return null;
+    const item = pendingApprovalsData.pendingApprovals;
+    if (Array.isArray(item)) return item[0] || null;
+    return item || null;
+  }, [pendingApprovalsData]);
+
   const durationMultiplier: Record<DurationTab, number> = {
     monthly: 1,
     '3months': 0.95,
@@ -153,7 +165,68 @@ export default function BuyMembershipScreen() {
   const selectedContract = selectedClubPlan ? selectedClubPlan?.gymContract : null
 
   const handleContinue = () => {
-    setIsAddOnModalOpen(true);
+    if (hasPendingApproval) {
+      Toast.show({
+        type: 'info',
+        text1: 'Approval Pending',
+        text2: `You already have a pending membership approval${
+          pendingApproval?.gymName ? ` at ${pendingApproval.gymName}` : ''
+        }.`,
+      });
+      router.push({
+        pathname: '/membership/checkout' as any,
+        params: { initialStep: 'pending' },
+      });
+      return;
+    }
+
+    const rawDurationKey = selectedClubPlan?.plan || selectedDuration;
+    const durationKey =
+      rawDurationKey === '6months'
+        ? 'six_months'
+        : rawDurationKey === 'annual' || rawDurationKey === '12months'
+        ? 'twelve_months'
+        : rawDurationKey;
+
+    const planPriceDocId =
+      selectedClubPlan?.documentId ||
+      (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
+      durationKey;
+
+    const clubOwner =
+      (params.club_owner as string) ||
+      (params.clubOwner as string) ||
+      (params.ownerId as string) ||
+      (params.gymId as string) ||
+      selectedClubPlan?.club_owner ||
+      selectedClubPlan?.clubOwner ||
+      '';
+
+    const resolvedLocation =
+      (params.gymAddress as string) ||
+      (params.gymLocation as string) ||
+      (params.address as string) ||
+      'Phase 7, Mohali';
+
+    router.push({
+      pathname: '/membership/checkout' as any,
+      params: {
+        gymName,
+        gymLocation: resolvedLocation,
+        gymAddress: resolvedLocation,
+        gymId: (params.gymId as string) || '',
+        club_owner: clubOwner,
+        clubOwner: clubOwner,
+        selectedPlanName: planTitle,
+        selectedPlanPrice: planPrice,
+        duration: planDuration,
+        initialMode: 'gym',
+        planDocumentId: planPriceDocId,
+        membership_plan_price: planPriceDocId,
+        gymContract: selectedContract,
+        planKey: selectedClubPlan?.plan || '',
+      },
+    });
   };
 
   const handleAddOutdoorPass = () => {
@@ -169,7 +242,7 @@ export default function BuyMembershipScreen() {
           selectedClubPlan?.documentId ||
           (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
           selectedClubPlan?.plan,
-        gymContract: selectedContract
+        gymContract: selectedContract,
       },
     });
   };
@@ -191,30 +264,14 @@ export default function BuyMembershipScreen() {
           selectedClubPlan?.documentId ||
           (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
           selectedClubPlan?.plan,
-        gymContract: selectedContract
-
+        gymContract: selectedContract,
       },
     });
   };
 
   const handlePayAtGym = () => {
     setIsAddOnModalOpen(false);
-    router.push({
-      pathname: '/membership/checkout' as any,
-      params: {
-        gymName,
-        gymLocation: 'Phase 7, Mohali',
-        selectedPlanName: planTitle,
-        selectedPlanPrice: planPrice,
-        duration: planDuration,
-        initialMode: 'gym',
-        planDocumentId:
-          selectedClubPlan?.documentId ||
-          (selectedClubPlan?.id ? String(selectedClubPlan.id) : '') ||
-          selectedClubPlan?.plan,
-        gymContract: selectedContract,
-      },
-    });
+    handleContinue();
   };
 
   return (
@@ -451,11 +508,31 @@ export default function BuyMembershipScreen() {
         <GradientDivider />
         <View className="px-5 pt-3 pb-2">
           <TouchableOpacity
-            onPress={handleContinue}
+            onPress={
+              hasPendingApproval
+                ? () => {
+                    Toast.show({
+                      type: 'info',
+                      text1: 'Approval Pending',
+                      text2: `You already have a pending membership approval${
+                        pendingApproval?.gymName ? ` at ${pendingApproval.gymName}` : ''
+                      }.`,
+                    });
+                    router.push({
+                      pathname: '/membership/checkout' as any,
+                      params: { initialStep: 'pending' },
+                    });
+                  }
+                : handleContinue
+            }
             activeOpacity={0.88}
             style={{ borderRadius: 14 }}
-            className="w-full items-center justify-center bg-[#E23744] py-3.5">
-            <Text className="font-bold text-[16px] text-white">Continue</Text>
+            className={`w-full items-center justify-center ${
+              hasPendingApproval ? 'bg-[#D97706]' : 'bg-[#E23744]'
+            } py-3.5`}>
+            <Text className="font-bold text-[16px] text-white">
+              {hasPendingApproval ? 'Approval Pending — View Request' : 'Continue'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

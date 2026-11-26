@@ -5,14 +5,13 @@ import { CheckoutDetails } from './CheckoutScreen';
 
 interface RequestDeclinedStepProps {
   details: CheckoutDetails;
-  onPayOnlineNow: () => void;
+  onPayOnlineNow?: () => void;
   onSendNewRequest: () => void;
   onBack: () => void;
 }
 
 export default function RequestDeclinedStep({
   details,
-  onPayOnlineNow,
   onSendNewRequest,
   onBack,
 }: RequestDeclinedStepProps) {
@@ -20,8 +19,8 @@ export default function RequestDeclinedStep({
     typeof details.price === 'number'
       ? `₹${details.price.toLocaleString('en-IN')}`
       : details.price.startsWith('₹')
-      ? details.price
-      : `₹${details.price}`;
+        ? details.price
+        : `₹${details.price}`;
 
   const gymDisplay = details.gymLocation
     ? `${details.gymName}, ${details.gymLocation}`
@@ -104,7 +103,7 @@ export default function RequestDeclinedStep({
                 lineHeight: 20,
                 paddingHorizontal: 16,
               }}>
-              {details.gymName} couldn't confirm your payment. Send a new request or pay online for instant access.
+              {details.gymName} couldn&apos;t confirm your payment. Send a new request or pay online for instant access.
             </Text>
           </View>
 
@@ -169,28 +168,6 @@ export default function RequestDeclinedStep({
 
         {/* Bottom Actions */}
         <View style={{ marginTop: 28, gap: 10 }}>
-          <TouchableOpacity
-            onPress={onPayOnlineNow}
-            activeOpacity={0.88}
-            style={{
-              height: 52,
-              borderRadius: 16,
-              backgroundColor: '#E23744',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              shadowColor: '#E23744',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              elevation: 4,
-            }}>
-            <Ionicons name="flash" size={16} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-              Pay Online Now
-            </Text>
-          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={onSendNewRequest}
@@ -205,7 +182,7 @@ export default function RequestDeclinedStep({
               justifyContent: 'center',
             }}>
             <Text style={{ color: '#E23744', fontSize: 14, fontWeight: '800' }}>
-              Send New Request
+              Explor New Gym
             </Text>
           </TouchableOpacity>
         </View>

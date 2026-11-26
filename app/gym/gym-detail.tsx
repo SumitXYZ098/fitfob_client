@@ -1,8 +1,6 @@
-/* eslint-disable import/no-named-as-default */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable react-hooks/purity */
 /* eslint-disable react-hooks/preserve-manual-memoization */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
@@ -36,7 +34,15 @@ import GymMembershipPlansSection, {
 } from '@/components/modules/GymMembershipPlansSection';
 import GymWhereYouWillBeSection from '@/components/modules/GymWhereYouWillBeSection';
 import { formatPlanNameAndDuration, formatGymTitle } from '@/components/GymCard';
-import { useGymDetail, useGetFavorites, useToggleFavorite, extractFavoriteIds, useClientSubscriptions } from '@/hook/useClient';
+import {
+  useGymDetail,
+  useGetFavorites,
+  useToggleFavorite,
+  extractFavoriteIds,
+  useClientSubscriptions,
+  useClientPendingApprovals,
+} from '@/hook/useClient';
+import Toast from 'react-native-toast-message';
 import { useQueryClient } from '@tanstack/react-query';
 
 export interface GymPhotoItem {
@@ -394,6 +400,16 @@ export default function GymDetailScreen() {
         (s.membershipStatus || '').toLowerCase() === 'paused'
     );
   }, [subscriptionsData]);
+
+  // 0.1 Check client's pending approvals from server
+  const { data: pendingApprovalsData } = useClientPendingApprovals();
+  const hasPendingApproval = Boolean(pendingApprovalsData?.hasPendingApproval);
+  const pendingApproval = useMemo(() => {
+    if (!pendingApprovalsData?.hasPendingApproval) return null;
+    const item = pendingApprovalsData.pendingApprovals;
+    if (Array.isArray(item)) return item[0] || null;
+    return item || null;
+  }, [pendingApprovalsData]);
 
   // 1. Instantly parse photos passed from the GymCard
   const initialPhotos: GymPhotoItem[] = useMemo(() => {
@@ -1963,6 +1979,8 @@ export default function GymDetailScreen() {
           <GymMembershipPlansSection
             membershipPlans={gym.membershipPlans}
             isAlreadyMember={isAlreadyMember}
+            hasPendingApproval={hasPendingApproval}
+            pendingGymName={pendingApproval?.gymName}
             membershipClubName={gym.membershipClubName}
             membershipClubDocumentId={gym.membershipClubDocumentId}
             gymTitle={gym.title}
@@ -2193,7 +2211,7 @@ export default function GymDetailScreen() {
             </View>
           ) : null}
 
-          {/* Buy Membership Button / View Membership Active */}
+          {/* Buy Membership Button / View Membership Active / Approval Pending */}
           {isAlreadyMember ? (
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/membership' as any)}
@@ -2201,6 +2219,29 @@ export default function GymDetailScreen() {
               className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-[#E23744] py-3.5 shadow-md shadow-[#E23744]/25">
               <Ionicons name="card-outline" size={17} color="#FFFFFF" />
               <Text className="font-bold text-sm text-white">View Membership</Text>
+            </TouchableOpacity>
+          ) : hasPendingApproval ? (
+            <TouchableOpacity
+              onPress={() => {
+                Toast.show({
+                  type: 'info',
+                  text1: 'Approval Pending',
+                  text2: `You have a pending approval request${
+                    pendingApproval?.gymName ? ` at ${pendingApproval.gymName}` : ''
+                  }.`,
+                });
+                router.push({
+                  pathname: '/membership/checkout' as any,
+                  params: {
+                    initialStep: 'pending',
+                    documentId: pendingApproval?.documentId,
+                  },
+                });
+              }}
+              activeOpacity={0.85}
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-[#D97706] py-3.5 shadow-md shadow-[#D97706]/25">
+              <Ionicons name="time-outline" size={18} color="#FFFFFF" />
+              <Text className="font-bold text-sm text-white">Approval Pending</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -2210,6 +2251,9 @@ export default function GymDetailScreen() {
                   params: {
                     gymName: gym.title,
                     gymId: gym.id,
+                    clubOwner: gym.clubOwner || gym.documentId || gym.id,
+                    club_owner: gym.clubOwner || gym.documentId || gym.id,
+                    gymAddress: gym.address,
                     plans:
                       gym.membershipPlans && gym.membershipPlans.length > 0
                         ? JSON.stringify(gym.membershipPlans)

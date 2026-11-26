@@ -52,4 +52,9 @@ export const ENDPOINTS = {
   OFFLINE_MEMBER_SEND_OTP: `${BASE_URL}/api/send-otp`,
   OFFLINE_MEMBER_VERIFY_OTP: `${BASE_URL}/api/verify-otp`,
   CLAIM_MEMBERSHIP: (docId: string | number) => `${BASE_URL}/api/client/claim-membership/${docId}`,
+
+  // Pay at Gym
+  PAY_AT_GYM: `${BASE_URL}/api/client/pay-at-gym`,
+  CANCEL_PAY_AT_GYM: (docId: string | number) => `${BASE_URL}/api/client/pay-at-gym/${docId}/cancel`,
+  CLIENT_PENDING_APPROVALS: `${BASE_URL}/api/client/pending-approvals`,
 };

@@ -822,3 +822,83 @@ export const claimMembershipApi = async (documentId: string | number) => {
     throw error;
   }
 };
+
+// Pay at Gym: POST /api/client/pay-at-gym
+export interface PayAtGymPayload {
+  club_owner: string | number;
+  membership_plan_price: string | number;
+  [key: string]: any;
+}
+
+export interface PayAtGymData {
+  id: number;
+  documentId: string;
+  gymName: string;
+  gymAddress: string;
+  planName: string;
+  amountDue: number;
+  paymentStatus: string;
+  subscriptionStatus: string;
+  requestedAt: string;
+  [key: string]: any;
+}
+
+export interface PayAtGymResponse {
+  success: boolean;
+  message: string;
+  data: PayAtGymData;
+}
+
+export const payAtGymApi = async (payload: PayAtGymPayload): Promise<PayAtGymResponse> => {
+  try {
+    const response = await apiInstance.post(ENDPOINTS.PAY_AT_GYM, payload);
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+// Cancel Pay at Gym: POST /api/client/pay-at-gym/:docId/cancel
+export const cancelPayAtGymApi = async (documentId: string | number) => {
+  try {
+    const response = await apiInstance.post(ENDPOINTS.CANCEL_PAY_AT_GYM(documentId), {});
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+// Pending Approvals: GET /api/client/pending-approvals
+export interface PendingApprovalItem {
+  id?: number;
+  documentId?: string;
+  gymName?: string;
+  gymAddress?: string;
+  gymLocation?: [string, string] | string[];
+  planName?: string;
+  amountDue?: number;
+  currency?: string;
+  paymentStatus?: string;
+  subscriptionStatus?: string;
+  startDate?: string;
+  endDate?: string;
+  requestedAt?: string;
+  timeAgo?: string;
+  [key: string]: any;
+}
+
+export interface ClientPendingApprovalsResponse {
+  hasPendingApproval: boolean;
+  count?: number;
+  pendingApprovals?: PendingApprovalItem | PendingApprovalItem[] | null;
+  [key: string]: any;
+}
+
+export const getClientPendingApprovals = async (): Promise<ClientPendingApprovalsResponse> => {
+  try {
+    const response = await apiInstance.get(ENDPOINTS.CLIENT_PENDING_APPROVALS);
+    return response.data;
+  } catch (error: any) {
+    throw error;
+  }
+};

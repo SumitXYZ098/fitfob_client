@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import Toast from 'react-native-toast-message';
 
 export interface ClubMembershipPlan {
   id?: string | number;
@@ -41,6 +42,8 @@ export interface ActiveMembershipInfo {
 export interface GymMembershipPlansSectionProps {
   membershipPlans?: ClubMembershipPlan[];
   isAlreadyMember?: boolean;
+  hasPendingApproval?: boolean;
+  pendingGymName?: string;
   membershipClubName?: string;
   membershipClubDocumentId?: string;
   gymTitle: string;
@@ -214,6 +217,8 @@ function SkeletonBox({ style }: { style?: object }) {
 export default function GymMembershipPlansSection({
   membershipPlans,
   isAlreadyMember = false,
+  hasPendingApproval = false,
+  pendingGymName,
   membershipClubName,
   membershipClubDocumentId,
   gymTitle,
@@ -420,11 +425,27 @@ export default function GymMembershipPlansSection({
               activeOpacity={isAlreadyMember ? 1 : 0.9}
               onPress={() => {
                 if (isAlreadyMember) return;
+                if (hasPendingApproval) {
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Approval Pending',
+                    text2: `You already have a pending membership approval${
+                      pendingGymName ? ` at ${pendingGymName}` : ''
+                    }.`,
+                  });
+                  router.push({
+                    pathname: '/membership/checkout' as any,
+                    params: { initialStep: 'pending' },
+                  });
+                  return;
+                }
                 router.push({
                   pathname: '/membership/buy-membership' as any,
                   params: {
                     gymName: gymTitle,
                     gymId: gymId,
+                    clubOwner: (plan as any).clubOwner || (plan as any).club_owner || gymId,
+                    club_owner: (plan as any).clubOwner || (plan as any).club_owner || gymId,
                     selectedPlanId:
                       plan.documentId ||
                       (plan.id ? String(plan.id) : '') ||
@@ -487,6 +508,12 @@ export default function GymMembershipPlansSection({
                         <View className="rounded-full bg-slate-200/80 px-2 py-0.5 border border-slate-300">
                           <Text className="text-[10px] font-bold text-slate-600">
                             {isMemberOfThisClub ? 'Current Member' : 'Disabled'}
+                          </Text>
+                        </View>
+                      ) : hasPendingApproval ? (
+                        <View className="rounded-full bg-amber-50 px-2 py-0.5 border border-amber-200">
+                          <Text className="text-[10px] font-bold text-amber-700">
+                            Approval Pending
                           </Text>
                         </View>
                       ) : isBestValue ? (

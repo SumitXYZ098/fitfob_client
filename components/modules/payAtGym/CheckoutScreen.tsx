@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Rect } from 'react-native-svg';
 
@@ -14,6 +14,7 @@ export interface CheckoutDetails {
 interface CheckoutScreenProps {
   details: CheckoutDetails;
   initialMode?: 'online' | 'gym';
+  isLoading?: boolean;
   onPayOnline: () => void;
   onPayAtGym: () => void;
   onBack: () => void;
@@ -22,6 +23,7 @@ interface CheckoutScreenProps {
 export default function CheckoutScreen({
   details,
   initialMode = 'online',
+  isLoading = false,
   onPayOnline,
   onPayAtGym,
   onBack,
@@ -388,12 +390,14 @@ export default function CheckoutScreen({
 
         <TouchableOpacity
           onPress={() => {
+            if (isLoading) return;
             if (paymentMode === 'online') {
               onPayOnline();
             } else {
               onPayAtGym();
             }
           }}
+          disabled={isLoading}
           activeOpacity={0.88}
           style={{
             flexDirection: 'row',
@@ -409,8 +413,11 @@ export default function CheckoutScreen({
             shadowOpacity: 0.25,
             shadowRadius: 8,
             elevation: 4,
+            opacity: isLoading ? 0.75 : 1,
           }}>
-          {paymentMode === 'online' ? (
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : paymentMode === 'online' ? (
             <>
               <Ionicons name="flash" size={16} color="#FFFFFF" />
               <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>

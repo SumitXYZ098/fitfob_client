@@ -41,6 +41,14 @@ import {
   CancelGymTrialResponse,
   RescheduleGymTrialPayload,
   RescheduleGymTrialResponse,
+  payAtGymApi,
+  cancelPayAtGymApi,
+  PayAtGymPayload,
+  PayAtGymData,
+  PayAtGymResponse,
+  getClientPendingApprovals,
+  PendingApprovalItem,
+  ClientPendingApprovalsResponse,
 } from '@/api/clientApi';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -502,6 +510,49 @@ export const useRescheduleGymTrial = () => {
   });
 };
 
+// ─── Pay At Gym Hook ─────────────────────────────────────────────────────────
+export const usePayAtGym = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PayAtGymPayload) => payAtGymApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-pending-approvals'] });
+    },
+  });
+};
+
+export const useCancelPayAtGym = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: string | number) => cancelPayAtGymApi(documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['club-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['client-pending-approvals'] });
+    },
+  });
+};
+
+// ─── Pending Approvals Hook ───────────────────────────────────────────────────
+export const useClientPendingApprovals = (options?: {
+  refetchInterval?: number | false;
+  enabled?: boolean;
+}) => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ['client-pending-approvals'],
+    queryFn: getClientPendingApprovals,
+    enabled: !!user?.token && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval,
+    refetchOnMount: 'always',
+    staleTime: 0,
+  });
+};
+
 export type {
   CheckinItem,
   MyCheckinsResponse,
@@ -520,6 +571,11 @@ export type {
   CancelGymTrialResponse,
   RescheduleGymTrialPayload,
   RescheduleGymTrialResponse,
+  PayAtGymPayload,
+  PayAtGymData,
+  PayAtGymResponse,
+  PendingApprovalItem,
+  ClientPendingApprovalsResponse,
 };
 
 
