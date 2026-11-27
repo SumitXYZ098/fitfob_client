@@ -13,7 +13,7 @@
         "gradleCommand": ":app:assembleDebug"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://backend.fitfob.com",
+        "EXPO_PUBLIC_API_URL": "https://api-fftest.xyzdemowebsites.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "694317966222-fr234kqdgdcn5hm5q9vb5vudqnq8c3b1.apps.googleusercontent.com"
       }
     },
@@ -24,7 +24,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://backend.fitfob.com",
+        "EXPO_PUBLIC_API_URL": "https://api-fftest.xyzdemowebsites.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "694317966222-fr234kqdgdcn5hm5q9vb5vudqnq8c3b1.apps.googleusercontent.com"
       }
     },
@@ -32,7 +32,7 @@
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://backend.fitfob.com",
+        "EXPO_PUBLIC_API_URL": "https://api-fftest.xyzdemowebsites.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "694317966222-fr234kqdgdcn5hm5q9vb5vudqnq8c3b1.apps.googleusercontent.com"
       }
     }
