@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization */
 import {
   View,
   Text,
@@ -15,7 +16,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/useAuthStore';
 
 interface SlideData {
@@ -279,7 +280,7 @@ export default function Welcome() {
 
               {/* Motivational Quote */}
               <Text className="mt-2 font-medium text-base leading-snug text-white/90">
-                "{currentSlide.quote}"
+                &ldquo;{currentSlide.quote}&ldquo;
               </Text>
 
               {/* Subtitle / Tip */}

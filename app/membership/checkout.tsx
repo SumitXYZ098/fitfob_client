@@ -242,13 +242,9 @@ export default function MembershipCheckoutRoute() {
     router.push('/(tab)/scan' as any);
   };
 
-  const handleBack = () => {
-    if (currentStep === 'pending' || currentStep === 'declined' || currentStep === 'success') {
-      setCurrentStep('checkout');
-    } else {
-      router.back();
-    }
-  };
+  const handleBack = () => router.back();
+
+
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
